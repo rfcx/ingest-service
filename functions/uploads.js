@@ -14,6 +14,10 @@ const crypto = require("crypto")
 module.exports = (req, res) => {
   // TODO(developer) check that the user is authorized to upload
 
+  res.header('Content-Type','application/json')
+  res.header('Access-Control-Allow-Origin', '*')
+  res.header('Access-Control-Allow-Headers', 'Content-Type')
+
   const contentType = 'audio/wav'
   const uploadId = crypto.randomBytes(16).toString("hex")
   const filename = uploadId + '.wav'
