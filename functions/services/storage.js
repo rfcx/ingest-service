@@ -1,12 +1,13 @@
 const { Storage } = require('@google-cloud/storage')
 const storage = new Storage({
-  keyFilename: "serviceAccountKeyStorageOnly.json"
+  keyFilename: "serviceAccountKeyStorage.json" // See README for how to obtain a key
 })
+
+const bucketName = 'rfcx-ingest-dev.appspot.com' // TODO extract to env variables
 
 function getSignedUrl (filePath, contentType) {
   // Get a reference to the destination file in GCS
-  const bucket = 'rfcx-ingest-dev.appspot.com' // TODO extract to env variables
-  const file = storage.bucket(bucket).file(filePath)
+  const file = storage.bucket(bucketName).file(filePath)
 
   // Create a temporary upload URL
   const expiresAtMs = Date.now() + 300000 // Link expires in 5 minutes
@@ -21,4 +22,8 @@ function getSignedUrl (filePath, contentType) {
   })
 }
 
-module.exports = { getSignedUrl }
+function download (remotePath, localPath) {
+  return storage.bucket(bucketName).file(remotePath).download({ destination: localPath })
+}
+
+module.exports = { bucketName, getSignedUrl, download }
