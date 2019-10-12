@@ -1,6 +1,9 @@
 const express = require('express')
+const bodyParser = require("body-parser")
 const app = express()
 
-app.post('/uploads', require('./uploads'))
+app.use(bodyParser.urlencoded({ extended: true }))
+
+app.use('/uploads', require('./routes/uploads'))
 
 module.exports = app
