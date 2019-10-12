@@ -1,5 +1,6 @@
 const path = require('path')
 const os = require('os')
+const fs = require('fs')
 const db = require('../services/db')
 const storage = require('../services/storage')
 const rfcx = require('../services/rfcx')
@@ -20,12 +21,16 @@ module.exports = async (object) => {
 
   // Get the upload metadata
   const data = await db.getUpload(meta.uploadId)
-  console.log('Data about upload', data)
+  console.log('Original name', data.originalFilename)
 
   // Upload to RFCx
+  // try {
+  await rfcx.checkin(tempFilePath, data.originalFilename, '%YYY%m%d-%H%M%S')
+  // } catch (err) {
+  //   console.log(err)
+  // }
 
-
-  return fs.unlinkSync(tempFilePath);
+  return fs.unlinkSync(tempFilePath)
 }
 
 // Extra stream id, upload id, and filename from the path
