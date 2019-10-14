@@ -15,6 +15,11 @@ router.post('/', (req, res) => {
   const originalFilename = req.body.filename
   const streamId = req.body.stream
 
+  // TODO check that we need this - Ant I don't think we need it
+  res.header('Content-Type', 'application/json')
+  res.header('Access-Control-Allow-Origin', '*')
+  res.header('Access-Control-Allow-Headers', 'Content-Type')
+
   if (originalFilename === undefined || streamId === undefined) {
     res.status(400).send('Required: filename, stream')
     return
@@ -24,11 +29,6 @@ router.post('/', (req, res) => {
   const userId = 'testuserguid'
 
   const fileExtension = originalFilename.split('.').pop()
-
-  // TODO check that we need this - Ant I don't think we need it
-  res.header('Content-Type', 'application/json')
-  res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Headers', 'Content-Type')
 
   db.generateUpload(streamId, userId, originalFilename, fileExtension).then(data => {
     const uploadId = data.id
