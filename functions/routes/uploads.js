@@ -15,6 +15,11 @@ router.post('/', (req, res) => {
   const originalFilename = req.body.filename
   const streamId = req.body.stream
 
+  if (originalFilename === undefined || streamId === undefined) {
+    res.status(400).send('Required: filename, stream')
+    return
+  }
+
   // TODO check that the user is authorized to upload (to the given streamId)
   const userId = 'testuserguid'
 
