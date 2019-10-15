@@ -5,10 +5,11 @@ const cryptoJS = require('crypto-js')
 const sox = require('sox')
 const querystring = require('querystring')
 const axios = require('axios')
+const FormData = require('form-data')
 
 const apiHostName = 'https://api.rfcx.org/'
-const apiToken = 'j8kheb0k83fqrgsw2ur2g035pyd6cizoogsz2n51'
-const guardianGuid = '5a279b776b3b'
+const apiToken = 'y'
+const guardianGuid = 'x'
 
 // TODO: get filename as a parameter (2019-06-01-14:05:30.opus, %YYY-%m-%d-%H:%M:%S) and do the logic to return datetime back
 function getDateTime (fileName, timeStampFormat) {
@@ -117,53 +118,24 @@ function getGZippedJSON (json) {
       const hexdump = Buffer.from(base64).toString('hex')
       const hexArray = hexdump.match(/.{1,2}/g)
       const sed = '%' + hexArray.join('%')
-      console.log('base64: ' + base64)
-      console.log('hexdump: ' + hexdump)
-      console.log('sed: ' + sed)
       resolve(sed)
     })
   })
 }
 
-function unzip (gZippedJson) {
-  const a = querystring.parse('gzipped=' + gZippedJson)
-  console.log(a)
-  zlib.unzip(
-    Buffer.from(querystring.parse('gzipped=' + gZippedJson).gzipped, 'base64'),
-    function (zLibError, zLibBuffer) {
-      if (!zLibError) {
-        console.log(JSON.parse(zLibBuffer.toString()))
-      } else {
-        if (zLibError) {
-          console.log(zLibError)
-        }
-      }
-    })
-}
-
-const FormData = require('form-data')
-
-axios.interceptors.request.use(request => {
-  console.log('Starting Request', JSON.stringify(request))
-  return request
-})
-
-function request (meta, audioStream) {
-  const path = apiHostName + 'v1/guardians/' + guardianGuid + '/checkins'
+function request (meta, audioStream, audioFilename) {
+  const url = apiHostName + 'v1/guardians/' + guardianGuid + '/checkins'
 
   const data = new FormData()
   data.append('meta', meta)
-  data.append('audio', audioStream)
+  data.append('audio', audioStream, audioFilename)
 
-  const headers = Object.assign(data.getHeaders(),
-    {
-      'Cache-Control': 'no-cache',
-      'x-auth-token': apiToken,
-      'x-auth-user': 'guardian/' + guardianGuid
-    })
-  console.log(JSON.stringify(headers))
+  const headers = Object.assign(data.getHeaders(), {
+    'x-auth-token': apiToken,
+    'x-auth-user': 'guardian/' + guardianGuid
+  })
 
-  return axios.post(path, data, { headers })
+  return axios.post(url, data, { headers })
     .then(function (response) {
       console.log('request success')
       console.log(JSON.stringify(response.data))
@@ -174,26 +146,17 @@ function request (meta, audioStream) {
     })
 }
 
-function gzipFile (filePath) {
-  return new Promise((resolve, reject) => {
-    const stream = fs.createReadStream(filePath).pipe(zlib.createGzip())
-    var buf = '';
-    stream.on('data', d => { buf += d; })
-      .on('end', () => { resolve(buf) })
-      .on('error', err => reject(err))
-  })
-}
-
 async function checkin (filePath, originalFilename, timestampFormat) {
+  // Meta
   const timestampIso = getDateTime(originalFilename, timestampFormat)
   const json = await generateJSON(filePath, timestampIso)
   const gzJson = await getGZippedJSON(json)
 
-  console.log('gzJson: ' + gzJson)
+  // Audio
+  const gzFile = fs.createReadStream(filePath).pipe(zlib.createGzip())
+  const gzFilename = originalFilename + '.gz'
 
-  //const gzFile = await gzipFile(filePath)
-  const gzFile = fs.createReadStream(filePath) //.pipe(zlib.createGzip())
-  await request(gzJson, gzFile)
+  await request(gzJson, gzFile, gzFilename)
 }
 
 module.exports = { checkin }
