@@ -15,10 +15,10 @@ router.post('/', (req, res) => {
   const originalFilename = req.body.filename
   const streamId = req.body.stream
 
-  // TODO check that we need this - Ant I don't think we need it
-  res.header('Content-Type', 'application/json')
-  res.header('Access-Control-Allow-Origin', '*')
-  res.header('Access-Control-Allow-Headers', 'Content-Type')
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Credentials': 'true'
+  })
 
   if (originalFilename === undefined || streamId === undefined) {
     res.status(400).send('Required: filename, stream')
@@ -63,5 +63,23 @@ router.get('/:id', (req, res) => {
     res.status(500).end()
   })
 })
+
+/**
+ * Preflight CORS
+ */
+function cors (methods) {
+  return (req, res) => {
+    res.set({
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Methods': methods,
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+      'Access-Control-Max-Age': '3600'
+    })
+    res.status(204).end()
+  }
+}
+router.options('/', cors('POST'))
+router.options('/:id', cors('GET'))
 
 module.exports = router
