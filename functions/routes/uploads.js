@@ -1,6 +1,8 @@
 const express = require('express')
 var router = express.Router()
 
+router.use(require('../middleware/cors'))
+
 const db = require('../services/db')
 const storage = require('../services/storage')
 
@@ -14,11 +16,6 @@ const storage = require('../services/storage')
 router.post('/', (req, res) => {
   const originalFilename = req.body.filename
   const streamId = req.body.stream
-
-  res.set({
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Credentials': 'true'
-  })
 
   if (originalFilename === undefined || streamId === undefined) {
     res.status(400).send('Required: filename, stream')

@@ -15,20 +15,26 @@ module.exports = async (object) => {
   const contentType = object.contentType
   const tempFilePath = path.join(os.tmpdir(), meta.filename);
 
-  // Get the file from GCS
-  await storage.download(filePath, tempFilePath)
-  console.log('Downloaded locally to', tempFilePath)
+  var error = undefined
+  try {
+    // Get the file from GCS
+    await storage.download(filePath, tempFilePath)
+    console.log('Downloaded locally to', tempFilePath)
 
-  // Get the upload metadata
-  const data = await db.getUpload(meta.uploadId)
-  console.log('Original name', data.originalFilename)
+    // Get the upload metadata
+    const data = await db.getUpload(meta.uploadId)
+    console.log('Original name', data.originalFilename)
 
-  // Upload to RFCx
-  // try {
-  await rfcx.checkin(tempFilePath, data.originalFilename, '%YYY%m%d-%H%M%S')
-  // } catch (err) {
-  //   console.log(err)
-  // }
+    // Upload to RFCx
+    await rfcx.checkin(tempFilePath, data.originalFilename, '%YYY%m%d-%H%M%S')
+
+  } catch (err) {
+    error = err
+  }
+
+  const status = error ? db.status.FAILED : db.status.INGESTED
+  const failureMessage = error ? error.message : null
+  await db.updateUploadStatus(meta.uploadId, status, failureMessage)
 
   return fs.unlinkSync(tempFilePath)
 }

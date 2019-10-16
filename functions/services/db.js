@@ -3,7 +3,8 @@ const db = firebase.firestore()
 const FieldValue = require('firebase-admin').firestore.FieldValue;
 
 const uploadCollection = 'uploads'
-const UPLOAD_STATUS = 0
+const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30 }
+const statusNumbers = Object.values(status)
 
 function generateUpload (streamId, userId, originalFilename, fileType) {
   let ref = db.collection(uploadCollection).doc();
@@ -11,8 +12,9 @@ function generateUpload (streamId, userId, originalFilename, fileType) {
   return ref.set({
     streamId: streamId,
     userId: userId,
-    status: UPLOAD_STATUS,
-    timestamp: FieldValue.serverTimestamp(),
+    status: status.WAITING,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
     originalFilename: originalFilename,
     path: path
   }).then(() => {
@@ -26,11 +28,18 @@ function getUpload (id) {
   })
 }
 
-module.exports = { generateUpload, getUpload }
+function updateUploadStatus (id, statusNumber, failureMessage = null) {
+  if (!statusNumbers.includes(statusNumber)) {
+    return Promise.reject('Invalid status')
+  }
+  var updates = {
+    status: statusNumber,
+    updatedAt: FieldValue.serverTimestamp()
+  }
+  if (failureMessage != null) {
+    updates['failureMessage'] = failureMessage
+  }
+  return db.collection(uploadCollection).doc(id).update(updates)
+}
 
-// let addDoc = db.collection('cities').add({
-//   name: 'Tokyo',
-//   country: 'Japan'
-// }).then(ref => {
-//   console.log('Added document with ID: ', ref.id);
-// });
+module.exports = { generateUpload, getUpload, updateUploadStatus, status }
