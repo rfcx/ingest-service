@@ -2,10 +2,10 @@ const fs = require('fs')
 const zlib = require('zlib')
 const moment = require('moment')
 const cryptoJS = require('crypto-js')
-const sox = require('sox')
 const querystring = require('querystring')
 const axios = require('axios')
 const FormData = require('form-data')
+const { identify } = require('../services/audio')
 
 const apiHostName = 'https://api.rfcx.org/'
 const apiToken = 'y'
@@ -13,8 +13,6 @@ const guardianGuid = 'x'
 
 // TODO: get filename as a parameter (2019-06-01-14:05:30.opus, %YYY-%m-%d-%H:%M:%S) and do the logic to return datetime back
 function getDateTime (fileName, timeStampFormat) {
-  console.log('filename: ' + fileName + ' timestamp format: ' + timeStampFormat)
-
   const stringOffsetYear = timeStampFormat.search('%Y')
   const stringOffsetMonth = timeStampFormat.search('%m')
   const stringOffsetDay = timeStampFormat.search('%d')
@@ -28,13 +26,6 @@ function getDateTime (fileName, timeStampFormat) {
   const min = fileName.substr(stringOffsetMin, 2)
   const sec = fileName.substr(stringOffsetSec, 2)
 
-  console.log(stringOffsetYear + '=' + year)
-  console.log(stringOffsetMonth + '=' + month)
-  console.log(stringOffsetDay + '=' + day)
-  console.log(stringOffsetHour + '=' + hour)
-  console.log(stringOffsetMin + '=' + min)
-  console.log(stringOffsetSec + '=' + sec)
-
   // add milli sec
   const milliSeconds = 0
 
@@ -43,7 +34,6 @@ function getDateTime (fileName, timeStampFormat) {
   const timezoneOffset = '+0000'
 
   const dateTimeISO = year + '-' + month + '-' + day + 'T' + hour + ':' + min + ':' + sec + '.' + milliSeconds + timezoneOffset
-  console.log('date iso: ' + dateTimeISO)
   return dateTimeISO
 }
 
@@ -52,22 +42,6 @@ function getAudioFinalSha1 (filePath) {
   const fileWordArray = cryptoJS.lib.WordArray.create(fileContent)
   const audioFinalSha1 = cryptoJS.SHA1(fileWordArray)
   return audioFinalSha1
-}
-
-/* Run sox to get the sample rate and duration
-** results looks like:
-** { format: 'wav', duration: 1.5, sampleCount: 66150, channelCount: 1, bitRate: 722944, sampleRate: 44100 }
-*/
-function identifyAudioFile (fileName) {
-  return new Promise((resolve, reject) => {
-    sox.identify(fileName, (err, result) => {
-      if (err) {
-        reject(err)
-      } else {
-        resolve(result)
-      }
-    })
-  })
 }
 
 async function generateJSON (filePath, timestampIso) {
@@ -80,7 +54,7 @@ async function generateJSON (filePath, timestampIso) {
   const sha1 = getAudioFinalSha1(filePath)
 
   try {
-    var result = await identifyAudioFile(filePath)
+    var result = await identify(filePath)
   } catch (error) {
     console.log(error)
     return
@@ -156,7 +130,7 @@ async function checkin (filePath, originalFilename, timestampFormat) {
   const gzFile = fs.createReadStream(filePath).pipe(zlib.createGzip())
   const gzFilename = originalFilename + '.gz'
 
-  await request(gzJson, gzFile, gzFilename)
+  return request(gzJson, gzFile, gzFilename)
 }
 
 module.exports = { checkin }
