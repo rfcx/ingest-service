@@ -45,11 +45,12 @@ function updateUploadStatus (id, statusNumber, failureMessage = null) {
 
 function createStream (name) {
   const ref = db.collection(streamsCollection).doc()
+  const token = '1234' // TODO: this is only here for legacy calls to checkin api
   return ref.set({
     name: name,
-    token: '1234' // TODO: this is only here for legacy calls to checkin api
+    token: token
   }).then(() => {
-    return { id: ref.id }
+    return { id: ref.id, token: token }
   })
 }
 
