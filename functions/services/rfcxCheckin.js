@@ -5,11 +5,9 @@ const cryptoJS = require('crypto-js')
 const querystring = require('querystring')
 const axios = require('axios')
 const FormData = require('form-data')
-const { identify } = require('../services/audio')
+const { identify } = require('./audio')
 
-const apiHostName = 'https://api.rfcx.org/'
-const apiToken = 'y'
-const guardianGuid = 'x'
+const apiHostName = require('./rfcxConfig.json').apiHostName
 
 // TODO: get filename as a parameter (2019-06-01-14:05:30.opus, %YYY-%m-%d-%H:%M:%S) and do the logic to return datetime back
 function getDateTime (fileName, timeStampFormat) {
@@ -97,17 +95,22 @@ function getGZippedJSON (json) {
   })
 }
 
-function request (meta, audioStream, audioFilename) {
-  const url = apiHostName + 'v1/guardians/' + guardianGuid + '/checkins'
+function request (meta, audioStream, audioFilename, guardianGuid, guardianToken) {
+  const guid = guardianGuid.toLowerCase()
+  const url = apiHostName + 'v1/guardians/' + guid + '/checkins'
 
   const data = new FormData()
   data.append('meta', meta)
   data.append('audio', audioStream, audioFilename)
 
+  console.log(guid)
+
   const headers = Object.assign(data.getHeaders(), {
-    'x-auth-token': apiToken,
-    'x-auth-user': 'guardian/' + guardianGuid
+    'x-auth-token': guardianToken,
+    'x-auth-user': 'guardian/' + guid
   })
+
+  console.log(headers)
 
   return axios.post(url, data, { headers })
     .then(function (response) {
@@ -120,7 +123,7 @@ function request (meta, audioStream, audioFilename) {
     })
 }
 
-async function checkin (filePath, originalFilename, timestampFormat) {
+async function checkin (filePath, originalFilename, timestampFormat, guardianGuid, guardianToken) {
   // Meta
   const timestampIso = getDateTime(originalFilename, timestampFormat)
   const json = await generateJSON(filePath, timestampIso)
@@ -130,7 +133,7 @@ async function checkin (filePath, originalFilename, timestampFormat) {
   const gzFile = fs.createReadStream(filePath).pipe(zlib.createGzip())
   const gzFilename = originalFilename + '.gz'
 
-  return request(gzJson, gzFile, gzFilename)
+  return request(gzJson, gzFile, gzFilename, guardianGuid, guardianToken)
 }
 
 module.exports = { checkin }

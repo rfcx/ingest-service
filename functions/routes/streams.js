@@ -4,6 +4,7 @@ var router = express.Router()
 router.use(require('../middleware/cors'))
 
 const db = require('../services/db')
+const rfcx = require('../services/rfcxRegister')
 
 /**
  * HTTP function that creates a stream
@@ -11,7 +12,9 @@ const db = require('../services/db')
 router.post('/', (req, res) => {
   const name = req.body.name
   return db.createStream(name).then(result => {
-    res.json(result)
+    return rfcx.register(result.id, result.token, name).then(() => {
+      res.json({ id: result.id })
+    })
   }).catch(err => {
     console.log(err)
     res.status(500).end()

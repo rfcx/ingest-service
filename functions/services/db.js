@@ -53,4 +53,10 @@ function createStream (name) {
   })
 }
 
-module.exports = { generateUpload, getUpload, updateUploadStatus, status, createStream }
+function getStream (id) {
+  return db.collection(streamsCollection).doc(id).get().then(snapshot => {
+    return snapshot.data()
+  })
+}
+
+module.exports = { generateUpload, getUpload, updateUploadStatus, status, createStream, getStream }
