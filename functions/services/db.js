@@ -2,12 +2,13 @@ const firebase = require('./firebase')
 const db = firebase.firestore()
 const FieldValue = require('firebase-admin').firestore.FieldValue;
 
-const uploadCollection = 'uploads'
+const uploadsCollection = 'uploads'
 const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30 }
 const statusNumbers = Object.values(status)
+const streamsCollection = 'streams'
 
 function generateUpload (streamId, userId, originalFilename, fileType) {
-  let ref = db.collection(uploadCollection).doc();
+  let ref = db.collection(uploadsCollection).doc()
   let path = 'uploaded/' + streamId + '/' + ref.id + '.' + fileType
   return ref.set({
     streamId: streamId,
@@ -23,7 +24,7 @@ function generateUpload (streamId, userId, originalFilename, fileType) {
 }
 
 function getUpload (id) {
-  return db.collection(uploadCollection).doc(id).get().then(snapshot => {
+  return db.collection(uploadsCollection).doc(id).get().then(snapshot => {
     return snapshot.data()
   })
 }
@@ -39,7 +40,17 @@ function updateUploadStatus (id, statusNumber, failureMessage = null) {
   if (failureMessage != null) {
     updates['failureMessage'] = failureMessage
   }
-  return db.collection(uploadCollection).doc(id).update(updates)
+  return db.collection(uploadsCollection).doc(id).update(updates)
 }
 
-module.exports = { generateUpload, getUpload, updateUploadStatus, status }
+function createStream (name) {
+  const ref = db.collection(streamsCollection).doc()
+  return ref.set({
+    name: name,
+    token: '1234' // TODO: this is only here for legacy calls to checkin api
+  }).then(() => {
+    return { id: ref.id }
+  })
+}
+
+module.exports = { generateUpload, getUpload, updateUploadStatus, status, createStream }
