@@ -34,25 +34,28 @@ gcloud iam service-accounts keys create functions/serviceAccountKeyStorage.json 
 
 ## Local development
 
+_Temporary step for demo:_
+Copy `services/rfcxConfig.json.example` to `services/rfcxConfig.json` and set the API base url and access token (see "Not yet implemented" below).
+
 Install dependencies:
 ```
 cd functions
 npm install
 ```
 
-Run the API endpoints:
+Run the API endpoints only:
 ```
 npm run serve
 ```
 
-Test the cloud functions that trigger on new storage objects:
+Test the cloud functions that trigger on new storage objects (and also run the API endpoints):
 ```
 npm run shell
 ```
 
 then emulate a new object added to the bucket:
 ```
-ingest({name:'uploaded/test/1IHYDcAOaUaG4ff1VZIp.mp3', contentType: 'audio/mp3'})
+ingest({name:'uploaded/test/2JkxPLSzeOZ86EPZvGmv.mp3', contentType: 'audio/mp3'})
 ```
 
 
@@ -67,3 +70,14 @@ To set the CORS on GCS (to enable the ingest app to PUT a file):
 ```
 gsutil cors set storage.cors.json gs://rfcx-ingest-dev.appspot.com
 ```
+
+## Testing
+
+The `example` folder contains `upload.js` which can be run as `node upload.js filename.mp3` to perform the client-side steps to upload the file (get a signed url, upload the file to storage, and check the upload status). (Install the dependencies before you start `cd example ; npm i`.)
+
+To test the trigger from storage, use the `npm run shell` described above (from the `functions` folder).
+
+
+## Not yet implemented
+
+- *Authentication*: Currently need to set an access token with the guardianCreator role in `services/rfcxConfig.json` under `tempAccessToken`. In future, we need to pass the access token from the client (Ingest App).

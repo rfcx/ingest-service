@@ -4,7 +4,10 @@ const fs = require("fs")
 const apiUrl = 'https://us-central1-rfcx-ingest-dev.cloudfunctions.net/api'
 //const apiUrl = 'http://localhost:5000/rfcx-ingest-dev/us-central1/api'
 
-const filePath = 'example.wav'
+const arguments = process.argv.slice(2);
+const filePath = arguments[0] || 'example.mp3'
+const filename = '20191010-010101.mp3'
+const stream = 'g1smnj4td3kkmfo7kc1i'
 
 
 // Part 1: Get signed url
@@ -24,38 +27,47 @@ function requestUploadUrl (originalFilename, streamId) {
 
 function upload (signedUrl, filePath) {
   const readStream = fs.createReadStream(filePath)
+  const fileType = filePath.split('.').splice(-1)[0]
   const options = {
     headers: {
-      'Content-Type': 'audio/wav'
+      'Content-Type': 'audio/' + fileType
     }
   }
   return axios.put(signedUrl, readStream, options)
 }
 
 
-// Part 3: Get ingest status -- todo!
+// Part 3: Get ingest status
 
 function checkStatus (uploadId) {
   return axios.get(apiUrl + '/uploads/' + uploadId)
     .then(function (response) {
-      const status = response.data.status
-      return status
+      return response.data
     })
 }
 
 
 // Let's do this...
 var uploadId
-requestUploadUrl('20191010-010101.wav', 'test').then((data) => {
+requestUploadUrl(filename, stream).then((data) => {
   uploadId = data.uploadId
   return upload(data.url, filePath).then(() => {
-    console.log('Done!')
+    console.log('Upload complete')
   })
 }).catch((err) => console.log(err))
 
 // and keep checking for the result
+console.log('Waiting 10 secs to check the ingest status')
 setTimeout(() => {
-  checkStatus(uploadId).then((status) => {
-    console.log('Ingest status = ' + status)
+  checkStatus(uploadId).then(upload => {
+    if (upload.status >= 30) {
+      console.log('Ingest failed: ' + upload.failureMessage)
+    } else if (upload.status >= 20) {
+      console.log('Ingest success')
+    } else if (upload.status >= 10) {
+      console.log('Started ingesting, but not yet finished')
+    } else if (upload.status == 0) {
+      console.log('Waiting to be ingested')
+    }
   }).catch((err) => console.log(err))
 }, 10000)
