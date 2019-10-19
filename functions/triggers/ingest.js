@@ -15,6 +15,9 @@ module.exports = async (object) => {
   const contentType = object.contentType
   const tempFilePath = path.join(os.tmpdir(), meta.filename);
 
+  // Mark uploaded
+  await db.updateUploadStatus(meta.uploadId, db.status.UPLOADED)
+
   var error = undefined
   try {
     // Get the file from GCS
