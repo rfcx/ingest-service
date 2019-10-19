@@ -46,8 +46,8 @@ async function generateJSON (filePath, timestampIso) {
   const fileName = filePath.split('/').slice(-1)[0]
   const fileExtension = fileName.split('.').slice(-1)[0]
 
-  const timestampEpoch = moment(timestampIso).unix() * 1000
-  const sentAtEpoch = moment().unix()
+  const timestampEpochMs = moment(timestampIso).valueOf()
+  const sentAtEpochMs = moment().valueOf()
 
   const sha1 = getAudioFinalSha1(filePath)
 
@@ -58,19 +58,19 @@ async function generateJSON (filePath, timestampIso) {
     return
   }
 
-  const audioElement = [sentAtEpoch, timestampEpoch, fileExtension, sha1, result.sampleRate, '1', fileExtension, 'vbr', '1', '16bit']
-  console.log('dateEpoch: ' + timestampEpoch)
-  console.log('sentAtEpoch: ' + sentAtEpoch)
+  const audioElement = [sentAtEpochMs, timestampEpochMs, fileExtension, sha1, result.sampleRate, '1', fileExtension, 'vbr', '1', '16bit']
+  console.log('dateEpoch: ' + timestampEpochMs)
+  console.log('sentAtEpoch: ' + sentAtEpochMs)
   console.log('sha1: ' + sha1)
   console.log('audioSampleRate: ' + result.sampleRate)
 
   // TODO: add LAT_LNG_JSON
   const checkInJson = {
     audio: audioElement.join('*'),
-    queued_at: sentAtEpoch,
-    measured_at: sentAtEpoch,
+    queued_at: sentAtEpochMs,
+    measured_at: sentAtEpochMs,
     software: 'ingest-service*0.0.1|ingest-service*0.0.1',
-    battery: sentAtEpoch + '*100*0',
+    battery: sentAtEpochMs + '*100*0',
     queued_checkins: 1,
     skipped_checkins: 0,
     stashed_checkins: 0
