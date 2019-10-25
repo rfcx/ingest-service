@@ -11,6 +11,7 @@ module.exports = async (object) => {
     return
   }
 
+  console.log('ingest: start')
   const meta = extractMeta(filePath)
   const contentType = object.contentType
   const tempFilePath = path.join(os.tmpdir(), meta.filename);
@@ -32,7 +33,7 @@ module.exports = async (object) => {
     const stream = await db.getStream(data.streamId)
 
     // Upload to RFCx
-    await rfcx.checkin(tempFilePath, data.originalFilename, '%YYY%m%d-%H%M%S', data.streamId, stream.token)
+    await rfcx.checkin(tempFilePath, data.originalFilename, data.timestamp, data.streamId, stream.token)
 
   } catch (err) {
     error = err

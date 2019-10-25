@@ -7,7 +7,7 @@ const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30 }
 const statusNumbers = Object.values(status)
 const streamsCollection = 'streams'
 
-function generateUpload (streamId, userId, originalFilename, fileType) {
+function generateUpload (streamId, userId, timestamp, originalFilename, fileType) {
   let ref = db.collection(uploadsCollection).doc()
   let path = 'uploaded/' + streamId + '/' + ref.id + '.' + fileType
   return ref.set({
@@ -16,6 +16,7 @@ function generateUpload (streamId, userId, originalFilename, fileType) {
     status: status.WAITING,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
+    timestamp: timestamp,
     originalFilename: originalFilename,
     path: path
   }).then(() => {

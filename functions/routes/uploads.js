@@ -1,3 +1,4 @@
+const moment = require('moment')
 const express = require('express')
 var router = express.Router()
 
@@ -15,10 +16,16 @@ const storage = require('../services/storage')
  */
 router.post('/', (req, res) => {
   const originalFilename = req.body.filename
+  const timestamp = req.body.timestamp
   const streamId = req.body.stream
 
-  if (originalFilename === undefined || streamId === undefined) {
-    res.status(400).send('Required: filename, stream')
+  if (originalFilename === undefined || streamId === undefined || timestamp === undefined) {
+    res.status(400).send('Required: filename, stream, timestamp')
+    return
+  }
+
+  if (!moment(timestamp, moment.ISO_8601).isValid()) {
+    res.status(400).send('Invalid format: timestamp')
     return
   }
 
@@ -27,7 +34,7 @@ router.post('/', (req, res) => {
 
   const fileExtension = originalFilename.split('.').pop()
 
-  db.generateUpload(streamId, userId, originalFilename, fileExtension).then(data => {
+  db.generateUpload(streamId, userId, timestamp, originalFilename, fileExtension).then(data => {
     const uploadId = data.id
     const destinationPath = data.path
 

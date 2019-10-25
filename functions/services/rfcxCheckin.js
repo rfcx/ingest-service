@@ -7,33 +7,9 @@ const axios = require('axios')
 const FormData = require('form-data')
 const { identify } = require('./audio')
 
-const apiHostName = require('./rfcxConfig.json').apiHostName
-
-// TODO: get filename as a parameter (2019-06-01-14:05:30.opus, %YYY-%m-%d-%H:%M:%S) and do the logic to return datetime back
-function getDateTime (fileName, timeStampFormat) {
-  const stringOffsetYear = timeStampFormat.search('%Y')
-  const stringOffsetMonth = timeStampFormat.search('%m')
-  const stringOffsetDay = timeStampFormat.search('%d')
-  const stringOffsetHour = timeStampFormat.search('%H')
-  const stringOffsetMin = timeStampFormat.search('%M')
-  const stringOffsetSec = timeStampFormat.search('%S')
-  const year = fileName.substr(stringOffsetYear, 4)
-  const month = fileName.substr(stringOffsetMonth, 2)
-  const day = fileName.substr(stringOffsetDay, 2)
-  const hour = fileName.substr(stringOffsetHour, 2)
-  const min = fileName.substr(stringOffsetMin, 2)
-  const sec = fileName.substr(stringOffsetSec, 2)
-
-  // add milli sec
-  const milliSeconds = 0
-
-  // add timezone offset
-  // TODO: check pref timestamp
-  const timezoneOffset = '+0000'
-
-  const dateTimeISO = year + '-' + month + '-' + day + 'T' + hour + ':' + min + ':' + sec + '.' + milliSeconds + timezoneOffset
-  return dateTimeISO
-}
+const config = require('./rfcxConfig.json')
+const apiHostName = config.apiHostName
+const maxContentLength = config.maxUploadBytes
 
 function getAudioFinalSha1 (filePath) {
   const fileContent = fs.readFileSync(filePath)
@@ -42,10 +18,7 @@ function getAudioFinalSha1 (filePath) {
   return audioFinalSha1
 }
 
-async function generateJSON (filePath, timestampIso) {
-  const fileName = filePath.split('/').slice(-1)[0]
-  const fileExtension = fileName.split('.').slice(-1)[0]
-
+async function generateJSON (filePath, timestampIso, fileType) {
   const timestampEpochMs = moment(timestampIso).valueOf()
   const sentAtEpochMs = moment().valueOf()
 
@@ -58,7 +31,7 @@ async function generateJSON (filePath, timestampIso) {
     return
   }
 
-  const audioElement = [sentAtEpochMs, timestampEpochMs, fileExtension, sha1, result.sampleRate, '1', fileExtension, 'vbr', '1', '16bit']
+  const audioElement = [sentAtEpochMs, timestampEpochMs, fileType, sha1, result.sampleRate, '1', fileType, 'vbr', '1', '16bit']
   console.log('dateEpoch: ' + timestampEpochMs)
   console.log('sentAtEpoch: ' + sentAtEpochMs)
   console.log('sha1: ' + sha1)
@@ -103,16 +76,12 @@ function request (meta, audioStream, audioFilename, guardianGuid, guardianToken)
   data.append('meta', meta)
   data.append('audio', audioStream, audioFilename)
 
-  console.log(guid)
-
   const headers = Object.assign(data.getHeaders(), {
     'x-auth-token': guardianToken,
     'x-auth-user': 'guardian/' + guid
   })
 
-  console.log(headers)
-
-  return axios.post(url, data, { headers })
+  return axios.post(url, data, { headers, maxContentLength })
     .then(function (response) {
       console.log('request success')
       console.log(JSON.stringify(response.data))
@@ -123,10 +92,16 @@ function request (meta, audioStream, audioFilename, guardianGuid, guardianToken)
     })
 }
 
-async function checkin (filePath, originalFilename, timestampFormat, guardianGuid, guardianToken) {
+async function checkin (filePath, originalFilename, timestampIso, guardianGuid, guardianToken) {
+  // Hack to upload wav files
+  if (originalFilename.endsWith('.wav')) {
+    originalFilename = originalFilename.substring(0, originalFilename.length - 3) + 'flac'
+  }
+
+  const fileType = originalFilename.split('.').pop()
+
   // Meta
-  const timestampIso = getDateTime(originalFilename, timestampFormat)
-  const json = await generateJSON(filePath, timestampIso)
+  const json = await generateJSON(filePath, timestampIso, fileType)
   const gzJson = await getGZippedJSON(json)
 
   // Audio
