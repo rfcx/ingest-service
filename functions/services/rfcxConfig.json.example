@@ -1,5 +1,6 @@
 {
   "apiHostName": "https://staging-api.rfcx.org/",
+  "bucketName": "rfcx-ingest-dev.appspot.com",
   "maxUploadBytes": 209715200,
   "tempAccessToken": "abc"
 }

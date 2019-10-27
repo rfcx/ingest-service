@@ -3,7 +3,7 @@ const storage = new Storage({
   keyFilename: "serviceAccountKeyStorage.json" // See README for how to obtain a key
 })
 
-const bucketName = 'rfcx-ingest-dev.appspot.com' // TODO extract to env variables
+const bucketName = require('./rfcxConfig').bucketName
 
 function getSignedUrl (filePath, contentType) {
   // Get a reference to the destination file in GCS
