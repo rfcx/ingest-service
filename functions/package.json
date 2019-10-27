@@ -22,6 +22,7 @@
     "form-data": "^2.5.1",
     "moment": "^2.24.0",
     "querystring": "^0.2.0",
+    "sha1-file": "^1.0.4",
     "zlib": "^1.0.5"
   },
   "devDependencies": {
