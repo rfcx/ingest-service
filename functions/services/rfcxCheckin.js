@@ -43,8 +43,6 @@ async function generateJSON (filePath, timestampIso, fileType) {
 // gzip
 function getGZippedJSON (json) {
   const jsonStr = JSON.stringify(json)
-  console.log('json:', jsonStr)
-  // const jsonStr = '{"audio":"1566904446322*1548246896000*mp3*e3ecd8549ef9e973f20b23e342816fa284a8cbc9*12000*1*mp3*vbr*1*16bit","queued_at":1566904446322,"measured_at":1566904446322,"software":"guardian-cli*0.1.0|updater-cli*0.1.0","battery":"1566904446322*100*0","queued_checkins":"1","skipped_checkins":"0","stashed_checkins":"0"}'
   return new Promise((resolve, reject) => {
     zlib.gzip(jsonStr, (error, gzip) => {
       if (error) reject(error)
@@ -72,12 +70,7 @@ function request (meta, audioStream, audioFilename, guardianGuid, guardianToken)
 
   return axios.post(url, data, { headers, maxContentLength })
     .then(function (response) {
-      console.log('request success')
       console.log(JSON.stringify(response.data))
-    })
-    .catch(function (error) {
-      console.log('request error')
-      console.log(error)
     })
 }
 

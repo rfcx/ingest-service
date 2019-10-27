@@ -6,18 +6,17 @@ const storage = require('../services/storage')
 const rfcx = require('../services/rfcxCheckin')
 
 module.exports = async (context) => {
-  console.log('Ingest: Triggered')
+  const startTime = Date.now()
 
   // Check if there is anything to ingest from the db
   var upload = undefined
   try {
     upload = await db.lockUploadForIngest()
   } catch (err) {
-    console.log('Ingest: ', err.message)
+    console.log(err)
     return
   }
-
-  console.log('Ingest: Found id', upload.id, 'Original filename', upload.originalFilename)
+  logPerf(`Found id ${upload.id} original filename ${upload.originalFilename}`, startTime)
 
   const tempFilePath = path.join(os.tmpdir(), upload.id)
 
@@ -25,14 +24,15 @@ module.exports = async (context) => {
   try {
     // Get the file from GCS
     await storage.download(upload.path, tempFilePath)
-    console.log('Ingest: Downloaded locally to', tempFilePath)
+    logPerf('Downloaded', startTime)
 
     // Get the stream info
     const stream = await db.getStream(upload.streamId)
+    logPerf('Got stream', startTime)
 
     // Upload to RFCx
     await rfcx.checkin(tempFilePath, upload.originalFilename, upload.timestamp, upload.streamId, stream.token)
-
+    logPerf('Checked in', startTime)
   } catch (err) {
     error = err
   }
@@ -44,3 +44,10 @@ module.exports = async (context) => {
   return fs.unlinkSync(tempFilePath)
 }
 
+function logPerf (tag, startTime) {
+  console.log(`${tag} time ${((Date.now() - startTime) / 1000).toFixed(3)} s`)
+  // const used = process.memoryUsage();
+  // for (let key in used) {
+  //   console.log(`${tag} ${key} ${Math.round(used[key] / 1024 / 1024 * 100) / 100} MB`);
+  // }
+}
