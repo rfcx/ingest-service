@@ -1,8 +1,7 @@
 const fs = require('fs')
 const zlib = require('zlib')
 const moment = require('moment')
-const cryptoJS = require('crypto-js')
-const querystring = require('querystring')
+const sha1File = require('sha1-file')
 const axios = require('axios')
 const FormData = require('form-data')
 const { identify } = require('./audio')
@@ -11,31 +10,21 @@ const config = require('./rfcxConfig.json')
 const apiHostName = config.apiHostName
 const maxContentLength = config.maxUploadBytes
 
-function getAudioFinalSha1 (filePath) {
-  const fileContent = fs.readFileSync(filePath)
-  const fileWordArray = cryptoJS.lib.WordArray.create(fileContent)
-  const audioFinalSha1 = cryptoJS.SHA1(fileWordArray)
-  return audioFinalSha1
-}
-
 async function generateJSON (filePath, timestampIso, fileType) {
   const timestampEpochMs = moment(timestampIso).valueOf()
   const sentAtEpochMs = moment().valueOf()
 
-  const sha1 = getAudioFinalSha1(filePath)
+  const sha1 = sha1File(filePath)
 
   try {
     var result = await identify(filePath)
+    console.log('end identify')
   } catch (error) {
     console.log(error)
     return
   }
 
   const audioElement = [sentAtEpochMs, timestampEpochMs, fileType, sha1, result.sampleRate, '1', fileType, 'vbr', '1', '16bit']
-  console.log('dateEpoch: ' + timestampEpochMs)
-  console.log('sentAtEpoch: ' + sentAtEpochMs)
-  console.log('sha1: ' + sha1)
-  console.log('audioSampleRate: ' + result.sampleRate)
 
   // TODO: add LAT_LNG_JSON
   const checkInJson = {
