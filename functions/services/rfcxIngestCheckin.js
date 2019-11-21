@@ -15,16 +15,9 @@ async function generateJSON (filePath, timestampIso, fileType) {
   const sentAtEpochMs = moment().valueOf()
 
   const sha1 = sha1File(filePath)
+  const meta = await identify(filePath)
 
-  try {
-    var result = await identify(filePath)
-    console.log('end identify')
-  } catch (error) {
-    console.log(error)
-    return
-  }
-
-  const audioElement = [sentAtEpochMs, timestampEpochMs, fileType, sha1, result.sampleRate, '1', fileType, 'vbr', '1', '16bit']
+  const audioElement = [sentAtEpochMs, timestampEpochMs, fileType, sha1, meta.sampleRate, '1', fileType, 'vbr', '1', '16bit']
 
   // TODO: add LAT_LNG_JSON
   const checkInJson = {
