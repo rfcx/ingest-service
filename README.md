@@ -55,7 +55,12 @@ npm run shell
 
 then emulate a new object added to the bucket:
 ```
-ingest({name:'uploaded/test/2JkxPLSzeOZ86EPZvGmv.mp3', contentType: 'audio/mp3'})
+uploaded({name:'uploaded/test/9hSBSHakAw8gjT7Pz6pe.mp3', contentType: 'audio/mp3'})
+```
+
+and trigger the next ingest:
+```
+ingest()
 ```
 
 

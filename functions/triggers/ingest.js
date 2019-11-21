@@ -5,52 +5,49 @@ const db = require('../services/db')
 const storage = require('../services/storage')
 const rfcx = require('../services/rfcxCheckin')
 
-module.exports = async (object) => {
-  const filePath = object.name
-  if (!filePath.startsWith('uploaded/')) {
+module.exports = async (context) => {
+  const startTime = Date.now()
+
+  // Check if there is anything to ingest from the db
+  var upload = undefined
+  try {
+    upload = await db.lockUploadForIngest()
+  } catch (err) {
+    console.log(err)
     return
   }
+  logPerf(`Found id ${upload.id} original filename ${upload.originalFilename}`, startTime)
 
-  console.log('ingest: start')
-  const meta = extractMeta(filePath)
-  const contentType = object.contentType
-  const tempFilePath = path.join(os.tmpdir(), meta.filename);
-
-  // Mark uploaded
-  await db.updateUploadStatus(meta.uploadId, db.status.UPLOADED)
+  const tempFilePath = path.join(os.tmpdir(), upload.id)
 
   var error = undefined
   try {
     // Get the file from GCS
-    await storage.download(filePath, tempFilePath)
-    console.log('Downloaded locally to', tempFilePath)
-
-    // Get the upload metadata
-    const data = await db.getUpload(meta.uploadId)
-    console.log('Original name', data.originalFilename)
+    await storage.download(upload.path, tempFilePath)
+    logPerf('Downloaded', startTime)
 
     // Get the stream info
-    const stream = await db.getStream(data.streamId)
+    const stream = await db.getStream(upload.streamId)
+    logPerf('Got stream', startTime)
 
     // Upload to RFCx
-    await rfcx.checkin(tempFilePath, data.originalFilename, data.timestamp, data.streamId, stream.token)
-
+    await rfcx.checkin(tempFilePath, upload.originalFilename, upload.timestamp, upload.streamId, stream.token)
+    logPerf('Checked in', startTime)
   } catch (err) {
     error = err
   }
 
   const status = error ? db.status.FAILED : db.status.INGESTED
   const failureMessage = error ? error.message : null
-  await db.updateUploadStatus(meta.uploadId, status, failureMessage)
+  await db.updateUploadStatus(upload.id, status, failureMessage)
 
   return fs.unlinkSync(tempFilePath)
 }
 
-// Extra stream id, upload id, and filename from the path
-function extractMeta (path) {
-  const pathParts = path.split('/')
-  const streamId = pathParts[1]
-  const filename = pathParts[2]
-  const uploadId = filename.split('.')[0]
-  return { streamId, filename, uploadId }
+function logPerf (tag, startTime) {
+  console.log(`${tag} time ${((Date.now() - startTime) / 1000).toFixed(3)} s`)
+  // const used = process.memoryUsage();
+  // for (let key in used) {
+  //   console.log(`${tag} ${key} ${Math.round(used[key] / 1024 / 1024 * 100) / 100} MB`);
+  // }
 }
