@@ -1,9 +1,10 @@
 const path = require('path')
 const os = require('os')
 const fs = require('fs')
+const config = require('../services/rfcxConfig.json')
 const db = require('../services/db')
-const storage = require('../services/storage')
-const rfcx = require('../services/rfcxCheckin')
+const storage = require('../services/storageGcs')
+const rfcx = require('../services/rfcxIngest')(config.ingestMethod)
 
 module.exports = async (context) => {
   const startTime = Date.now()

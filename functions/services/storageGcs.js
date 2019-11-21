@@ -4,7 +4,7 @@ const storage = new Storage({
   keyFilename: config.gcsServiceAccountKeyFile // See README for how to obtain a key
 })
 
-const bucketName = config.bucketName
+const bucketName = config.uploadBucketName
 
 function getSignedUrl (filePath, contentType) {
   // Get a reference to the destination file in GCS
@@ -27,4 +27,4 @@ function download (remotePath, localPath) {
   return storage.bucket(bucketName).file(remotePath).download({ destination: localPath })
 }
 
-module.exports = { bucketName, getSignedUrl, download }
+module.exports = { getSignedUrl, download }

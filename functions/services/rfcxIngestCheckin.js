@@ -74,7 +74,7 @@ function request (meta, audioStream, audioFilename, guardianGuid, guardianToken)
     })
 }
 
-async function checkin (filePath, originalFilename, timestampIso, guardianGuid, guardianToken) {
+async function ingest (filePath, originalFilename, timestampIso, guardianGuid, guardianToken) {
   // Hack to upload wav files
   if (originalFilename.endsWith('.wav')) {
     originalFilename = originalFilename.substring(0, originalFilename.length - 3) + 'flac'
@@ -93,4 +93,4 @@ async function checkin (filePath, originalFilename, timestampIso, guardianGuid, 
   return request(gzJson, gzFile, gzFilename, guardianGuid, guardianToken)
 }
 
-module.exports = { checkin }
+module.exports = { ingest }
