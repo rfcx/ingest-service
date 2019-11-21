@@ -17,19 +17,26 @@ const s3Client = new aws.S3()
 async function postAudio (guardianGuid, measuredAt, sha1Checksum, sampleCount, filename, numberOfBytes) {
   const url = apiHostName + 'v1/guardians/' + guardianGuid + '/audio'
 
-  const data = { measured_at: measuredAt, sha1_checksum: sha1Checksum, size: numberOfBytes, capture_sample_count: sampleCount, format_id: 3, original_filename: filename }
+  const data = { measured_at: measuredAt, sha1_checksum: sha1Checksum, size: numberOfBytes, capture_sample_count: sampleCount, format_id: 3 }
   const headers = {
     'Authorization': 'Bearer ' + accessToken,
     'Content-Type': 'application/x-www-form-urlencoded'
   }
 
-  return axios.post(url, qs.stringify(data), { headers })
-    .then(response => {
-      console.log('request success')
-      console.log(response.data)
-    }).catch(err => {
-      console.log(err)
-    })
+  try {
+    const response = await axios.post(url, qs.stringify(data), { headers })
+  } catch (err) {
+    console.log(JSON.stringify(err.response.data))
+    if (err.response && err.response.data && err.response.data.msg) {
+      if (err.response.data.msg == 'Failed to create audio: SequelizeUniqueConstraintError: Validation error') {
+        throw { message: 'Duplicate file. Matching sha1 signature already ingested.' }
+      } else {
+        throw { message: err.response.data.msg }
+      }
+    } else {
+      throw err
+    }
+  }
 }
 
 async function putFile (localPath, remotePath) {
@@ -53,7 +60,7 @@ async function ingest (filePath, originalFilename, timestampIso, guardianGuid, g
   await putFile(filePath, remotePath)
 
   // Call post audio endpoint
-  await postAudio(guardianGuid, timestampIso, sha1, meta.sampleCount, originalFilename)
+  await postAudio(guardianGuid, timestampIso, sha1, meta.sampleCount, originalFilename, 0)
 }
 
 module.exports = { ingest }
