@@ -2,19 +2,21 @@ const axios = require('axios')
 const fs = require("fs")
 
 const apiUrl = 'https://us-central1-rfcx-ingest-dev.cloudfunctions.net/api'
-//const apiUrl = 'http://localhost:5000/rfcx-ingest-dev/us-central1/api'
+// const apiUrl = 'http://localhost:5000/rfcx-ingest-dev/us-central1/api'
+// const apiUrl = 'http://localhost:3030' // local address for v2
 
 const arguments = process.argv.slice(2);
 const filePath = arguments[0] || 'example.mp3'
 const filename = '20191010-010101.mp3'
 const stream = 'g1smnj4td3kkmfo7kc1i'
+const timestamp = '2019-10-10T01:01:01.000Z';
 
 
 // Part 1: Get signed url
 
 function requestUploadUrl (originalFilename, streamId) {
   // Make a request for a user with a given ID
-  return axios.post(apiUrl + '/uploads', { filename: originalFilename, stream: streamId })
+  return axios.post(apiUrl + '/uploads', { filename: originalFilename, stream: streamId, timestamp })
     .then(function (response) {
       const url = response.data.url
       const uploadId = response.data.uploadId

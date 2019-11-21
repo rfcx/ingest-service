@@ -34,27 +34,27 @@ router.post('/', (req, res) => {
 
   const fileExtension = originalFilename.split('.').pop()
 
-  db.generateUpload(streamId, userId, timestamp, originalFilename, fileExtension).then(data => {
-    const uploadId = data.id
-    const destinationPath = data.path
-    const filePath = `${userId}/${originalFilename}`;
+  db.generateUpload(streamId, userId, timestamp, originalFilename, fileExtension)
+    .then(data => {
+      const uploadId = data.id
+      const destinationPath = data.path
+      const filePath = `${userId}/${originalFilename}`;
 
-    url = storage.getSignedUrl(filePath, 'audio/' + fileExtension)
-    if (!url) {
+      return storage.getSignedUrl(filePath, 'audio/' + fileExtension)
+        .then((url) => {
+          if (!url) {
+            res.status(500).end()
+          }
+          else {
+            res.json({ uploadId, url })
+          }
+          return;
+        });
+    })
+    .catch(err => {
+      console.error(err)
       res.status(500).end()
-      return;
-    }
-    res.json({ uploadId, url })
-    // .then(url => {
-    //   res.json({ uploadId, url })
-    // }).catch(err => {
-    //   console.error(err)
-    //   res.status(500).end()
-    // })
-  }).catch(err => {
-    console.error(err)
-    res.status(500).end()
-  })
+    })
 })
 
 /**

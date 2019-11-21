@@ -1,7 +1,7 @@
 const axios = require('axios')
 const qs = require('querystring')
 
-const config = require('./rfcxConfig.json.js.js')
+const config = require('./rfcxConfig.json')
 const apiHostName = config.apiHostName
 const accessToken = config.tempAccessToken
 

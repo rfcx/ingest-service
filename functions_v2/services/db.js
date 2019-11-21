@@ -1,64 +1,76 @@
-const firebase = require('./firebase')
-const db = firebase.firestore()
-const FieldValue = require('firebase-admin').firestore.FieldValue;
+const db = require('../utils/redis');
+const moment = require('moment-timezone');
+const uuid = require('uuid/v4');
 
-const uploadsCollection = 'uploads'
 const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30 }
 const statusNumbers = Object.values(status)
-const streamsCollection = 'streams'
 
 function generateUpload (streamId, userId, timestamp, originalFilename, fileType) {
-  let ref = db.collection(uploadsCollection).doc()
-  let path = 'uploaded/' + streamId + '/' + ref.id + '.' + fileType
-  return ref.set({
-    streamId: streamId,
-    userId: userId,
+  const now = moment().tz('UTC').valueOf();
+  const uploadId = uuid();
+  const path = `uploaded/${streamId}/${uploadId}.${fileType}`;
+  const opts = {
+    streamId,
+    userId,
     status: status.WAITING,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-    timestamp: timestamp,
-    originalFilename: originalFilename,
-    path: path
-  }).then(() => {
-    return { id: ref.id, path: path }
-  })
+    createdAt: now,
+    updatedAt: now,
+    timestamp,
+    originalFilename,
+    path
+  };
+  return db.setAsync(`upload-${uploadId}`, JSON.stringify(opts))
+    .then((data) => {
+      console.log('generateUpload redis data', data);
+      return {
+        id: uploadId,
+        path
+      };
+    });
+}
+
+function getKeyJSONValue(key) {
+  return db.getAsync(key)
+    .then((data) => {
+      return JSON.parse(data);
+    });
 }
 
 function getUpload (id) {
-  return db.collection(uploadsCollection).doc(id).get().then(snapshot => {
-    return snapshot.data()
-  })
+  return getKeyJSONValue(`upload-${id}`);
 }
 
 function updateUploadStatus (id, statusNumber, failureMessage = null) {
   if (!statusNumbers.includes(statusNumber)) {
     return Promise.reject('Invalid status')
   }
-  var updates = {
-    status: statusNumber,
-    updatedAt: FieldValue.serverTimestamp()
-  }
-  if (failureMessage != null) {
-    updates['failureMessage'] = failureMessage
-  }
-  return db.collection(uploadsCollection).doc(id).update(updates)
+  return getUpload(id)
+    .then((dataStr) => {
+      let data = JSON.parse(dataStr);
+      data.status = statusNumber;
+      data.updatedAt = moment().tz('UTC').valueOf();
+      if (failureMessage != null) {
+        data.failureMessage = failureMessage;
+      }
+      return db.setAsync(id, JSON.stringify(data));
+    })
 }
 
 function createStream (name) {
-  const ref = db.collection(streamsCollection).doc()
   const token = '1234' // TODO: this is only here for legacy calls to checkin api
-  return ref.set({
-    name: name,
-    token: token
-  }).then(() => {
-    return { id: ref.id, token: token }
-  })
+  const streamGuid = uuid();
+  return db.setAsync(`stream-${streamGuid}`, JSON.stringify({ name, token }))
+    .then((data) => {
+      console.log('createStream redis data', data);
+      return {
+        id: streamGuid,
+        token
+      };
+    });
 }
 
 function getStream (id) {
-  return db.collection(streamsCollection).doc(id).get().then(snapshot => {
-    return snapshot.data()
-  })
+  return getKeyJSONValue(`stream-${id}`);
 }
 
 module.exports = { generateUpload, getUpload, updateUploadStatus, status, createStream, getStream }

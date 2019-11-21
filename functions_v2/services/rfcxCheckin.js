@@ -7,7 +7,7 @@ const axios = require('axios')
 const FormData = require('form-data')
 const { identify } = require('./audio')
 
-const config = require('./rfcxConfig.json.js')
+const config = require('./rfcxConfig.json')
 const apiHostName = config.apiHostName
 const maxContentLength = config.maxUploadBytes
 
