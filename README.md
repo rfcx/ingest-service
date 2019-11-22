@@ -31,7 +31,6 @@ gcloud iam service-accounts keys create functions/serviceAccountKeyStorage.json 
   --iam-account functions-storage@rfcx-ingest-dev.iam.gserviceaccount.com --project rfcx-ingest-dev
 ```
 
-
 ## Local development
 
 _Temporary step for demo:_
@@ -81,6 +80,21 @@ gsutil cors set storage.cors.json gs://rfcx-ingest-dev.appspot.com
 The `example` folder contains `upload.js` which can be run as `node upload.js filename.mp3` to perform the client-side steps to upload the file (get a signed url, upload the file to storage, and check the upload status). (Install the dependencies before you start `cd example ; npm i`.)
 
 To test the trigger from storage, use the `npm run shell` described above (from the `functions` folder).
+
+
+## Ingestion methods
+
+1. Checkin endpoint
+
+Set the `ingestMethod` to `checkin` in rfcxConfig.json. No extra configuration required.
+
+2. Manual S3 upload and audio endpoint
+
+Set the `ingestMethod` to `manual` and `ingestManualBucketName` to `rfcx-guardian-ark-staging` in rfcxConfig.json. Also add the AWS S3 user config: `s3AccessKey`, `s3PrivateKey`, `s3Region`.
+
+3. Streams endpoint - not yet implemented
+
+Set the `ingestMethod` to `streams` in rfcxConfig.json. 
 
 
 ## Not yet implemented

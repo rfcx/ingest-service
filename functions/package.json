@@ -9,11 +9,13 @@
     "deploy-prod": "firebase deploy --project prod --only functions",
     "logs": "firebase functions:log"
   },
+  "main": "indexFunctions.js",
   "engines": {
     "node": "10"
   },
   "dependencies": {
     "@google-cloud/storage": "^3.3.1",
+    "aws-sdk": "^2.574.0",
     "axios": "^0.19.0",
     "body-parser": "^1.19.0",
     "express": "^4.17.1",

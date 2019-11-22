@@ -5,7 +5,7 @@ var router = express.Router()
 router.use(require('../middleware/cors'))
 
 const db = require('../services/db')
-const storage = require('../services/storage')
+const storage = require('../services/storageGcs')
 
 /**
  * HTTP function that generates a signed URL

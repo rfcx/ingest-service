@@ -4,7 +4,7 @@ const functions = require('firebase-functions')
 exports.api = functions.https.onRequest(require('./api'))
 
 // Background triggers
-const bucketName = require('./services/rfcxConfig').bucketName
+const bucketName = require('./services/rfcxConfig').uploadBucketName
 exports.uploaded = functions.storage.bucket(bucketName).object().onFinalize(require('./triggers/uploaded'))
 
 const ingest = require('./triggers/ingest')
