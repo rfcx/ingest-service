@@ -1,10 +1,11 @@
 const path = require('path')
 const os = require('os')
 const fs = require('fs')
-const config = require('../services/rfcxConfig.json')
-const db = require('../services/db')
-const storage = require('../services/storageGcs')
-const rfcx = require('../services/rfcxIngest')(config.ingestMethod)
+
+const platform = process.env.PLATFORM || 'google';
+const db = require(`../services/db/${platform}`)
+const storage = require(`../services/storage/${platform}`);
+const rfcx = require('../services/rfcxIngest')(process.env.INGEST_METHOD)
 
 module.exports = async (context) => {
   const startTime = Date.now()

@@ -1,12 +1,10 @@
-const aws = require('aws-sdk');
+const AWS = require('aws-sdk');
 
-const config = require('../services/rfcxConfig.json')
-
-aws.config.update({
-  accessKeyId: config.s3AccessKey,
-  secretAccessKey: config.s3SecretKey,
-  region: config.s3Region,
+AWS.config.update({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_KEY,
+  region: process.env.AWS_REGION_ID,
   signatureVersion: 'v4',
 });
 
-module.exports = aws;
+module.exports = AWS;

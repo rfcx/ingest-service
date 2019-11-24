@@ -3,12 +3,11 @@ const fs = require('fs')
 const qs = require('querystring')
 const moment = require('moment')
 const sha1File = require('sha1-file')
-const config = require('./rfcxConfig.json')
 const { identify } = require('./audio')
 
-const apiHostName = config.apiHostName
-const accessToken = config.tempAccessToken
-const targetBucketName = config.ingestManualBucketName
+const apiHostName = process.env.API_HOST
+const accessToken = process.env.TEMP_ACCESS_TOKEN
+const targetBucketName = process.env.S3_INGEST_MANUAL_BUCKET
 
 const aws = require('../utils/aws')
 const s3Client = new aws.S3()

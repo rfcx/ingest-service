@@ -4,8 +4,9 @@ var router = express.Router()
 
 router.use(require('../middleware/cors'))
 
-const db = require('../services/db')
-const storage = require('../services/storageGcs')
+const platform = process.env.PLATFORM || 'google';
+const db = require(`../services/db/${platform}`)
+const storage = require(`../services/storage/${platform}`);
 
 /**
  * HTTP function that generates a signed URL
@@ -34,20 +35,26 @@ router.post('/', (req, res) => {
 
   const fileExtension = originalFilename.split('.').pop()
 
-  db.generateUpload(streamId, userId, timestamp, originalFilename, fileExtension).then(data => {
-    const uploadId = data.id
-    const destinationPath = data.path
+  db.generateUpload(streamId, userId, timestamp, originalFilename, fileExtension)
+    .then(data => {
+      const uploadId = data.id
+      const destinationPath = storageType === 'GCS'? data.path : `${userId}/${originalFilename}`
 
-    storage.getSignedUrl(destinationPath, 'audio/' + fileExtension).then(url => {
-      res.json({ uploadId, url })
-    }).catch(err => {
+      return storage.getSignedUrl(destinationPath, 'audio/' + fileExtension)
+      .then((url) => {
+        if (!url) {
+          res.status(500).end()
+        }
+        else {
+          res.json({ uploadId, url })
+        }
+        return;
+      });
+    })
+    .catch(err => {
       console.error(err)
       res.status(500).end()
-    })
-  }).catch(err => {
-    console.error(err)
-    res.status(500).end()
-  })
+    });
 })
 
 /**
@@ -57,7 +64,7 @@ router.post('/', (req, res) => {
  * @param {Object} res Cloud Function response context.
  */
 router.get('/:id', (req, res) => {
-  // TODO check that the user owns the upload 
+  // TODO check that the user owns the upload
 
   const id = req.params.id
   db.getUpload(id).then(data => {

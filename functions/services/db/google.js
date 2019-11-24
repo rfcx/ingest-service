@@ -1,4 +1,4 @@
-const firebase = require('./firebase')
+const firebase = require('../../utils/firebase')
 const db = firebase.firestore()
 const FieldValue = require('firebase-admin').firestore.FieldValue;
 

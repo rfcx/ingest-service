@@ -6,9 +6,8 @@ const axios = require('axios')
 const FormData = require('form-data')
 const { identify } = require('./audio')
 
-const config = require('./rfcxConfig.json')
-const apiHostName = config.apiHostName
-const maxContentLength = config.maxUploadBytes
+const apiHostName = process.env.API_HOST
+const maxContentLength = process.env.MAX_UPLOAD_BYTES ? parseInt(process.env.MAX_UPLOAD_BYTES) : 209715200
 
 async function generateJSON (filePath, timestampIso, fileType) {
   const timestampEpochMs = moment(timestampIso).valueOf()

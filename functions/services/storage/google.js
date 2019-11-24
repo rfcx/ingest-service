@@ -1,10 +1,9 @@
 const { Storage } = require('@google-cloud/storage')
-const config = require('./rfcxConfig.json')
 const storage = new Storage({
-  keyFilename: config.gcsServiceAccountKeyFile // See README for how to obtain a key
+  keyFilename: process.env.GCS_SERVICE_ACCOUNT_KEY_FILE // See README for how to obtain a key
 })
 
-const bucketName = config.uploadBucketName
+const bucketName = process.env.S3_UPLOAD_BUCKET
 
 function getSignedUrl (filePath, contentType) {
   // Get a reference to the destination file in GCS

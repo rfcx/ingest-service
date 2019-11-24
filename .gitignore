@@ -65,3 +65,5 @@ node_modules/
 .env
 serviceAccountKeyStorage.json
 rfcxConfig.json
+
+.DS_Store

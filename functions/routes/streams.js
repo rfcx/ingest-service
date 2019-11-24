@@ -3,7 +3,8 @@ var router = express.Router()
 
 router.use(require('../middleware/cors'))
 
-const db = require('../services/db')
+const platform = process.env.PLATFORM || 'google';
+const db = require(`../services/db/${platform}`)
 const rfcx = require('../services/rfcxRegister')
 
 /**

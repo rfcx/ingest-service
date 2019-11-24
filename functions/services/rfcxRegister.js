@@ -1,9 +1,8 @@
 const axios = require('axios')
 const qs = require('querystring')
 
-const config = require('./rfcxConfig.json')
-const apiHostName = config.apiHostName
-const accessToken = config.tempAccessToken
+const apiHostName = process.env.API_HOST
+const accessToken = process.env.TEMP_ACCESS_TOKEN
 
 async function register (guardianGuid, guardianToken, name) {
   const url = apiHostName + 'v1/guardians/register'
