@@ -33,14 +33,22 @@ gcloud iam service-accounts keys create functions/serviceAccountKeyStorage.json 
 
 ## Local development
 
-_Temporary step for demo:_
-Copy `services/rfcxConfig.json.example` to `services/rfcxConfig.json` and set the API base url and access token (see "Not yet implemented" below).
+Copy `functions/.env.example` to `functions/.env` and set the API base url and access token (see "Not yet implemented" below).
 
 Install dependencies:
 ```
 cd functions
 npm install
 ```
+
+### For Amazon
+
+Run the API endpoints:
+```
+npm run start.amazon
+```
+
+### For Google
 
 Run the API endpoints only:
 ```
