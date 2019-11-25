@@ -3,7 +3,7 @@ const storage = new Storage({
   keyFilename: process.env.GCS_SERVICE_ACCOUNT_KEY_FILE // See README for how to obtain a key
 })
 
-const bucketName = process.env.S3_UPLOAD_BUCKET
+const bucketName = process.env.UPLOAD_BUCKET
 
 function getSignedUrl (filePath, contentType) {
   // Get a reference to the destination file in GCS

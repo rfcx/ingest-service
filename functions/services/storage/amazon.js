@@ -1,15 +1,17 @@
 const AWS = require('../../utils/aws');
 const fs = require('fs');
 
+const bucketName = process.env.UPLOAD_BUCKET
+
 const s3Client = new AWS.S3({
   signatureVersion: 'v4',
-  endpoint: new AWS.Endpoint(`${process.env.S3_INGEST_BUCKET}.s3-accelerate.amazonaws.com`),
+  endpoint: new AWS.Endpoint(`${bucketName}.s3-accelerate.amazonaws.com`),
   useAccelerateEndpoint: true,
 });
 
 function getSignedUrl (filePath, contentType) {
   const params = {
-    Bucket: process.env.S3_INGEST_BUCKET,
+    Bucket: bucketName,
     Key: filePath,
     Expires: 60 * 60 * 24, // 24 hours
     ContentType: contentType

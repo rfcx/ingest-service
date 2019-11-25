@@ -38,23 +38,21 @@ router.post('/', (req, res) => {
   db.generateUpload(streamId, userId, timestamp, originalFilename, fileExtension)
     .then(data => {
       const uploadId = data.id
-      const destinationPath = storageType === 'GCS'? data.path : `${userId}/${originalFilename}`
-
-      return storage.getSignedUrl(destinationPath, 'audio/' + fileExtension)
-      .then((url) => {
-        if (!url) {
-          res.status(500).end()
-        }
-        else {
-          res.json({ uploadId, url })
-        }
-        return;
-      });
+      return storage.getSignedUrl(data.path, 'audio/' + fileExtension)
+        .then((url) => {
+          if (!url) {
+            res.status(500).end()
+          }
+          else {
+            res.json({ uploadId, url })
+          }
+          return
+        })
     })
     .catch(err => {
       console.error(err)
       res.status(500).end()
-    });
+    })
 })
 
 /**
