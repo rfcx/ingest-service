@@ -18,4 +18,15 @@ function identify (filePath) {
   })
 }
 
+/**
+ *
+ * @param {String} sourceFile - path to source file on disk
+ * @param {Object[]} splittedFiles - array with objects with segments information (local path, duration, start, end timestamps)
+ */
+function split(sourceFile, splittedFiles) {
+  // TODO: write split code here
+  // Assume that you have a new file at `/tmp/ingest-service/source`. Just place it there and work with it.
+  // Put splitted files into `/tmp/ingest-service/splitted/`
+}
+
 module.exports = { identify }
