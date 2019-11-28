@@ -7,6 +7,6 @@ RUN npm install
 
 FROM 887044485231.dkr.ecr.eu-west-1.amazonaws.com/node12_base:latest 
 
-COPY --from=builder --chmod=755 /var/app/ /var/app/
+COPY --from=builder /var/app/ /var/app/
 
 CMD npm run start.amazon
