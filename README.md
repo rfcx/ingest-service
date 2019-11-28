@@ -33,7 +33,7 @@ gcloud iam service-accounts keys create functions/serviceAccountKeyStorage.json 
 
 ## Local development
 
-Copy `functions/.env.example` to `functions/.env` and set the API base url and access token (see "Not yet implemented" below).
+Copy `functions/.env.example` to `functions/.env`. Minimum setup requires `PLATFORM`, `API_HOST`, `UPLOAD_BUCKET` (follow the instructions for other vars).
 
 Install dependencies:
 ```
@@ -50,14 +50,19 @@ npm run start.amazon
 
 ### For Google
 
+Cloud Functions use envrionment variables from .runtimeconfig.json. To generate this file from your .env file:
+```
+node devtools/convertEnvToFirebaseConfig.js
+```
+
 Run the API endpoints only:
 ```
-npm run serve
+npm run servefb
 ```
 
 Test the cloud functions that trigger on new storage objects (and also run the API endpoints):
 ```
-npm run shell
+npm run shellfb
 ```
 
 then emulate a new object added to the bucket:
@@ -73,9 +78,15 @@ ingest()
 
 ## Deployment
 
+Before deploying the functions, upload the config to the server:
+```
+npm run deployfbconfig
+```
+Note that config can be updated independently of the code in the functions.
+
 Deploy to Firebase Cloud Functions:
 ```
-npm run deploy
+npm run deployfb
 ```
 
 To set the CORS on GCS (to enable the ingest app to PUT a file):
@@ -87,24 +98,24 @@ gsutil cors set storage.cors.json gs://rfcx-ingest-dev.appspot.com
 
 The `example` folder contains `upload.js` which can be run as `node upload.js filename.mp3` to perform the client-side steps to upload the file (get a signed url, upload the file to storage, and check the upload status). (Install the dependencies before you start `cd example ; npm i`.)
 
-To test the trigger from storage, use the `npm run shell` described above (from the `functions` folder).
+To test the trigger from storage, use the `npm run shellfb` described above (from the `functions` folder).
 
 
 ## Ingestion methods
 
 1. Checkin endpoint
 
-Set the `ingestMethod` to `checkin` in rfcxConfig.json. No extra configuration required.
+Set the `INGEST_METHOD` to `checkin` in rfcxConfig.json. No extra configuration required.
 
 2. Manual S3 upload and audio endpoint
 
-Set the `ingestMethod` to `manual` and `ingestManualBucketName` to `rfcx-guardian-ark-staging` in rfcxConfig.json. Also add the AWS S3 user config: `s3AccessKey`, `s3PrivateKey`, `s3Region`.
+Set the `INGEST_METHOD` to `manual` and `ingestManualBucketName` to `rfcx-guardian-ark-staging` in rfcxConfig.json. Also add the AWS S3 user config: `S3_ACCESS_KEY_ID`, `S3_SECRET_KEY`, `S3_REGION_ID`.
 
 3. Streams endpoint - not yet implemented
 
-Set the `ingestMethod` to `streams` in rfcxConfig.json. 
+Set the `INGEST_METHOD` to `streams` in rfcxConfig.json. 
 
 
 ## Not yet implemented
 
-- *Authentication*: Currently need to set an access token with the guardianCreator role in `services/rfcxConfig.json` under `tempAccessToken`. In future, we need to pass the access token from the client (Ingest App).
+- *Authentication*: Currently need to set an access token with the guardianCreator role in `.env` under `TEMP_ACCESS_TOKEN`. In future, we need to pass the access token from the client (Ingest App).

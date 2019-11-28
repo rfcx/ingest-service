@@ -1,8 +1,13 @@
 const functions = require('firebase-functions')
 
-// TODO Firebase should be able to autoload the config
-require('dotenv').config()
+// Extract Firebase env vars to process env vars
+const config = functions.config()
+for (const key in config.env) {
+  process.env[key.toUpperCase()] = config.env[key]
+}
+
 const bucketName = process.env.UPLOAD_BUCKET
+console.log('bucket = ' + bucketName)
 
 // HTTP endpoints
 exports.api = functions.https.onRequest(require('./api'))
