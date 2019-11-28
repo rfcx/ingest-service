@@ -2,7 +2,6 @@ FROM node:12 as builder
 
 RUN mkdir /var/app
 ADD . /var/app/
-RUN chmod -R 777 /var/app
 WORKDIR /var/app/functions
 RUN npm install
 

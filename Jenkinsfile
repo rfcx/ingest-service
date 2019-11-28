@@ -78,6 +78,7 @@ pipeline {
         if (branch == 'master') {
              result = "staging"
         withCredentials([file(credentialsId: 'ingest_staging_env', variable: 'PRIVATE_ENV')]) {
+        sh "chmod -R 777 *"
         sh "cp $PRIVATE_ENV functions/.env"
         sh "chmod 777 functions/.env"
         }
