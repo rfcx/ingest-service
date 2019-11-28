@@ -77,7 +77,7 @@ pipeline {
         result = "NULL"
         if (branch == 'master') {
              result = "staging"
-        withCredentials([file(credentialsId: 'ingest_service_env', variable: 'PRIVATE_ENV')]) {
+        withCredentials([file(credentialsId: 'ingest_staging_env', variable: 'PRIVATE_ENV')]) {
         sh "cp $PRIVATE_ENV functions/.env"
         sh "chmod 777 functuins/.env"
         }
