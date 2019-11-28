@@ -79,7 +79,7 @@ pipeline {
              result = "staging"
         withCredentials([file(credentialsId: 'ingest_staging_env', variable: 'PRIVATE_ENV')]) {
         sh "cp $PRIVATE_ENV functions/.env"
-        sh "chmod 777 functuins/.env"
+        sh "chmod 777 functions/.env"
         }
          }
          echo "BRANCH:${branch} -> CONFIGURATION:${result}"
