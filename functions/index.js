@@ -10,3 +10,8 @@ const port = process.env.PORT || 3030
 api.listen(port, function () {
   console.log(`App is listening on port ${port}`)
 })
+
+if (process.env.PLATFORM === 'amazon') {
+  let ingestSQSConsumer = require('./services/consumer/amazon');
+  ingestSQSConsumer.start();
+}
