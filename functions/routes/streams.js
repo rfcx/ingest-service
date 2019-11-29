@@ -36,4 +36,30 @@ router.post('/', (req, res) => {
   })
 })
 
+/**
+ * HTTP function that edits a stream (e.g. rename)
+ */
+router.post('/:id', (req, res) => {
+  const id = req.params.id
+  const name = req.body.name
+  const site = req.body.site
+
+  if (name === undefined) {
+    res.status(400).send('Required: name')
+    return
+  }
+
+  return db.editStream(id, name, site).then(result => {
+    // TODO rfcx.editStream(..)
+    res.json({})
+  }).catch(err => {
+    if (err.message == errors.UNAUTHORIZED) {
+      res.status(401).send(err.message)
+    } else {
+      console.log(err)
+      res.status(500).send(err.message)
+    }
+  })
+})
+
 module.exports = router

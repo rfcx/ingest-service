@@ -79,4 +79,14 @@ function getStream (id) {
   })
 }
 
-module.exports = { generateUpload, getUpload, updateUploadStatus, lockUploadForIngest, status, createStream, getStream }
+function editStream (id, name, site) {
+  var changeSet = {
+    name: name
+  }
+  if (site !== undefined) {
+    changeSet['site'] = site
+  }
+  return db.collection(streamsCollection).doc(id).update(changeSet)
+}
+
+module.exports = { generateUpload, getUpload, updateUploadStatus, lockUploadForIngest, status, createStream, getStream, editStream }

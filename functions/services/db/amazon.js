@@ -29,7 +29,7 @@ function generateUpload (streamId, userId, timestamp, originalFilename, fileType
     });
 }
 
-function getKeyJSONValue(key) {
+function getKeyJSONValue (key) {
   return db.getAsync(key)
     .then((data) => {
       return JSON.parse(data);
@@ -56,10 +56,10 @@ function updateUploadStatus (id, statusNumber, failureMessage = null) {
     })
 }
 
-function createStream (name) {
+function createStream (name, site) {
   const token = '1234' // TODO: this is only here for legacy calls to checkin api
   const streamGuid = uuid();
-  return db.setAsync(`stream-${streamGuid}`, JSON.stringify({ name, token }))
+  return db.setAsync(`stream-${streamGuid}`, JSON.stringify({ name, site, token }))
     .then((data) => {
       console.log('createStream redis data', data);
       return {
@@ -70,7 +70,20 @@ function createStream (name) {
 }
 
 function getStream (id) {
-  return getKeyJSONValue(`stream-${id}`);
+  return getKeyJSONValue(`stream-${id}`)
 }
 
-module.exports = { generateUpload, getUpload, updateUploadStatus, status, createStream, getStream }
+function editStream (id, name, site) { // TODO needs testing
+  return getKeyJSONValue(`stream-${id}`).then(stream => {
+    stream.name = name
+    if (site !== undefined) {
+      stream.site = site
+    }
+    return db.setAsync(`stream-${id}`, JSON.stringify(stream))
+      .then((data) => {
+        console.log('editStream redis data', data)
+      })
+  })
+}
+
+module.exports = { generateUpload, getUpload, updateUploadStatus, status, createStream, getStream, editStream }
