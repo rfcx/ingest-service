@@ -41,12 +41,20 @@ cd functions
 npm install
 ```
 
-### For Amazon
+### For Node/Amazon
 
-Run the API endpoints:
+Run the API endpoints (with live reloading):
 ```
-npm run start.amazon
+npm run dev
 ```
+
+In production the API endpoints are run directly:
+```
+npm start
+```
+
+TODO: How to run the background job (SQS Consumer) and test the triggers from S3 to ingest
+
 
 ### For Google
 
