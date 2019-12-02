@@ -53,6 +53,8 @@ In production the API endpoints are run directly:
 npm start
 ```
 
+Use these [instructions](https://confluence.rfcx.org/display/RD/Configuring+S3+new+file+trigger+to+SQS+queue "Confluence document") to configure S3 new file trigger to SQS queue.
+
 TODO: How to run the background job (SQS Consumer) and test the triggers from S3 to ingest
 
 
@@ -121,7 +123,7 @@ Set the `INGEST_METHOD` to `manual` and `ingestManualBucketName` to `rfcx-guardi
 
 3. Streams endpoint - not yet implemented
 
-Set the `INGEST_METHOD` to `streams` in rfcxConfig.json. 
+Set the `INGEST_METHOD` to `streams` in rfcxConfig.json.
 
 
 ## Not yet implemented
