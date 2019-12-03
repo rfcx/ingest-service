@@ -23,7 +23,7 @@ router.route('/').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
     res.status(400).send('Required: name')
     return
   }
-  const idToken = req.header['authorization'];
+  const idToken = req.headers['authorization'];
   return db.createStream(name, idToken).then(result => {
     return rfcx.register(result.id, result.token, name, site, idToken).then(() => {
       res.json({ id: result.id })
