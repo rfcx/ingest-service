@@ -124,8 +124,3 @@ Set the `INGEST_METHOD` to `manual` and `ingestManualBucketName` to `rfcx-guardi
 3. Streams endpoint - not yet implemented
 
 Set the `INGEST_METHOD` to `streams` in rfcxConfig.json.
-
-
-## Not yet implemented
-
-- *Authentication*: Currently need to set an access token with the guardianCreator role in `.env` under `TEMP_ACCESS_TOKEN`. In future, we need to pass the access token from the client (Ingest App).

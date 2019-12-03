@@ -62,14 +62,15 @@ function lockUploadForIngest (id) {
   })
 }
 
-function createStream (name) {
+function createStream (name, idToken) {
   const ref = db.collection(streamsCollection).doc()
   const token = '1234' // TODO: this is only here for legacy calls to checkin api
   return ref.set({
     name: name,
-    token: token
+    token: token,
+    idToken: idToken
   }).then(() => {
-    return { id: ref.id, token: token }
+    return { id: ref.id, token: token, idToken: idToken }
   })
 }
 

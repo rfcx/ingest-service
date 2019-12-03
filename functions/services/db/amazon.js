@@ -56,15 +56,16 @@ function updateUploadStatus (id, statusNumber, failureMessage = null) {
     })
 }
 
-function createStream (name, site) {
+function createStream (name, idToken) {
   const token = '1234' // TODO: this is only here for legacy calls to checkin api
   const streamGuid = uuid();
-  return db.setAsync(`stream-${streamGuid}`, JSON.stringify({ name, site, token }))
+  return db.setAsync(`stream-${streamGuid}`, JSON.stringify({ name, token, idToken }))
     .then((data) => {
       console.log('createStream redis data', data);
       return {
         id: streamGuid,
-        token
+        token,
+        idToken
       };
     });
 }

@@ -1,6 +1,10 @@
 const express = require('express')
 var router = express.Router()
 
+const authentication = require('../middleware/authentication');
+const verifyToken = authentication.verifyToken;
+const hasRole = authentication.hasRole;
+
 router.use(require('../middleware/cors'))
 
 const platform = process.env.PLATFORM || 'google';
@@ -11,7 +15,7 @@ const errors = require('../utils/errors')
 /**
  * HTTP function that creates a stream
  */
-router.post('/', (req, res) => {
+router.route('/').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
   const name = req.body.name
   const site = req.body.site
 
@@ -19,9 +23,9 @@ router.post('/', (req, res) => {
     res.status(400).send('Required: name')
     return
   }
-
-  return db.createStream(name).then(result => {
-    return rfcx.register(result.id, result.token, name, site).then(() => {
+  const idToken = req.header['authorization'];
+  return db.createStream(name, idToken).then(result => {
+    return rfcx.register(result.id, result.token, name, site, idToken).then(() => {
       res.json({ id: result.id })
     })
   }).catch(err => {
@@ -39,7 +43,7 @@ router.post('/', (req, res) => {
 /**
  * HTTP function that edits a stream (e.g. rename)
  */
-router.post('/:id', (req, res) => {
+router.route('/:id').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
   const id = req.params.id
   const name = req.body.name
   const site = req.body.site
