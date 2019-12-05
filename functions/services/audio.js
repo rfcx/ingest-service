@@ -24,9 +24,15 @@ function identify (filePath) {
  * @param {Object[]} splittedFiles - array with objects with segments information (local path, duration, start, end timestamps)
  */
 function split(sourceFile, splittedFiles) {
+  console.log('split file', sourceFile);
+  return Promise.resolve(); // TODO: remove this line when start working on real code
+
   // TODO: write split code here
   // Assume that you have a new file at `/tmp/ingest-service/source`. Just place it there and work with it.
   // Put splitted files into `/tmp/ingest-service/splitted/`
 }
 
-module.exports = { identify }
+module.exports = {
+  identify,
+  split,
+}

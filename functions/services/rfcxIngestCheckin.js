@@ -66,7 +66,7 @@ function request (meta, audioStream, audioFilename, guardianGuid, guardianToken)
     })
 }
 
-async function ingest (filePath, originalFilename, timestampIso, guardianGuid, guardianToken) {
+async function ingest (filePath, originalFilename, timestampIso, guardianGuid, guardianToken, idToken) {
   // Hack to upload wav files
   if (originalFilename.endsWith('.wav')) {
     originalFilename = originalFilename.substring(0, originalFilename.length - 3) + 'flac'

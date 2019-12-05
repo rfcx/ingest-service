@@ -62,14 +62,15 @@ function lockUploadForIngest (id) {
   })
 }
 
-function createStream (name) {
+function createStream (name, idToken) {
   const ref = db.collection(streamsCollection).doc()
   const token = '1234' // TODO: this is only here for legacy calls to checkin api
   return ref.set({
     name: name,
-    token: token
+    token: token,
+    idToken: idToken
   }).then(() => {
-    return { id: ref.id, token: token }
+    return { id: ref.id, token: token, idToken: idToken }
   })
 }
 
@@ -79,4 +80,14 @@ function getStream (id) {
   })
 }
 
-module.exports = { generateUpload, getUpload, updateUploadStatus, lockUploadForIngest, status, createStream, getStream }
+function editStream (id, name, site) {
+  var changeSet = {
+    name: name
+  }
+  if (site !== undefined) {
+    changeSet['site'] = site
+  }
+  return db.collection(streamsCollection).doc(id).update(changeSet)
+}
+
+module.exports = { generateUpload, getUpload, updateUploadStatus, lockUploadForIngest, status, createStream, getStream, editStream }

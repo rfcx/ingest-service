@@ -7,9 +7,10 @@
     "deployfb": "firebase deploy --only functions",
     "deployfbconfig": "cat .runtimeconfig.json | node devtools/publishFirebaseConfig.js",
     "logsfb": "firebase functions:log",
-    "start.amazon": "node indexAmazon.js"
+    "dev": "nodemon index.js",
+    "start": "node index.js"
   },
-  "main": "indexGoogle.js",
+  "main": "cloudFunctions.js",
   "engines": {
     "node": "10"
   },
@@ -29,12 +30,15 @@
     "moment-timezone": "0.5.27",
     "querystring": "^0.2.0",
     "redis": "2.8.0",
+    "rimraf": "^3.0.0",
     "sha1-file": "^1.0.4",
+    "sqs-consumer": "^5.4.0",
     "uuid": "3.3.3",
     "zlib": "^1.0.5"
   },
   "devDependencies": {
-    "firebase-functions-test": "^0.1.6"
+    "firebase-functions-test": "^0.1.6",
+    "nodemon": "^2.0.1"
   },
   "private": true
 }
