@@ -12,7 +12,7 @@ pipeline {
 
         stage("Build") {
             when {
-                 expression { BRANCH_NAME ==~ /(master)/ }
+                 expression { BRANCH_NAME ==~ /(master|staging)/ }
             }
             steps {
             slackSend (color: '#FF9800', message: "STARTED: ${env.BUILD_NUMBER} Application ${APP} Branch ${PHASE} \nCommit ${GIT_COMMIT} by ${env.GIT_COMMITTER_NAME} (${env.BUILD_URL})")
@@ -37,7 +37,7 @@ pipeline {
         }
         stage('Deploy') {
             when {
-                 expression { BRANCH_NAME ==~ /(master)/ }
+                 expression { BRANCH_NAME ==~ /(master|staging)/ }
             }
             steps {
                 sh "kubectl set image deployment ${APP} ${APP}=${ECR}/${APP}_${PHASE}:${BUILD_NUMBER} --namespace ${PHASE}"
@@ -46,7 +46,7 @@ pipeline {
         }
         stage('Verifying') {
             when {
-                 expression { BRANCH_NAME ==~ /(master)/ }
+                 expression { BRANCH_NAME ==~ /(master|staging)/ }
             }
             steps {
             catchError {
@@ -75,9 +75,17 @@ pipeline {
   def branchToConfig(branch) {
      script {
         result = "NULL"
-        if (branch == 'master') {
+        if (branch == 'staging') {
              result = "staging"
         withCredentials([file(credentialsId: 'ingest_staging_env', variable: 'PRIVATE_ENV')]) {
+        sh "chmod -R 777 *"
+        sh "cp $PRIVATE_ENV functions/.env"
+        sh "chmod 777 functions/.env"
+        }
+        }
+        if (branch == 'master') {
+             result = "production"
+        withCredentials([file(credentialsId: 'ingest_production_env', variable: 'PRIVATE_ENV')]) {
         sh "chmod -R 777 *"
         sh "cp $PRIVATE_ENV functions/.env"
         sh "chmod 777 functions/.env"
