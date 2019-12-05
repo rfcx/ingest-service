@@ -8,7 +8,7 @@ const statusNumbers = Object.values(status)
 function generateUpload (streamId, userId, timestamp, originalFilename, fileType) {
   const now = moment().tz('UTC').valueOf();
   const uploadId = uuid();
-  const path = `uploaded/${streamId}/${uploadId}.${fileType}`;
+  const path = `${streamId}/${uploadId}.${fileType}`;
   const opts = {
     streamId,
     userId,
@@ -40,19 +40,18 @@ function getUpload (id) {
   return getKeyJSONValue(`upload-${id}`);
 }
 
-function updateUploadStatus (id, statusNumber, failureMessage = null) {
+function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
   if (!statusNumbers.includes(statusNumber)) {
     return Promise.reject('Invalid status')
   }
-  return getUpload(id)
-    .then((dataStr) => {
-      let data = JSON.parse(dataStr);
+  return getUpload(uploadId)
+    .then((data) => {
       data.status = statusNumber;
       data.updatedAt = moment().tz('UTC').valueOf();
       if (failureMessage != null) {
         data.failureMessage = failureMessage;
       }
-      return db.setAsync(id, JSON.stringify(data));
+      return db.setAsync(`upload-${uploadId}`, JSON.stringify(data));
     })
 }
 

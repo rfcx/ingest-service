@@ -4,6 +4,7 @@ const AWS = require('../../utils/aws');
 const storage = require('../storage/amazon');
 const audioService = require('../audio');
 const dirUtil = require('../../utils/dir');
+const db = require('../db/amazon');
 
 const consumer = Consumer.create({
   queueUrl: process.env.SQS_INGEST_TRIGGER_QUEUE_URL,
@@ -19,6 +20,11 @@ const consumer = Consumer.create({
           .then(() => {
             return storage.download(file.key, `${process.env.CACHE_DIRECTORY}${file.key}`)
           })
+        .then(() => {
+          const streamId = path.dirname(file.key);
+          const uploadId = path.basename(file.key, path.extname(file.key));
+          return db.updateUploadStatus(uploadId, db.status.UPLOADED)
+        })
         .then(() => {
           return audioService.split(file.key);
         });
