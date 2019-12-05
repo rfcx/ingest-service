@@ -9,7 +9,7 @@ async function register (guardianGuid, guardianToken, name, site, idToken) {
 
   const data = { guid: guardianGuid, token: guardianToken, site_guid: site }
   const headers = {
-    'Authorization': `Bearer ${idToken}`,
+    'Authorization': idToken,
     'Content-Type': 'application/x-www-form-urlencoded'
   }
 
