@@ -1,15 +1,15 @@
 const express = require('express')
 var router = express.Router()
 
-const authentication = require('../middleware/authentication');
-const verifyToken = authentication.verifyToken;
-const hasRole = authentication.hasRole;
+const authentication = require('../middleware/authentication')
+const verifyToken = authentication.verifyToken
+const hasRole = authentication.hasRole
 
 router.use(require('../middleware/cors'))
 
-const platform = process.env.PLATFORM || 'google';
+const platform = process.env.PLATFORM || 'google'
 const db = require(`../services/db/${platform}`)
-const rfcx = require('../services/rfcxRegister')
+const rfcx = require('../services/rfcx/register')
 const errors = require('../utils/errors')
 
 /**
@@ -23,15 +23,15 @@ router.route('/').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
     res.status(400).send('Required: name')
     return
   }
-  const idToken = req.headers['authorization'];
+  const idToken = req.headers.authorization
   return db.createStream(name, idToken).then(result => {
     return rfcx.register(result.id, result.token, name, site, idToken).then(() => {
       res.json({ id: result.id })
     })
   }).catch(err => {
-    if (err.message == errors.SITE_NOT_FOUND) {
+    if (err.message === errors.SITE_NOT_FOUND) {
       res.status(400).send(err.message)
-    } else if (err.message == errors.UNAUTHORIZED) {
+    } else if (err.message === errors.UNAUTHORIZED) {
       res.status(401).send(err.message)
     } else {
       console.log(err)
@@ -57,7 +57,7 @@ router.route('/:id').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
     // TODO rfcx.editStream(..)
     res.json({})
   }).catch(err => {
-    if (err.message == errors.UNAUTHORIZED) {
+    if (err.message === errors.UNAUTHORIZED) {
       res.status(401).send(err.message)
     } else {
       console.log(err)
