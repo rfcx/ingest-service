@@ -1,2 +1,3 @@
 node_modules/
 rfcx.cert
+serviceAccountKeyStorage*.json
