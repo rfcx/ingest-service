@@ -6,15 +6,17 @@ const probe = require('ffmpeg-probe')
 */
 function identify (filePath) {
   return probe(filePath).then(result => {
+    console.log('\n\nresult', result, '\n\n');
     const stream = result.streams[0]
     const format = result.format.format_name
     const duration = stream.duration
     const sampleCount = stream.duration_ts
     const channelCount = stream.channels
+    const channelLayout = stream.channel_layout
     const bitRate = stream.bit_rate
     const sampleRate = stream.sample_rate
-    const codec = stream.codec_name // unused (but contains useful info like 'pcm_s16le')
-    return { format, duration, sampleCount, channelCount, bitRate, sampleRate } // , codec }
+    const codec = stream.codec_name
+    return { format, duration, sampleCount, channelLayout, channelCount, bitRate, sampleRate , codec }
   })
 }
 
@@ -24,9 +26,15 @@ function identify (filePath) {
  * @param {Object[]} splittedFiles - array with objects with segments information (local path, duration, start, end timestamps)
  */
 function split(sourceFile, splittedFiles) {
+  console.log('split file', sourceFile);
+  return Promise.resolve(); // TODO: remove this line when start working on real code
+
   // TODO: write split code here
   // Assume that you have a new file at `/tmp/ingest-service/source`. Just place it there and work with it.
   // Put splitted files into `/tmp/ingest-service/splitted/`
 }
 
-module.exports = { identify }
+module.exports = {
+  identify,
+  split,
+}

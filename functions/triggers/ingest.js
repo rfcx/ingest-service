@@ -33,7 +33,7 @@ module.exports = async (context) => {
     logPerf('Got stream', startTime)
 
     // Upload to RFCx
-    await rfcx.ingest(tempFilePath, upload.originalFilename, upload.timestamp, upload.streamId, stream.token)
+    await rfcx.ingest(tempFilePath, upload.originalFilename, upload.timestamp, upload.streamId, stream.token, stream.idToken)
     logPerf('Checked in', startTime)
   } catch (err) {
     error = err

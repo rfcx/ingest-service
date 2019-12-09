@@ -8,7 +8,7 @@ const statusNumbers = Object.values(status)
 function generateUpload (streamId, userId, timestamp, originalFilename, fileType) {
   const now = moment().tz('UTC').valueOf();
   const uploadId = uuid();
-  const path = `uploaded/${streamId}/${uploadId}.${fileType}`;
+  const path = `${streamId}/${uploadId}.${fileType}`;
   const opts = {
     streamId,
     userId,
@@ -29,7 +29,7 @@ function generateUpload (streamId, userId, timestamp, originalFilename, fileType
     });
 }
 
-function getKeyJSONValue(key) {
+function getKeyJSONValue (key) {
   return db.getAsync(key)
     .then((data) => {
       return JSON.parse(data);
@@ -40,37 +40,50 @@ function getUpload (id) {
   return getKeyJSONValue(`upload-${id}`);
 }
 
-function updateUploadStatus (id, statusNumber, failureMessage = null) {
+function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
   if (!statusNumbers.includes(statusNumber)) {
     return Promise.reject('Invalid status')
   }
-  return getUpload(id)
-    .then((dataStr) => {
-      let data = JSON.parse(dataStr);
+  return getUpload(uploadId)
+    .then((data) => {
       data.status = statusNumber;
       data.updatedAt = moment().tz('UTC').valueOf();
       if (failureMessage != null) {
         data.failureMessage = failureMessage;
       }
-      return db.setAsync(id, JSON.stringify(data));
+      return db.setAsync(`upload-${uploadId}`, JSON.stringify(data));
     })
 }
 
-function createStream (name) {
+function createStream (name, idToken) {
   const token = '1234' // TODO: this is only here for legacy calls to checkin api
   const streamGuid = uuid();
-  return db.setAsync(`stream-${streamGuid}`, JSON.stringify({ name, token }))
+  return db.setAsync(`stream-${streamGuid}`, JSON.stringify({ name, token, idToken }))
     .then((data) => {
       console.log('createStream redis data', data);
       return {
         id: streamGuid,
-        token
+        token,
+        idToken
       };
     });
 }
 
 function getStream (id) {
-  return getKeyJSONValue(`stream-${id}`);
+  return getKeyJSONValue(`stream-${id}`)
 }
 
-module.exports = { generateUpload, getUpload, updateUploadStatus, status, createStream, getStream }
+function editStream (id, name, site) { // TODO needs testing
+  return getKeyJSONValue(`stream-${id}`).then(stream => {
+    stream.name = name
+    if (site !== undefined) {
+      stream.site = site
+    }
+    return db.setAsync(`stream-${id}`, JSON.stringify(stream))
+      .then((data) => {
+        console.log('editStream redis data', data)
+      })
+  })
+}
+
+module.exports = { generateUpload, getUpload, updateUploadStatus, status, createStream, getStream, editStream }

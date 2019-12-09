@@ -31,13 +31,13 @@ function download (remotePath, localPath) {
   return new Promise((resolve, reject) => {
     try {
       s3Client.headObject({
-        Bucket: process.env.S3_INGEST_BUCKET,
+        Bucket: process.env.UPLOAD_BUCKET,
         Key: remotePath
       }, (headErr, data) => {
         if (headErr) { reject(headErr); }
         let tempWriteStream = fs.createWriteStream(localPath);
         let tempReadStream  = s3Client.getObject({
-          Bucket: process.env.S3_INGEST_BUCKET,
+          Bucket: process.env.UPLOAD_BUCKET,
           Key: remotePath
         })
         .createReadStream()

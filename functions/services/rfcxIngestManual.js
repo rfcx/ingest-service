@@ -6,19 +6,18 @@ const sha1File = require('sha1-file')
 const { identify } = require('./audio')
 
 const apiHostName = process.env.API_HOST
-const accessToken = process.env.TEMP_ACCESS_TOKEN
 const targetBucketName = process.env.S3_INGEST_MANUAL_BUCKET
 
 const aws = require('../utils/aws')
 const s3Client = new aws.S3()
 
 
-async function postAudio (guardianGuid, measuredAt, sha1Checksum, sampleCount, filename, numberOfBytes) {
+async function postAudio (guardianGuid, measuredAt, sha1Checksum, sampleCount, filename, numberOfBytes, idToken) {
   const url = apiHostName + 'v1/guardians/' + guardianGuid + '/audio'
 
   const data = { measured_at: measuredAt, sha1_checksum: sha1Checksum, size: numberOfBytes, capture_sample_count: sampleCount, format_id: 3 }
   const headers = {
-    'Authorization': 'Bearer ' + accessToken,
+    'Authorization': `Bearer ${idToken}`,
     'Content-Type': 'application/x-www-form-urlencoded'
   }
 
@@ -45,7 +44,7 @@ async function putFile (localPath, remotePath) {
   console.log("Successfully uploaded data to " + targetBucketName + "/" + remotePath)
 }
 
-async function ingest (filePath, originalFilename, timestampIso, guardianGuid, guardianToken) {
+async function ingest (filePath, originalFilename, timestampIso, guardianGuid, guardianToken, idToken) {
 
   // Get sha1, sample count, size
   const sha1 = sha1File(filePath)
@@ -59,7 +58,7 @@ async function ingest (filePath, originalFilename, timestampIso, guardianGuid, g
   await putFile(filePath, remotePath)
 
   // Call post audio endpoint
-  await postAudio(guardianGuid, timestampIso, sha1, meta.sampleCount, originalFilename, 0)
+  await postAudio(guardianGuid, timestampIso, sha1, meta.sampleCount, originalFilename, 0, idToken)
 }
 
 module.exports = { ingest }

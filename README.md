@@ -41,12 +41,22 @@ cd functions
 npm install
 ```
 
-### For Amazon
+### For Node/Amazon
 
-Run the API endpoints:
+Run the API endpoints (with live reloading):
 ```
-npm run start.amazon
+npm run dev
 ```
+
+In production the API endpoints are run directly:
+```
+npm start
+```
+
+Use these [instructions](https://confluence.rfcx.org/display/RD/Configuring+S3+new+file+trigger+to+SQS+queue "Confluence document") to configure S3 new file trigger to SQS queue.
+
+TODO: How to run the background job (SQS Consumer) and test the triggers from S3 to ingest
+
 
 ### For Google
 
@@ -113,9 +123,4 @@ Set the `INGEST_METHOD` to `manual` and `ingestManualBucketName` to `rfcx-guardi
 
 3. Streams endpoint - not yet implemented
 
-Set the `INGEST_METHOD` to `streams` in rfcxConfig.json. 
-
-
-## Not yet implemented
-
-- *Authentication*: Currently need to set an access token with the guardianCreator role in `.env` under `TEMP_ACCESS_TOKEN`. In future, we need to pass the access token from the client (Ingest App).
+Set the `INGEST_METHOD` to `streams` in rfcxConfig.json.

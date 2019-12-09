@@ -3,14 +3,13 @@ const qs = require('querystring')
 const errors = require('../utils/errors')
 
 const apiHostName = process.env.API_HOST
-const accessToken = process.env.TEMP_ACCESS_TOKEN
 
-async function register (guardianGuid, guardianToken, name, site) {
+async function register (guardianGuid, guardianToken, name, site, idToken) {
   const url = apiHostName + 'v1/guardians/register'
 
   const data = { guid: guardianGuid, token: guardianToken, site_guid: site }
   const headers = {
-    'Authorization': 'Bearer ' + accessToken,
+    'Authorization': idToken,
     'Content-Type': 'application/x-www-form-urlencoded'
   }
 

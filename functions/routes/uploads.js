@@ -2,6 +2,10 @@ const moment = require('moment')
 const express = require('express')
 var router = express.Router()
 
+const authentication = require('../middleware/authentication');
+const verifyToken = authentication.verifyToken;
+const hasRole = authentication.hasRole;
+
 router.use(require('../middleware/cors'))
 
 const platform = process.env.PLATFORM || 'google';
@@ -15,7 +19,7 @@ const storage = require(`../services/storage/${platform}`);
  * @param {Object} req Cloud Function request context.
  * @param {Object} res Cloud Function response context.
  */
-router.post('/', (req, res) => {
+router.route('/').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
   const originalFilename = req.body.filename
   const timestamp = req.body.timestamp
   const streamId = req.body.stream
@@ -31,7 +35,7 @@ router.post('/', (req, res) => {
   }
 
   // TODO check that the user is authorized to upload (to the given streamId)
-  const userId = 'testuserguid'
+  const userId = req.user.guid;
 
   const fileExtension = originalFilename.split('.').pop()
 
@@ -61,7 +65,7 @@ router.post('/', (req, res) => {
  * @param {Object} req Cloud Function request context.
  * @param {Object} res Cloud Function response context.
  */
-router.get('/:id', (req, res) => {
+router.route('/:id').get(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
   // TODO check that the user owns the upload
 
   const id = req.params.id
