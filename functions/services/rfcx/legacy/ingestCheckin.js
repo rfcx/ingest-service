@@ -4,7 +4,7 @@ const moment = require('moment')
 const sha1File = require('sha1-file')
 const axios = require('axios')
 const FormData = require('form-data')
-const { identify } = require('./audio')
+const { identify } = require('../../audio')
 
 const apiHostName = process.env.API_HOST
 const maxContentLength = process.env.MAX_UPLOAD_BYTES ? parseInt(process.env.MAX_UPLOAD_BYTES) : 209715200

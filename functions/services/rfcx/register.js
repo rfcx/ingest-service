@@ -1,6 +1,6 @@
 const axios = require('axios')
 const qs = require('querystring')
-const errors = require('../utils/errors')
+const errors = require('../../utils/errors')
 
 const apiHostName = process.env.API_HOST
 

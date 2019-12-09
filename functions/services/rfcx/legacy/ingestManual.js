@@ -3,12 +3,12 @@ const fs = require('fs')
 const qs = require('querystring')
 const moment = require('moment')
 const sha1File = require('sha1-file')
-const { identify } = require('./audio')
+const { identify } = require('../../audio')
 
 const apiHostName = process.env.API_HOST
 const targetBucketName = process.env.S3_INGEST_MANUAL_BUCKET
 
-const aws = require('../utils/aws')
+const aws = require('../../../utils/aws')
 const s3Client = new aws.S3()
 
 

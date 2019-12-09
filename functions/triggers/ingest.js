@@ -5,7 +5,7 @@ const fs = require('fs')
 const platform = process.env.PLATFORM || 'google';
 const db = require(`../services/db/${platform}`)
 const storage = require(`../services/storage/${platform}`);
-const rfcx = require('../services/rfcxIngest')(process.env.INGEST_METHOD)
+const rfcx = require('../services/rfcx/ingest')(process.env.INGEST_METHOD)
 
 module.exports = async (context) => {
   const startTime = Date.now()
