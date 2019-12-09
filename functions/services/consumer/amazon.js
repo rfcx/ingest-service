@@ -5,6 +5,7 @@ const storage = require('../storage/amazon');
 const audioService = require('../audio');
 const dirUtil = require('../../utils/dir');
 const db = require('../db/amazon');
+const segmentService = require('../rfcx/segments')
 
 const consumer = Consumer.create({
   queueUrl: process.env.SQS_INGEST_TRIGGER_QUEUE_URL,
@@ -12,6 +13,9 @@ const consumer = Consumer.create({
     let files = parseIngestSQSMessage(message);
     let proms = [];
     files.forEach((file) => {
+      const fileLocalPath = `${process.env.CACHE_DIRECTORY}${file.key}`;
+      const streamId = path.dirname(file.key);
+      const uploadId = path.basename(file.key, path.extname(file.key));
       let prom =
         dirUtil.ensureDirExists(process.env.CACHE_DIRECTORY)
           .then(() => {
@@ -21,9 +25,17 @@ const consumer = Consumer.create({
             return storage.download(file.key, `${process.env.CACHE_DIRECTORY}${file.key}`)
           })
         .then(() => {
-          const streamId = path.dirname(file.key);
-          const uploadId = path.basename(file.key, path.extname(file.key));
           return db.updateUploadStatus(uploadId, db.status.UPLOADED)
+        })
+        .then(async () => {
+          let fileMeta = await audioService.identify(fileLocalPath);
+          let upload = await db.getUpload(uploadId);
+          let stream = await db.getStream(streamId);
+          let opts = fileMeta;
+          opts.guid = uploadId;
+          opts.idToken = stream.idToken;
+          opts.filename = upload.originalFilename;
+          return segmentService.createMasterSegment(opts);
         })
         .then(() => {
           return audioService.split(file.key);
