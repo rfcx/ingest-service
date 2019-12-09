@@ -1,4 +1,5 @@
 const probe = require('ffmpeg-probe')
+const fs = require('fs')
 
 /* Run sox (or in this case ffmpeg) to get the sample rate and duration
 ** results looks like:
@@ -23,15 +24,13 @@ function identify (filePath) {
 /**
  *
  * @param {String} sourceFile - path to source file on disk
- * @param {Object[]} splittedFiles - array with objects with segments information (local path, duration, start, end timestamps)
+ * @returns {Object[]} splittedFiles - array with objects with segments information (local path, duration, start, end timestamps)
  */
-function split (sourceFile, splittedFiles) {
+function split (sourceFile, destinationPath, maxDuration) {
   console.log('split file', sourceFile)
-  return Promise.resolve() // TODO: remove this line when start working on real code
-
-  // TODO: write split code here
-  // Assume that you have a new file at `/tmp/ingest-service/source`. Just place it there and work with it.
-  // Put splitted files into `/tmp/ingest-service/splitted/`
+  const destinationFile = destinationPath + '/' + sourceFile
+  fs.copyFileSync(sourceFile, destinationFile)
+  return Promise.resolve([{ path: destinationFile, duration: maxDuration }])
 }
 
 module.exports = {
