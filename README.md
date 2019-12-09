@@ -9,6 +9,9 @@ A mockup service for ingesting files via GCS
 - [Google Cloud SDK](https://cloud.google.com/sdk/)
 - [Firebase CLI](https://firebase.google.com/docs/cli)
 
+Optional:
+- [ES Lint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) for VS Code
+
 
 ## Setup project
 
@@ -85,6 +88,11 @@ and trigger the next ingest:
 ingest()
 ```
 
+## Lint
+
+The project uses ES Lint. It is installed as a dev dependency, so simply `npm run lint` to check for errors or `npm run lint-fix` to attempt to auto-fix the errors.
+
+VS Code support for lint is via the [ES Lint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint).
 
 ## Deployment
 
@@ -115,12 +123,12 @@ To test the trigger from storage, use the `npm run shellfb` described above (fro
 
 1. Checkin endpoint
 
-Set the `INGEST_METHOD` to `checkin` in rfcxConfig.json. No extra configuration required.
+Set the `INGEST_METHOD` to `checkin` in the environment variables (.env). No extra configuration required.
 
 2. Manual S3 upload and audio endpoint
 
-Set the `INGEST_METHOD` to `manual` and `ingestManualBucketName` to `rfcx-guardian-ark-staging` in rfcxConfig.json. Also add the AWS S3 user config: `S3_ACCESS_KEY_ID`, `S3_SECRET_KEY`, `S3_REGION_ID`.
+Set the `INGEST_METHOD` to `manual` and `ingestManualBucketName` to `rfcx-guardian-ark-staging` in the environment variables (.env). Also add the AWS S3 user config: `S3_ACCESS_KEY_ID`, `S3_SECRET_KEY`, `S3_REGION_ID`.
 
 3. Streams endpoint - not yet implemented
 
-Set the `INGEST_METHOD` to `streams` in rfcxConfig.json.
+Set the `INGEST_METHOD` to `streams` in the environment variables (.env).
