@@ -9,7 +9,9 @@
   "functions": {
     "source": "functions",
     "ignore": [
-      "devtools/"
+      "devtools/",
+      "ingest_staging_env",
+      "ingest_production_env"
     ]
   }
 }

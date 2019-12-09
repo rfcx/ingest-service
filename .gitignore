@@ -67,3 +67,5 @@ serviceAccountKeyStorage.json
 
 .DS_Store
 .runtimeconfig.json
+ingest_production_env
+ingest_staging_env
