@@ -6,6 +6,7 @@ A mockup service for ingesting files via GCS
 ## Requirements
 
 - Node 8+
+- [FFmpeg](https://ffmpeg.org) for splitting and identifying audio files 
 - [Google Cloud SDK](https://cloud.google.com/sdk/)
 - [Firebase CLI](https://firebase.google.com/docs/cli)
 
