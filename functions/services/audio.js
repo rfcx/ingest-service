@@ -6,7 +6,6 @@ const probe = require('ffmpeg-probe')
 */
 function identify (filePath) {
   return probe(filePath).then(result => {
-    console.log('\n\nresult', result, '\n\n')
     const stream = result.streams[0]
     const format = result.format.format_name
     const duration = stream.duration
