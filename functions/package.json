@@ -28,6 +28,7 @@
     "ffmpeg-probe": "^1.0.6",
     "firebase-admin": "^8.0.0",
     "firebase-functions": "^3.1.0",
+    "fluent-ffmpeg": "^2.1.2",
     "form-data": "^2.5.1",
     "moment": "^2.24.0",
     "moment-timezone": "0.5.27",
