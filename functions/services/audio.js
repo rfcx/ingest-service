@@ -1,24 +1,29 @@
-const probe = require('ffmpeg-probe')
-const fs = require('fs')
 const ffmpeg = require('fluent-ffmpeg')
 
-/* Run sox (or in this case ffmpeg) to get the sample rate and duration
-** results looks like:
-** { format: 'wav', duration: 1.5, sampleCount: 66150, channelCount: 1, bitRate: 722944, sampleRate: 44100 }
-*/
-function identify (filePath) {
-  return probe(filePath).then(result => {
-    console.log('\n\nresult', result, '\n\n')
-    const stream = result.streams[0]
-    const format = result.format.format_name
-    const duration = stream.duration
-    const sampleCount = stream.duration_ts
-    const channelCount = stream.channels
-    const channelLayout = stream.channel_layout
-    const bitRate = stream.bit_rate
-    const sampleRate = stream.sample_rate
-    const codec = stream.codec_name
-    return { format, duration, sampleCount, channelLayout, channelCount, bitRate, sampleRate, codec }
+/**
+ * Probe an audio file to find its sample rate, duration and other meta data
+ * - result: { format: 'wav', duration: 1.5, sampleCount: 66150, channelCount: 1, bitRate: 722944, sampleRate: 44100 }
+ * @param {String} sourceFile - path to source file on disk
+ * @returns {Promise<Object>} - an object containing the meta data
+ */
+function identify (sourceFile) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(sourceFile)
+      .ffprobe(0, function (err, result) {
+        if (err) {
+          reject(err)
+        } else {
+          const stream = result.streams[0]
+          const format = result.format.format_name
+          const duration = parseFloat(stream.duration)
+          const sampleCount = stream.duration_ts
+          const channelCount = stream.channels
+          const bitRate = parseInt(stream.bit_rate)
+          const sampleRate = parseInt(stream.sample_rate)
+          const codec = stream.codec_name
+          resolve({ format, duration, sampleCount, channelCount, bitRate, sampleRate, codec })
+        }
+      })
   })
 }
 
