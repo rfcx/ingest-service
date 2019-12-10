@@ -10,6 +10,7 @@ router.use(require('../middleware/cors'))
 const platform = process.env.PLATFORM || 'google'
 const db = require(`../services/db/${platform}`)
 const rfcx = require('../services/rfcx/register')
+const streamService = require('../services/rfcx/streams');
 const errors = require('../utils/errors')
 
 /**
@@ -39,6 +40,50 @@ router.route('/').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
     }
   })
 })
+
+/**
+ * HTTP function that creates a stream
+ * v2 is temporary until we migrate to new client app
+ */
+router.route('/v2')
+  .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
+
+    const name = req.body.name
+    const site = req.body.site
+    const idToken = req.headers['authorization'];
+
+    if (!name) {
+      res.status(400).send('Required: name')
+      return
+    }
+    if (!site) {
+      res.status(400).send('Required: name')
+      return
+    }
+
+    return db.createStream(name, idToken)
+      .then(result => {
+        const streamId = result.id;
+        console.log('\n\ncreate stream')
+        return streamService
+          .createStream({ streamId, name, site, idToken })
+          .then(() => {
+            res.json({ id: result.id })
+          })
+      })
+      .catch(err => {
+        if (err.message == errors.SITE_NOT_FOUND) {
+          res.status(400).send(err.message)
+        }
+        else if (err.message == errors.UNAUTHORIZED) {
+          res.status(401).send(err.message)
+        }
+        else {
+          console.log(err)
+          res.status(500).send(err.message)
+        }
+      })
+  })
 
 /**
  * HTTP function that edits a stream (e.g. rename)
