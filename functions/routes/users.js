@@ -20,7 +20,11 @@ router.route('/touchapi')
         res.json( data )
       })
       .catch(err => {
-        res.status(500).send(err.message)
+        if (err.message === errors.UNAUTHORIZED) {
+          res.status(401).send(err.message)
+        } else {
+          res.status(500).send(err.message)
+        }
       })
 
   })
@@ -39,7 +43,13 @@ router.route('/code')
         res.json( data )
       })
       .catch(err => {
-        res.status(500).send(err.message)
+        if (err.message === errors.UNAUTHORIZED) {
+          res.status(401).send(err.message)
+        } else if (err.message === errors.INVALID_CODE) {
+          res.status(400).send(err.message)
+        } else {
+          res.status(500).send(err.message)
+        }
       })
 
   })
