@@ -1,4 +1,5 @@
 const ffmpeg = require('fluent-ffmpeg')
+const path = require('path')
 
 /**
  * Probe an audio file to find its sample rate, duration and other meta data
@@ -34,12 +35,12 @@ function identify (sourceFile) {
  * - the last output file may be shorter than the maximum duration
  * @param {String} sourceFile - path to source file on disk
  * @param {String} destinationPath - path (directory) to output the file segments
- * @param {Number} maxDuration - the maximum duration of a segment
+ * @param {Number} maxDuration - the maximum duration of a segment (in seconds)
  * @returns {Object[]} - array with objects with segments information (local path, duration)
  */
 function split (sourceFile, destinationPath, maxDuration) {
   destinationPath += destinationPath.endsWith('/') ? '' : '/'
-  const outputFileFormat = destinationPath + sourceFile.replace(/\.([^.]*)$/, '.%03d.$1') // convert hello.wav to hello.%03d.wav
+  const outputFileFormat = destinationPath + path.basename(sourceFile).replace(/\.([^.]*)$/, '.%03d.$1') // convert hello.wav to hello.%03d.wav
 
   return new Promise((resolve, reject) => {
     const command = ffmpeg(sourceFile)
@@ -62,16 +63,27 @@ function split (sourceFile, destinationPath, maxDuration) {
       reject(Error('Timeout')) // TODO: move to errors
     }, 60000)
 
-    command.on('error', function (err, stdout, stderr) {
-      clearTimeout(timeout)
-      reject(err)
-    }).on('end', function (stdout, stderr) {
-      clearTimeout(timeout)
-      const outputFiles = stdout.trim().split('\n').map(x => {
-        return { path: x, duration: maxDuration }
+    command
+      .on('error', function (err, stdout, stderr) {
+        clearTimeout(timeout)
+        reject(err)
       })
-      resolve(outputFiles)
-    }).run()
+      .on('end', function (stdout, stderr) {
+        clearTimeout(timeout)
+        const outputFiles = stdout.trim().split('\n').map(async (x) => {
+          try {
+            const filePath = path.join(destinationPath, x)
+            const meta = await identify(filePath)
+            return {
+              path: filePath,
+              meta: meta
+            }
+          }
+          catch (e) { reject(e) }
+        })
+        resolve(Promise.all(outputFiles))
+      })
+      .run()
   })
 }
 

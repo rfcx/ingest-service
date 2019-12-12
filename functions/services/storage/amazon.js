@@ -1,17 +1,18 @@
 const AWS = require('../../utils/aws');
 const fs = require('fs');
 
-const bucketName = process.env.UPLOAD_BUCKET
+const uploadBucket = process.env.UPLOAD_BUCKET;
+const ingestBucket = process.env.INGEST_BUCKET;
 
 const s3Client = new AWS.S3({
   signatureVersion: 'v4',
-  endpoint: new AWS.Endpoint(`${bucketName}.s3-accelerate.amazonaws.com`),
+  endpoint: new AWS.Endpoint(`${uploadBucket}.s3-accelerate.amazonaws.com`),
   useAccelerateEndpoint: true,
 });
 
 function getSignedUrl (filePath, contentType) {
   const params = {
-    Bucket: bucketName,
+    Bucket: uploadBucket,
     Key: filePath,
     Expires: 60 * 60 * 24, // 24 hours
     ContentType: contentType
@@ -31,13 +32,13 @@ function download (remotePath, localPath) {
   return new Promise((resolve, reject) => {
     try {
       s3Client.headObject({
-        Bucket: process.env.UPLOAD_BUCKET,
+        Bucket: uploadBucket,
         Key: remotePath
       }, (headErr, data) => {
         if (headErr) { reject(headErr); }
         let tempWriteStream = fs.createWriteStream(localPath);
         let tempReadStream  = s3Client.getObject({
-          Bucket: process.env.UPLOAD_BUCKET,
+          Bucket: uploadBucket,
           Key: remotePath
         })
         .createReadStream()
@@ -61,7 +62,27 @@ function download (remotePath, localPath) {
   });
 }
 
+function upload(remotePath, localPath) {
+  const fileStream = fs.readFileSync(localPath);
+  const opts = {
+    Bucket: ingestBucket,
+    Key: remotePath,
+    Body: fileStream
+  };
+  return s3Client.putObject(opts).promise();
+}
+
+function deleteObject(remotePath) {
+  const opts = {
+    Bucket: uploadBucket,
+    Key: remotePath
+  };
+  return s3Client.deleteObject(opts).promise();
+}
+
 module.exports = {
   getSignedUrl,
   download,
+  upload,
+  deleteObject,
 }

@@ -26,6 +26,25 @@ async function createMasterSegment (opts) {
   return axios.post(url, data, { headers })
 }
 
+async function createSegment (opts) {
+
+  const url = `${apiHostName}v2/streams/${opts.stream}/segment`
+  const data = {
+    guid: opts.guid,
+    master_segment: opts.masterSegment,
+    starts: opts.starts,
+    ends: opts.ends,
+  }
+
+  const headers = {
+    'Authorization': opts.idToken,
+    'Content-Type': 'application/json'
+  }
+
+  return axios.post(url, data, { headers })
+}
+
 module.exports = {
   createMasterSegment,
+  createSegment,
 }
