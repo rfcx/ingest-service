@@ -16,7 +16,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
 
   let stream;
   let upload;
-  const fileDurationMs = 60000;
+  const fileDurationMs = 120000;
   const streamLocalPath = path.join(process.env.CACHE_DIRECTORY, path.dirname(storageFilePath));
 
   return dirUtil.ensureDirExists(process.env.CACHE_DIRECTORY)
