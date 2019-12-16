@@ -115,6 +115,11 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       stream = null;
       uploadId = null;
     })
+    .catch((err) => {
+      console.log('\n\ncatch error', err, '\n\n');
+      db.updateUploadStatus(uploadId, db.status.FAILED, err.message);
+      dirUtil.removeDirRecursively(streamLocalPath);
+    });
 
 }
 
