@@ -117,7 +117,11 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
     })
     .catch((err) => {
       console.log('\n\ncatch error', err, '\n\n');
-      db.updateUploadStatus(uploadId, db.status.FAILED, err.message);
+      const message = `${err.message}`;
+      if (message !== 'Duplicate file. Matching sha1 signature already ingested.') {
+        message = 'Server failed with processing your file. Please try again later.';
+      }
+      db.updateUploadStatus(uploadId, db.status.FAILED, message);
       dirUtil.removeDirRecursively(streamLocalPath);
     });
 
