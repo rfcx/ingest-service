@@ -4,10 +4,15 @@ const errors = require('../../utils/errors')
 
 const apiHostName = process.env.API_HOST
 
-async function register (guardianGuid, guardianToken, name, site, idToken) {
+async function register (guardianGuid, guardianToken, shortname, site, idToken) {
   const url = apiHostName + 'v1/guardians/register'
 
-  const data = { guid: guardianGuid, token: guardianToken, site_guid: site }
+  const data = {
+    guid: guardianGuid,
+    token: guardianToken,
+    site_guid: site,
+    shortname: `${shortname}_${guardianGuid.substr(0,4)}`,
+  }
   const headers = {
     'Authorization': idToken,
     'Content-Type': 'application/x-www-form-urlencoded'

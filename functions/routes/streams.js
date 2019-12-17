@@ -25,20 +25,23 @@ router.route('/').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
     return
   }
   const idToken = req.headers.authorization
-  return db.createStream(name, idToken).then(result => {
-    return rfcx.register(result.id, result.token, name, site, idToken).then(() => {
-      res.json({ id: result.id })
+  return db.createStream(name, idToken)
+    .then(result => {
+      return rfcx.register(result.id, result.token, name, site, idToken)
+        .then(() => {
+          res.json({ id: result.id })
+        });
     })
-  }).catch(err => {
-    if (err.message === errors.SITE_NOT_FOUND) {
-      res.status(400).send(err.message)
-    } else if (err.message === errors.UNAUTHORIZED) {
-      res.status(401).send(err.message)
-    } else {
-      console.log(err)
-      res.status(500).send(err.message)
-    }
-  })
+    .catch(err => {
+      if (err.message === errors.SITE_NOT_FOUND) {
+        res.status(400).send(err.message)
+      } else if (err.message === errors.UNAUTHORIZED) {
+        res.status(401).send(err.message)
+      } else {
+        console.log(err)
+        res.status(500).send(err.message)
+      }
+    })
 })
 
 /**
@@ -57,14 +60,13 @@ router.route('/v2')
       return
     }
     if (!site) {
-      res.status(400).send('Required: name')
+      res.status(400).send('Required: site')
       return
     }
 
     return db.createStream(name, idToken)
       .then(result => {
         const streamId = result.id;
-        console.log('\n\ncreate stream')
         return streamService
           .createStream({ streamId, name, site, idToken })
           .then(() => {

@@ -73,6 +73,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
           masterSegment: uploadId,
           starts: timestamp + totalDurationMs,
           ends: timestamp + totalDurationMs + Math.round(file.meta.duration * 1000),
+          sample_count: file.meta.sampleCount,
         };
         totalDurationMs += duration;
         console.log('\ncreate segment', segmentOpts, '\n');

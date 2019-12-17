@@ -4,7 +4,7 @@ const apiHostName = process.env.API_HOST
 
 async function createMasterSegment (opts) {
 
-  const url = apiHostName + 'v2/streams/master-segment'
+  const url = `${apiHostName}v2/streams/master-segments`
   const data = {
     guid: opts.guid,
     filename: opts.filename,
@@ -28,12 +28,13 @@ async function createMasterSegment (opts) {
 
 async function createSegment (opts) {
 
-  const url = `${apiHostName}v2/streams/${opts.stream}/segment`
+  const url = `${apiHostName}v2/streams/${opts.stream}/segments`
   const data = {
     guid: opts.guid,
     master_segment: opts.masterSegment,
     starts: opts.starts,
     ends: opts.ends,
+    sample_count: opts.sample_count,
   }
 
   const headers = {
