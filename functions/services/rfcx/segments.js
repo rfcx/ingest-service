@@ -15,7 +15,8 @@ async function createMasterSegment (opts) {
     channels_count: opts.channelCount,
     bit_rate: opts.bitRate,
     sample_rate: opts.sampleRate,
-    codec: opts.codec
+    codec: opts.codec,
+    meta: opts.tags,
   }
 
   const headers = {

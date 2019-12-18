@@ -2,7 +2,7 @@ const db = require('../../utils/redis');
 const moment = require('moment-timezone');
 const uuid = require('uuid/v4');
 
-const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30 }
+const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31 }
 const statusNumbers = Object.values(status)
 
 function generateUpload (streamId, userId, timestamp, originalFilename, fileType) {

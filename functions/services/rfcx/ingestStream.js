@@ -30,12 +30,12 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       return db.updateUploadStatus(uploadId, db.status.UPLOADED)
     })
     .then(async () => {
-      let fileMeta = await audioService.identify(fileLocalPath);
+      let fileData = await audioService.identify(fileLocalPath);
       upload = await db.getUpload(uploadId);
       stream = await db.getStream(streamId);
       console.log('\n\nstream', stream, '\n\n')
       console.log('\n\nupload', upload, '\n\n')
-      let opts = fileMeta;
+      let opts = fileData;
       opts.guid = uploadId;
       opts.idToken = stream.idToken;
       opts.filename = upload.originalFilename;
@@ -118,11 +118,15 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
     })
     .catch((err) => {
       console.log('\n\ncatch error', err, '\n\n');
-      const message = `${err.message}`;
-      if (message !== 'Duplicate file. Matching sha1 signature already ingested.') {
-        message = 'Server failed with processing your file. Please try again later.';
+      let message = `${err.message}`;
+      if (message === 'Duplicate file. Matching sha1 signature already ingested.') {
+        // db.updateUploadStatus(uploadId, db.status.DUPLICATE, message); TODO: deploy this line for Ingest App 1.0.5
+        db.updateUploadStatus(uploadId, db.status.FAILED, message);
       }
-      db.updateUploadStatus(uploadId, db.status.FAILED, message);
+      else {
+        message = 'Server failed with processing your file. Please try again later.';
+        db.updateUploadStatus(uploadId, db.status.FAILED, message);
+      }
       dirUtil.removeDirRecursively(streamLocalPath);
     });
 

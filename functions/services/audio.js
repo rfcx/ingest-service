@@ -15,7 +15,7 @@ function identify (sourceFile) {
           reject(err)
         } else {
           const stream = result.streams[0]
-          const format = result.format.format_name
+          const format = result.format && result.format.format_name? result.format.format_name : undefined
           const duration = parseFloat(stream.duration)
           const sampleCount = stream.duration_ts
           const channelCount = stream.channels
@@ -23,7 +23,8 @@ function identify (sourceFile) {
           const bitRate = parseInt(stream.bit_rate)
           const sampleRate = parseInt(stream.sample_rate)
           const codec = stream.codec_name
-          resolve({ format, duration, sampleCount, channelLayout, channelCount, bitRate, sampleRate, codec })
+          const tags = result.format && result.format.tags? result.format.tags : {}
+          resolve({ format, duration, sampleCount, channelLayout, channelCount, bitRate, sampleRate, codec, tags })
         }
       })
   })

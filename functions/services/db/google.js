@@ -3,7 +3,7 @@ const db = firebase.firestore()
 const FieldValue = require('firebase-admin').firestore.FieldValue;
 
 const uploadsCollection = 'uploads'
-const status = { WAITING: 0, UPLOADED: 10, INGESTING: 19, INGESTED: 20, FAILED: 30 }
+const status = { WAITING: 0, UPLOADED: 10, INGESTING: 19, INGESTED: 20, FAILED: 30, DUPLICATE: 31 }
 const statusNumbers = Object.values(status)
 const streamsCollection = 'streams'
 
