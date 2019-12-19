@@ -17,11 +17,11 @@ function identify (sourceFile) {
           const stream = result.streams[0]
           const format = result.format && result.format.format_name? result.format.format_name : undefined
           const duration = parseFloat(stream.duration)
-          const sampleCount = stream.duration_ts
+          const sampleRate = (stream.sample_rate && stream.sample_rate !== 'N/A')? parseInt(stream.sample_rate) : 0
+          const sampleCount = Math.round(stream.duration * sampleRate)
           const channelCount = stream.channels
           const channelLayout = stream.channel_layout
-          const bitRate = parseInt(stream.bit_rate)
-          const sampleRate = parseInt(stream.sample_rate)
+          const bitRate = (stream.bit_rate && stream.bit_rate !== 'N/A')? parseInt(stream.bit_rate) : 0;
           const codec = stream.codec_name
           const tags = result.format && result.format.tags? result.format.tags : {}
           resolve({ format, duration, sampleCount, channelLayout, channelCount, bitRate, sampleRate, codec, tags })
