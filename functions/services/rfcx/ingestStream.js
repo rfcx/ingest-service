@@ -120,8 +120,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       console.log('\n\ncatch error', err, '\n\n');
       let message = `${err.message}`;
       if (message === 'Duplicate file. Matching sha1 signature already ingested.') {
-        // db.updateUploadStatus(uploadId, db.status.DUPLICATE, message); TODO: deploy this line for Ingest App 1.0.5
-        db.updateUploadStatus(uploadId, db.status.FAILED, message);
+        db.updateUploadStatus(uploadId, db.status.DUPLICATE, message);
       }
       else {
         message = 'Server failed with processing your file. Please try again later.';
