@@ -6,7 +6,7 @@ const audioService = require('../audio');
 const dirUtil = require('../../utils/dir');
 const segmentService = require('../rfcx/segments')
 const path = require('path');
-const moment = require('moment');
+const moment = require('moment-timezone');
 const uuid = require('uuid/v4');
 const ingestManual = require('./legacy/ingestManual');
 
@@ -48,10 +48,13 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
     .then((outputFiles) => {
       console.log('\n\nfile is splitted', outputFiles, '\n\n');
       let proms = []
-      const ts = moment(upload.timestamp);
+      let totalDurationMs = 0
       outputFiles.forEach((file) => {
+        const duration = Math.round(file.meta.duration * 1000);
+        const ts = moment.tz(upload.timestamp, 'UTC').add(totalDurationMs, 'milliseconds');
         file.guid = uuid();
         let remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${upload.streamId}/${file.guid}${path.extname(file.path)}`;
+        totalDurationMs += duration;
         proms.push(storage.upload(remotePath, file.path));
       })
       return Promise.all(proms)
@@ -62,7 +65,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
     .then((outputFiles) => {
       console.log('\n\nsegments are uploaded\n\n');
       let proms = []
-      const timestamp = moment(upload.timestamp).valueOf();
+      const timestamp = moment.tz(upload.timestamp, 'UTC').valueOf();
       let totalDurationMs = 0
       outputFiles.forEach((file) => {
         const duration = Math.round(file.meta.duration * 1000);
