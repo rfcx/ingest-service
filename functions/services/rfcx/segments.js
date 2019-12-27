@@ -36,6 +36,7 @@ async function createSegment (opts) {
     starts: opts.starts,
     ends: opts.ends,
     sample_count: opts.sample_count,
+    file_extension: opts.file_extension,
   }
 
   const headers = {

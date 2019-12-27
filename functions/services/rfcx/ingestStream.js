@@ -77,6 +77,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
           starts: timestamp + totalDurationMs,
           ends: timestamp + totalDurationMs + Math.round(file.meta.duration * 1000),
           sample_count: file.meta.sampleCount,
+          file_extension: path.extname(file.path),
         };
         totalDurationMs += duration;
         console.log('\ncreate segment', segmentOpts, '\n');
@@ -129,6 +130,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         message = 'Server failed with processing your file. Please try again later.';
         db.updateUploadStatus(uploadId, db.status.FAILED, message);
       }
+      storage.deleteObject(storageFilePath);
       dirUtil.removeDirRecursively(streamLocalPath);
     });
 
