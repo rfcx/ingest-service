@@ -6,8 +6,6 @@ const ingestBucket = process.env.INGEST_BUCKET;
 
 const s3Client = new AWS.S3({
   signatureVersion: 'v4',
-  endpoint: new AWS.Endpoint(`${uploadBucket}.s3-accelerate.amazonaws.com`),
-  useAccelerateEndpoint: true,
 });
 
 function getSignedUrl (filePath, contentType) {
