@@ -25,7 +25,7 @@ router.route('/').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
     return
   }
   const idToken = req.headers.authorization
-  return db.createStream(name, idToken)
+  return db.createStream(name)
     .then(result => {
       return rfcx.register(result.id, result.token, name, site, idToken)
         .then(() => {
@@ -64,7 +64,7 @@ router.route('/v2')
       return
     }
 
-    return db.createStream(name, idToken)
+    return db.createStream(name)
       .then(result => {
         const streamId = result.id;
         return streamService

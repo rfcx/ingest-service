@@ -20,7 +20,7 @@ async function createMasterSegment (opts) {
   }
 
   const headers = {
-    'Authorization': opts.idToken,
+    'Authorization': `Bearer ${opts.idToken}`,
     'Content-Type': 'application/json'
   }
 
@@ -40,7 +40,7 @@ async function createSegment (opts) {
   }
 
   const headers = {
-    'Authorization': opts.idToken,
+    'Authorization': `Bearer ${opts.idToken}`,
     'Content-Type': 'application/json'
   }
 
