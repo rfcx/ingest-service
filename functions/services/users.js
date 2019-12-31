@@ -23,6 +23,27 @@ async function touchapi (idToken) {
     })
 }
 
+async function getUserSites (idToken) {
+
+  const url = `${apiHostName}v1/sites?filter_by_user=true`
+  const headers = {
+    'Authorization': `Bearer ${idToken}`,
+    'Content-Type': 'application/x-www-form-urlencoded'
+  }
+
+  return axios.get(url, { headers })
+    .then(response => {
+      return response.data
+    })
+    .catch(err => {
+      if (err.response && err.response.status === 401) {
+        throw new Error(errors.UNAUTHORIZED)
+      }
+      throw err
+    })
+
+}
+
 async function sendCode (code, idToken) {
 
   const url = `${apiHostName}v1/users/code`
@@ -46,5 +67,6 @@ async function sendCode (code, idToken) {
 
 module.exports = {
   touchapi,
-  sendCode
+  sendCode,
+  getUserSites,
 }

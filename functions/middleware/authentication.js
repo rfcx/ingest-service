@@ -34,7 +34,13 @@ const verifyToken = function() {
     if (token.startsWith('Bearer ')) { // Remove Bearer from string
       token = token.slice(7, token.length);
     }
-    let decodedToken = jwt.verify(token, cert);
+    let decodedToken
+    try {
+      decodedToken = jwt.verify(token, cert);
+    }
+    catch (e) {
+      return res.sendStatus(401)
+    }
     if (!decodedToken) {
       res.sendStatus(403)
     }
