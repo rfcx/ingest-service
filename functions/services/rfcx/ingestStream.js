@@ -10,6 +10,7 @@ const path = require('path');
 const moment = require('moment-timezone');
 const uuid = require('uuid/v4');
 const ingestManual = require('./legacy/ingestManual');
+const sha1File = require('sha1-file');
 
 // Parameters set is different compared to legacy ingest methods
 
@@ -39,9 +40,18 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       let opts = fileData;
       opts.guid = uploadId;
       const token = await auth0Service.getToken();
+      opts.stream = upload.streamId,
       opts.idToken = `${token.access_token}`;
       opts.filename = upload.originalFilename;
-      return segmentService.createMasterSegment(opts);
+      opts.sha1_checksum = sha1File(fileLocalPath);
+      return segmentService.createMasterSegment(opts)
+        .catch((err) => {
+          if (err.response && err.response.data && err.response.data.message) {
+            throw { message: err.response.data.message }
+          } else {
+            throw err
+          }
+        });
     })
     .then(() => {
       console.log('\n\nmaster segment is created in db\n\n');
