@@ -1,6 +1,7 @@
 const db = require('../../utils/redis');
 const moment = require('moment-timezone');
 const uuid = require('uuid/v4');
+const hash = require('../../utils/hash');
 
 const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31 }
 const statusNumbers = Object.values(status)
@@ -57,7 +58,7 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
 
 function createStream (name) {
   const token = '1234' // TODO: this is only here for legacy calls to checkin api
-  const streamGuid = uuid();
+  const streamGuid = hash.randomString(12);
   return db.setAsync(`stream-${streamGuid}`, JSON.stringify({ name, token }))
     .then((data) => {
       console.log('createStream redis data', data);
