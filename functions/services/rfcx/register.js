@@ -11,7 +11,7 @@ async function register (guardianGuid, guardianToken, shortname, site, idToken) 
     guid: guardianGuid,
     token: guardianToken,
     site_guid: site,
-    shortname: `${shortname}_${guardianGuid.substr(0,4)}`,
+    shortname: `${shortname}`,
   }
   const headers = {
     'Authorization': idToken,
