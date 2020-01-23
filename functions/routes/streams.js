@@ -18,7 +18,7 @@ router.route('/')
 
     const idToken = req.headers.authorization
 
-    return streamService.getUserStreams(idToken, 'personal')
+    return streamService.getUserStreams(idToken, 'personal-all')
       .then((data) => {
         res.json( data )
       })
