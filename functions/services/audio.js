@@ -88,7 +88,44 @@ function split (sourceFile, destinationPath, maxDuration) {
   })
 }
 
+function convert (sourceFile, destinationPath) {
+  return new Promise((resolve, reject) => {
+    const command = ffmpeg(sourceFile)
+      .noVideo()
+      .output(destinationPath)
+      .on('start', function (commandLine) {
+        console.log('Spawned Ffmpeg with command: ' + commandLine)
+      }).on('progress', function (progress) {
+        console.log('Processing: ' + progress.percent + '% done')
+      })
+
+    const timeout = setTimeout(function () {
+      command.kill()
+      reject(Error('Timeout')) // TODO: move to errors
+    }, 60000)
+
+    command
+      .on('error', function (err, stdout, stderr) {
+        clearTimeout(timeout)
+        reject(err)
+      })
+      .on('end', async function (stdout, stderr) {
+        clearTimeout(timeout)
+        try {
+          const meta = await identify(destinationPath)
+          resolve({
+            path: destinationPath,
+            meta: meta
+          })
+        }
+        catch (e) { reject(e) }
+      })
+      .run()
+  })
+}
+
 module.exports = {
   identify,
-  split
+  split,
+  convert,
 }

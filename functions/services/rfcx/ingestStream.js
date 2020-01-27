@@ -21,6 +21,9 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
   const fileDurationMs = 120000;
   const streamLocalPath = path.join(process.env.CACHE_DIRECTORY, path.dirname(storageFilePath));
 
+  const requiresConvToWav = path.extname(fileLocalPath) === '.flac';
+  const fileLocalPathWav = requiresConvToWav? fileLocalPath.replace(path.extname(fileLocalPath), '.wav') : null;
+
   return dirUtil.ensureDirExists(process.env.CACHE_DIRECTORY)
     .then(() => {
       return dirUtil.ensureDirExists(streamLocalPath)
@@ -32,6 +35,11 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       return db.updateUploadStatus(uploadId, db.status.UPLOADED)
     })
     .then(async () => {
+      let filedataWav;
+      if (requiresConvToWav) {
+        let convRes = await audioService.convert(fileLocalPath, fileLocalPathWav);
+        filedataWav = convRes.meta;
+      }
       let fileData = await audioService.identify(fileLocalPath);
       upload = await db.getUpload(uploadId);
       stream = await db.getStream(streamId);
@@ -44,6 +52,10 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       opts.idToken = `${token.access_token}`;
       opts.filename = upload.originalFilename;
       opts.sha1_checksum = sha1File(fileLocalPath);
+      if (requiresConvToWav) {
+        opts.bitRate = filedataWav.bitRate;
+        opts.duration = filedataWav.duration;
+      }
       return segmentService.createMasterSegment(opts)
         .catch((err) => {
           if (err.response && err.response.data && err.response.data.message) {
@@ -55,10 +67,20 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
     })
     .then(() => {
       console.log('\n\nmaster segment is created in db\n\n');
-      return audioService.split(fileLocalPath, path.dirname(fileLocalPath), fileDurationMs/1000);
+      return audioService.split(requiresConvToWav? fileLocalPathWav : fileLocalPath, path.dirname(fileLocalPath), fileDurationMs/1000);
     })
-    .then((outputFiles) => {
+    .then(async (outputFiles) => {
       console.log('\n\nfile is splitted', outputFiles, '\n\n');
+      // convert wav files back to original format
+      if (requiresConvToWav) {
+        for (let i = 0; i < outputFiles.length; i++) {
+          let file = outputFiles[i];
+          let finalPath = file.path.replace('.wav', path.extname(fileLocalPath));
+          await audioService.convert(file.path, finalPath);
+          file.path = finalPath;
+        }
+      }
+
       let proms = []
       let totalDurationMs = 0
       outputFiles.forEach((file) => {
