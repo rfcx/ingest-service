@@ -34,7 +34,7 @@ router.route('/')
 /**
  * HTTP function that creates a stream
  */
-router.route('/')
+router.route('/legacy')
   .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
     const name = req.body.name
     const site = req.body.site
@@ -67,7 +67,7 @@ router.route('/')
  * HTTP function that creates a stream
  * v2 is temporary until we migrate to new client app
  */
-router.route('/v2')
+router.route('/')
   .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
 
     const name = req.body.name

@@ -124,23 +124,8 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
           return outputFiles;
         });
     })
-    .then(async (outputFiles) => { // temporary step which emulated guardian files. to be deleted once we migrate to streams
-      console.log('\n\nsegments are saved in db\n\n')
-      let totalDurationMs = 0
-      const token = await auth0Service.getToken();
-      // we send files not in parallel, but one after another so API will have time to create GuardianAudioFormat
-      // which is same for these files. If we run uploads in parallel, then we will have duplicate rows in GuardianAudioFormats table
-      for (let i = 0; i < outputFiles.length; i++) {
-        let file = outputFiles[i];
-        const duration = Math.round(file.meta.duration * 1000);
-        const timestamp = moment(upload.timestamp).add(totalDurationMs, 'milliseconds').toISOString();
-        await ingestManual.ingest(file.path, path.basename(file.path), timestamp, upload.streamId, stream.token, `${token.access_token}`)
-        totalDurationMs += duration;
-      }
-      return true
-    })
     .then(() => {
-      console.log('\n\nguardian audio is saved in db\n\n')
+      console.log('\n\nsegments are saved in db\n\n')
       return db.updateUploadStatus(uploadId, db.status.INGESTED)
     })
     .then(() => {
