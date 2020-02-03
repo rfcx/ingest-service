@@ -93,15 +93,19 @@ router.route('/')
           })
       })
       .catch(err => {
-        if (err.message == errors.SITE_NOT_FOUND) {
-          res.status(400).send(err.message)
+        let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while creating a stream.'
+        if (message === 'Site with given guid not found.') {
+          res.status(400).send(message)
         }
-        else if (err.message == errors.UNAUTHORIZED) {
-          res.status(401).send(err.message)
+        else if (message == errors.UNAUTHORIZED) {
+          res.status(401).send(message)
+        }
+        else if (message === `You are not allowed to add a stream with the site ${site}`) {
+          res.status(403).send(message)
         }
         else {
           console.log(err)
-          res.status(500).send(err.message)
+          res.status(500).send(message)
         }
       })
   })
