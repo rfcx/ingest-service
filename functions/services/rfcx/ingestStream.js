@@ -9,8 +9,10 @@ const auth0Service = require('../../services/auth0')
 const path = require('path');
 const moment = require('moment-timezone');
 const uuid = require('uuid/v4');
-const ingestManual = require('./legacy/ingestManual');
 const sha1File = require('sha1-file');
+
+const supportedExtensions = ['.wav', '.flac', '.opus'];
+const losslessExtensions = ['.wav', '.flac'];
 
 // Parameters set is different compared to legacy ingest methods
 
@@ -21,11 +23,17 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
   const fileDurationMs = 120000;
   const streamLocalPath = path.join(process.env.CACHE_DIRECTORY, path.dirname(storageFilePath));
 
-  const requiresConvToWav = path.extname(fileLocalPath) === '.flac';
+  const fileExtension = path.extname(storageFilePath);
+  const requiresConvToWav = fileExtension === '.flac';
+  const isLosslessFile = losslessExtensions.includes(fileExtension);
   const fileLocalPathWav = requiresConvToWav? fileLocalPath.replace(path.extname(fileLocalPath), '.wav') : null;
 
   return dirUtil.ensureDirExists(process.env.CACHE_DIRECTORY)
     .then(() => {
+      let originalExtension = path.extname(storageFilePath);
+      if (!supportedExtensions.includes(originalExtension)) {
+        throw { message: 'File extension is not supported' }
+      }
       return dirUtil.ensureDirExists(streamLocalPath)
     })
     .then(() => {
@@ -71,11 +79,11 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
     })
     .then(async (outputFiles) => {
       console.log('\n\nfile is splitted', outputFiles, '\n\n');
-      // convert wav files back to original format
-      if (requiresConvToWav) {
+      // convert lossless files to flac format
+      if (isLosslessFile) {
         for (let i = 0; i < outputFiles.length; i++) {
           let file = outputFiles[i];
-          let finalPath = file.path.replace('.wav', path.extname(fileLocalPath));
+          let finalPath = file.path.replace(path.extname(file.path), '.flac');
           await audioService.convert(file.path, finalPath);
           file.path = finalPath;
         }
@@ -146,6 +154,9 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       let message = `${err.message}`;
       if (message === 'Duplicate file. Matching sha1 signature already ingested.') {
         db.updateUploadStatus(uploadId, db.status.DUPLICATE, message);
+      }
+      else if (message === 'File extension is not supported') {
+        db.updateUploadStatus(uploadId, db.status.FAILED, message);
       }
       else {
         message = 'Server failed with processing your file. Please try again later.';
