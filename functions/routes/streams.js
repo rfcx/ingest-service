@@ -72,6 +72,7 @@ router.route('/')
 
     const name = req.body.name
     const site = req.body.site
+    const visibility = req.body.visibility || 'private';
     const idToken = req.headers['authorization'];
 
     if (!name) {
@@ -87,21 +88,25 @@ router.route('/')
       .then(result => {
         const streamId = result.id;
         return streamService
-          .createStream({ streamId, name, site, idToken })
+          .createStream({ streamId, name, site, visibility, idToken })
           .then(() => {
             res.json({ id: result.id })
           })
       })
       .catch(err => {
-        if (err.message == errors.SITE_NOT_FOUND) {
-          res.status(400).send(err.message)
+        let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while creating a stream.'
+        if (message === 'Site with given guid not found.') {
+          res.status(400).send(message)
         }
-        else if (err.message == errors.UNAUTHORIZED) {
-          res.status(401).send(err.message)
+        else if (message == errors.UNAUTHORIZED) {
+          res.status(401).send(message)
+        }
+        else if (message === `You are not allowed to add a stream with the site ${site}`) {
+          res.status(403).send(message)
         }
         else {
           console.log(err)
-          res.status(500).send(err.message)
+          res.status(500).send(message)
         }
       })
   })
