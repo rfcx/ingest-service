@@ -72,6 +72,7 @@ router.route('/')
 
     const name = req.body.name
     const site = req.body.site
+    const visibility = req.body.visibility || 'private';
     const idToken = req.headers['authorization'];
 
     if (!name) {
@@ -87,7 +88,7 @@ router.route('/')
       .then(result => {
         const streamId = result.id;
         return streamService
-          .createStream({ streamId, name, site, idToken })
+          .createStream({ streamId, name, site, visibility, idToken })
           .then(() => {
             res.json({ id: result.id })
           })

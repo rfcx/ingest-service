@@ -9,6 +9,7 @@ async function createStream (opts) {
   const data = {
     guid: opts.streamId,
     name: opts.name,
+    visibility: opts.visibility
   }
   if (opts.site) {
     data.site = opts.site;
