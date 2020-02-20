@@ -21,7 +21,9 @@ function identify (sourceFile) {
           const sampleCount = Math.round(stream.duration * sampleRate)
           const channelCount = stream.channels
           const channelLayout = stream.channel_layout
-          const bitRate = (stream.bit_rate && stream.bit_rate !== 'N/A')? parseInt(stream.bit_rate) : 0;
+          const bitRate = (stream.bit_rate && stream.bit_rate !== 'N/A') ?
+            parseInt(stream.bit_rate) :
+            (result.format && result.format.bit_rate && result.format.bit_rate !== 'N/A'? parseInt(result.format.bit_rate) : 0);
           const codec = stream.codec_name
           const tags = result.format && result.format.tags? result.format.tags : {}
           resolve({ format, duration, sampleCount, channelLayout, channelCount, bitRate, sampleRate, codec, tags })
