@@ -28,6 +28,12 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
   const isLosslessFile = losslessExtensions.includes(fileExtension);
   const fileLocalPathWav = requiresConvToWav? fileLocalPath.replace(path.extname(fileLocalPath), '.wav') : null;
 
+  let transactionData = {
+    masterSegmentGuid: null,
+    segmentsGuids: [],
+    segmentsFileUrls: []
+  }
+
   return dirUtil.ensureDirExists(process.env.CACHE_DIRECTORY)
     .then(() => {
       let originalExtension = path.extname(storageFilePath);
@@ -65,6 +71,9 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         opts.duration = filedataWav.duration;
       }
       return segmentService.createMasterSegment(opts)
+        .then(() => {
+          transactionData.masterSegmentGuid = opts.guid;
+        })
         .catch((err) => {
           if (err.response && err.response.data && err.response.data.message) {
             throw { message: err.response.data.message }
@@ -98,6 +107,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         let remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${upload.streamId}/${file.guid}${path.extname(file.path)}`;
         totalDurationMs += duration;
         proms.push(storage.upload(remotePath, file.path));
+        transactionData.segmentsFileUrls.push(remotePath);
       })
       return Promise.all(proms)
         .then(() => {
@@ -126,6 +136,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         console.log('\ncreate segment', segmentOpts, '\n');
         let prom = segmentService.createSegment(segmentOpts)
         proms.push(prom);
+        transactionData.segmentsGuids.push(segmentOpts.guid);
       })
       return Promise.all(proms)
         .then(() => {
@@ -149,7 +160,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       stream = null;
       uploadId = null;
     })
-    .catch((err) => {
+    .catch(async (err) => {
       console.log('\n\ncatch error', err, '\n\n');
       let message = `${err.message}`;
       if (message === 'Duplicate file. Matching sha1 signature already ingested.') {
@@ -162,7 +173,16 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         message = 'Server failed with processing your file. Please try again later.';
         db.updateUploadStatus(uploadId, db.status.FAILED, message);
       }
-      storage.deleteObject(storageFilePath);
+      for (let filePath of transactionData.segmentsFileUrls) {
+        await storage.deleteObject(filePath);
+      }
+      for (let guid of transactionData.segmentsGuids) {
+        await segmentService.deleteSegment({ guid });
+      }
+      if (transactionData.masterSegmentGuid) {
+        await segmentService.deleteMasterSegment({ guid: transactionData.masterSegmentGuid });
+      }
+      await storage.deleteObject(storageFilePath);
       dirUtil.removeDirRecursively(streamLocalPath);
     });
 

@@ -1,6 +1,7 @@
-const axios = require('axios')
+const axios = require('axios');
+const auth0Service = require('../auth0');
 
-const apiHostName = process.env.API_HOST
+const apiHostName = process.env.API_HOST;
 
 async function createMasterSegment (opts) {
 
@@ -28,6 +29,19 @@ async function createMasterSegment (opts) {
   return axios.post(url, data, { headers })
 }
 
+async function deleteMasterSegment (opts) {
+
+  const url = `${apiHostName}v2/streams/master-segments/${opts.guid}`
+
+  const token = await auth0Service.getToken();
+  const headers = {
+    'Authorization': `Bearer ${token.access_token}`,
+    'Content-Type': 'application/json'
+  }
+
+  return axios.delete(url, { headers })
+}
+
 async function createSegment (opts) {
 
   const url = `${apiHostName}v2/streams/${opts.stream}/segments`
@@ -48,7 +62,21 @@ async function createSegment (opts) {
   return axios.post(url, data, { headers })
 }
 
+async function deleteSegment (opts) {
+
+  const url = `${apiHostName}v2/streams/segments/${opts.guid}`
+  const token = await auth0Service.getToken();
+  const headers = {
+    'Authorization': `Bearer ${token.access_token}`,
+    'Content-Type': 'application/json'
+  }
+
+  return axios.delete(url, { headers })
+}
+
 module.exports = {
   createMasterSegment,
+  deleteMasterSegment,
   createSegment,
+  deleteSegment,
 }
