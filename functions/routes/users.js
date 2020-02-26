@@ -56,9 +56,10 @@ router.route('/code')
   .post(verifyToken(), (req, res) => {
 
     const code = req.body.code;
+    const acceptTerms = req.body.accept_terms;
     const idToken = req.headers['authorization'];
 
-    return userService.sendCode(code, idToken)
+    return userService.sendCode({ code, acceptTerms }, idToken)
       .then((data) => {
         res.json( data )
       })
@@ -67,6 +68,25 @@ router.route('/code')
           res.status(401).send(err.message)
         } else if (err.message === errors.INVALID_CODE) {
           res.status(400).send(err.message)
+        } else {
+          res.status(500).send(err.message)
+        }
+      })
+
+  })
+
+router.route('/accept-terms')
+  .post(verifyToken(), (req, res) => {
+
+    const idToken = req.headers['authorization'];
+
+    return userService.acceptTerms(idToken)
+      .then((data) => {
+        res.json( data )
+      })
+      .catch(err => {
+        if (err.message === errors.UNAUTHORIZED) {
+          res.status(401).send(err.message)
         } else {
           res.status(500).send(err.message)
         }

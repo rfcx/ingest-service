@@ -44,10 +44,13 @@ async function getUserSites (idToken) {
 
 }
 
-async function sendCode (code, idToken) {
+async function sendCode (opts, idToken) {
 
   const url = `${apiHostName}v1/users/code`
-  const data = { code: code }
+  const data = { code: opts.code }
+  if (opts.acceptTerms !== undefined) {
+    data.accept_terms = !!opts.acceptTerms
+  }
   const headers = {
     'Authorization': idToken,
     'Content-Type': 'application/json'
@@ -65,8 +68,29 @@ async function sendCode (code, idToken) {
     })
 }
 
+async function acceptTerms (idToken) {
+
+  const url = `${apiHostName}v1/users/accept-terms`
+  const headers = {
+    'Authorization': idToken,
+    'Content-Type': 'application/json'
+  }
+
+  return axios.post(url, {}, { headers })
+    .then(response => {
+      return response.data
+    })
+    .catch(err => {
+      if (err.response && err.response.status === 401) {
+        throw new Error(errors.UNAUTHORIZED)
+      }
+      throw new Error('Unable to apply acceptance.')
+    })
+}
+
 module.exports = {
   touchapi,
   sendCode,
   getUserSites,
+  acceptTerms,
 }
