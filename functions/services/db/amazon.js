@@ -86,4 +86,18 @@ function editStream (id, name, site) { // TODO needs testing
   })
 }
 
-module.exports = { generateUpload, getUpload, updateUploadStatus, status, createStream, getStream, editStream }
+function deleteStream (id) {
+  return db.delAsync(`stream-${id}`)
+}
+
+
+module.exports = {
+  generateUpload,
+  getUpload,
+  updateUploadStatus,
+  status,
+  createStream,
+  getStream,
+  editStream,
+  deleteStream,
+}
