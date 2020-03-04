@@ -35,7 +35,7 @@ if (process.env.PLATFORM === 'amazon') {
   }));
 }
 
-app.use('/ingest-app', nuts.router);
+app.use(nuts.router);
 app.use('/uploads', require('./routes/uploads'))
 app.use('/streams', require('./routes/streams'))
 app.use('/users', require('./routes/users'))
