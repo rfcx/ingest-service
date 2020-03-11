@@ -138,6 +138,38 @@ router.route('/:id')
     })
   })
 
+router.route('/:id/move-to-trash')
+  .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
+
+    const streamId = req.params.id
+    const idToken = req.headers['authorization'];
+
+    return streamService
+      .moveStreamToTrash({ streamId, idToken })
+      .then(() => {
+        return db.deleteStream(streamId)
+      })
+      .then(() => {
+        res.json({ success: true })
+      })
+      .catch(err => {
+        let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while moving stream to trash.'
+        if (message == errors.UNAUTHORIZED) {
+          res.status(401).send(message)
+        }
+        else if (message === `You don't have enough permissions for this action.`) {
+          res.status(403).send(message)
+        }
+        else if (message === `Stream with given guid not found.`) {
+          res.status(404).send(message)
+        }
+        else {
+          console.log(err)
+          res.status(500).send(message)
+        }
+      })
+  })
+
 router.route('/:id')
   .delete(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
 

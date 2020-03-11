@@ -23,6 +23,17 @@ async function createStream (opts) {
   return axios.post(url, data, { headers })
 }
 
+async function moveStreamToTrash (opts) {
+
+  const url = `${apiHostName}v2/streams/${opts.streamId}/move-to-trash`;
+  const headers = {
+    'Authorization': opts.idToken,
+    'Content-Type': 'application/json'
+  }
+
+  return axios.post(url, { headers })
+}
+
 async function deleteStream (opts) {
 
   const url = `${apiHostName}v2/streams/${opts.streamId}`;
@@ -61,6 +72,7 @@ async function getUserStreams (idToken, access) {
 
 module.exports = {
   createStream,
+  moveStreamToTrash,
   deleteStream,
   getUserStreams,
 }
