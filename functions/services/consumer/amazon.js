@@ -5,17 +5,16 @@ const { ingest } = require('../rfcx/ingestStream');
 
 const consumer = Consumer.create({
   queueUrl: process.env.SQS_INGEST_TRIGGER_QUEUE_URL,
+  batchSize: 1, // this is a default value, but set it to 1 just to make sure it won't be changed in future versions of the lib
   handleMessage: async (message) => {
     let files = parseIngestSQSMessage(message);
-    let proms = [];
-    files.forEach((file) => {
+    for (let file of files) {
       const fileLocalPath = `${process.env.CACHE_DIRECTORY}${file.key}`;
       const streamId = path.dirname(file.key);
       const uploadId = path.basename(file.key, path.extname(file.key));
-      let prom = ingest(file.key, fileLocalPath, streamId, uploadId)
-      proms.push(prom);
-    });
-    return Promise.all(proms);
+      await ingest(file.key, fileLocalPath, streamId, uploadId);
+    }
+    return true;
   },
   sqs: new AWS.SQS()
 });
