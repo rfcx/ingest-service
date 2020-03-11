@@ -64,7 +64,7 @@ function split (sourceFile, destinationPath, maxDuration) {
     const timeout = setTimeout(function () {
       command.kill()
       reject(Error('Timeout')) // TODO: move to errors
-    }, 60000)
+    }, 120000)
 
     command
       .on('error', function (err, stdout, stderr) {

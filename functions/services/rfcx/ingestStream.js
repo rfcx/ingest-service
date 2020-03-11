@@ -90,37 +90,32 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       console.log('\n\nfile is splitted', outputFiles, '\n\n');
       // convert lossless files to flac format
       if (isLosslessFile) {
-        for (let i = 0; i < outputFiles.length; i++) {
-          let file = outputFiles[i];
+        for (let file of outputFiles) {
           let finalPath = file.path.replace(path.extname(file.path), '.flac');
           await audioService.convert(file.path, finalPath);
           file.path = finalPath;
         }
       }
 
-      let proms = []
       let totalDurationMs = 0
-      outputFiles.forEach((file) => {
+      for (let file of outputFiles) {
         const duration = Math.round(file.meta.duration * 1000);
         const ts = moment.tz(upload.timestamp, 'UTC').add(totalDurationMs, 'milliseconds');
         file.guid = uuid();
         let remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${upload.streamId}/${file.guid}${path.extname(file.path)}`;
         totalDurationMs += duration;
-        proms.push(storage.upload(remotePath, file.path));
         transactionData.segmentsFileUrls.push(remotePath);
-      })
-      return Promise.all(proms)
-        .then(() => {
-          return outputFiles;
-        });
+        await storage.upload(remotePath, file.path);
+        console.log('\nsegment', file.path, 'has been uploaded to', remotePath, '\n');
+      }
+      return outputFiles;
     })
     .then(async (outputFiles) => {
       console.log('\n\nsegments are uploaded\n\n');
-      let proms = []
       const timestamp = moment.tz(upload.timestamp, 'UTC').valueOf();
       let totalDurationMs = 0
       const token = await auth0Service.getToken();
-      outputFiles.forEach((file) => {
+      for (let file of outputFiles) {
         const duration = Math.round(file.meta.duration * 1000);
         const segmentOpts = {
           guid: file.guid,
@@ -133,22 +128,18 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
           file_extension: path.extname(file.path),
         };
         totalDurationMs += duration;
-        console.log('\ncreate segment', segmentOpts, '\n');
-        let prom = segmentService.createSegment(segmentOpts)
-        proms.push(prom);
+        await segmentService.createSegment(segmentOpts)
+        console.log('\nsegment', segmentOpts, 'has been saved in DB\n');
         transactionData.segmentsGuids.push(segmentOpts.guid);
-      })
-      return Promise.all(proms)
-        .then(() => {
-          return outputFiles;
-        });
+      }
+      return outputFiles;
     })
     .then(() => {
       console.log('\n\nsegments are saved in db\n\n')
       return db.updateUploadStatus(uploadId, db.status.INGESTED)
     })
     .then(() => {
-      console.log('\n\nupload status is changed\n\n')
+      console.log(`\n\nupload status is changed to INGESTED (${db.status.INGESTED})`, '\n\n')
       return storage.deleteObject(storageFilePath);
     })
     .then(() => {
