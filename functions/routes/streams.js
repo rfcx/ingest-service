@@ -95,11 +95,11 @@ router.route('/')
       })
       .catch(err => {
         let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while creating a stream.'
-        if (message === 'Site with given guid not found.') {
-          res.status(400).send(message)
-        }
-        else if (message == errors.UNAUTHORIZED) {
+        if (err.response && err.response.data && err.response.data == errors.UNAUTHORIZED) {
           res.status(401).send(message)
+        }
+        else if (message === 'Site with given guid not found.') {
+          res.status(400).send(message)
         }
         else if (message === `You are not allowed to add a stream with the site ${site}`) {
           res.status(403).send(message)
@@ -154,7 +154,7 @@ router.route('/:id/move-to-trash')
       })
       .catch(err => {
         let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while moving stream to trash.'
-        if (message == errors.UNAUTHORIZED) {
+        if (err.response && err.response.data && err.response.data == errors.UNAUTHORIZED) {
           res.status(401).send(message)
         }
         else if (message === `You don't have enough permissions for this action.`) {
@@ -186,7 +186,7 @@ router.route('/:id')
       })
       .catch(err => {
         let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while deleting a stream.'
-        if (message == errors.UNAUTHORIZED) {
+        if (err.response && err.response.data && err.response.data == errors.UNAUTHORIZED) {
           res.status(401).send(message)
         }
         else if (message === `You don't have permissions to delete non-empty stream.` ||

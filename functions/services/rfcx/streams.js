@@ -31,7 +31,7 @@ async function moveStreamToTrash (opts) {
     'Content-Type': 'application/json'
   }
 
-  return axios.post(url, { headers })
+  return axios.post(url, {}, { headers })
 }
 
 async function deleteStream (opts) {
