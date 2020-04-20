@@ -66,6 +66,12 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       opts.idToken = `${token.access_token}`;
       opts.filename = upload.originalFilename;
       opts.sha1_checksum = sha1File(fileLocalPath);
+      if (isNaN(opts.duration) || opts.duration === 0) {
+        throw { message: 'Audio duration is zero' };
+      }
+      if (isNaN(opts.sampleCount) || opts.sampleCount === 0) {
+        throw { message: 'Audio sampleCount is zero' };
+      }
       if (requiresConvToWav) {
         opts.bitRate = filedataWav.bitRate;
         opts.duration = filedataWav.duration;
@@ -159,6 +165,12 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       }
       else if (message === 'File extension is not supported') {
         db.updateUploadStatus(uploadId, db.status.FAILED, message);
+      }
+      else if (message === 'Audio duration is zero') {
+        db.updateUploadStatus(uploadId, db.status.FAILED, 'Audio duration is zero');
+      }
+      else if (message === 'Audio sampleCount is zero') {
+        db.updateUploadStatus(uploadId, db.status.FAILED, 'Audio sampleCount is zero');
       }
       else {
         message = 'Server failed with processing your file. Please try again later.';
