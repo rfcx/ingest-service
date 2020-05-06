@@ -99,7 +99,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
 
       let totalDurationMs = 0
       for (let file of outputFiles) {
-        const duration = Math.round(file.meta.duration * 1000);
+        const duration = Math.floor(file.meta.duration * 1000);
         const ts = moment.tz(upload.timestamp, 'UTC').add(totalDurationMs, 'milliseconds');
         file.guid = uuid();
         let remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${upload.streamId}/${file.guid}${path.extname(file.path)}`;
@@ -116,14 +116,14 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       let totalDurationMs = 0
       const token = await auth0Service.getToken();
       for (let file of outputFiles) {
-        const duration = Math.round(file.meta.duration * 1000);
+        const duration = Math.floor(file.meta.duration * 1000);
         const segmentOpts = {
           guid: file.guid,
           stream: upload.streamId,
           idToken: `${token.access_token}`,
           masterSegment: uploadId,
           starts: timestamp + totalDurationMs,
-          ends: timestamp + totalDurationMs + Math.round(file.meta.duration * 1000),
+          ends: timestamp + totalDurationMs + duration,
           sample_count: file.meta.sampleCount,
           file_extension: path.extname(file.path),
         };
