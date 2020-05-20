@@ -37,7 +37,7 @@ router.route('/').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
   // TODO check that the user is authorized to upload (to the given streamId)
   const userId = req.user.guid;
 
-  const fileExtension = originalFilename.split('.').pop()
+  const fileExtension = originalFilename.split('.').pop().toLowerCase()
 
   db.generateUpload(streamId, userId, timestamp, originalFilename, fileExtension)
     .then(data => {
