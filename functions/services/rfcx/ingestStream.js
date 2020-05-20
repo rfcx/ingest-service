@@ -23,7 +23,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
   const fileDurationMs = 120000;
   const streamLocalPath = path.join(process.env.CACHE_DIRECTORY, path.dirname(storageFilePath));
 
-  const fileExtension = path.extname(storageFilePath);
+  const fileExtension = path.extname(storageFilePath).toLowerCase();
   const requiresConvToWav = fileExtension === '.flac';
   const isLosslessFile = losslessExtensions.includes(fileExtension);
   const fileLocalPathWav = requiresConvToWav? fileLocalPath.replace(path.extname(fileLocalPath), '.wav') : null;
@@ -36,8 +36,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
 
   return dirUtil.ensureDirExists(process.env.CACHE_DIRECTORY)
     .then(() => {
-      let originalExtension = path.extname(storageFilePath);
-      if (!supportedExtensions.includes(originalExtension)) {
+      if (!supportedExtensions.includes(fileExtension)) {
         throw { message: 'File extension is not supported' }
       }
       return dirUtil.ensureDirExists(streamLocalPath)
