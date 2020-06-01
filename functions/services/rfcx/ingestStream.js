@@ -55,8 +55,6 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       }
       let fileData = await audioService.identify(fileLocalPath);
       upload = await db.getUpload(uploadId);
-      stream = await db.getStream(streamId);
-      console.log('\n\nstream', stream, '\n\n')
       console.log('\n\nupload', upload, '\n\n')
       let opts = fileData;
       opts.guid = uploadId;

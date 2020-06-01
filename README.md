@@ -6,7 +6,7 @@ A mockup service for ingesting files via GCS
 ## Requirements
 
 - Node 8+
-- [FFmpeg](https://ffmpeg.org) for splitting and identifying audio files 
+- [FFmpeg](https://ffmpeg.org) for splitting and identifying audio files
 - [Google Cloud SDK](https://cloud.google.com/sdk/)
 - [Firebase CLI](https://firebase.google.com/docs/cli)
 
@@ -43,6 +43,18 @@ Install dependencies:
 ```
 cd functions
 npm install
+```
+
+## Database setup
+You can start local MongoDB using Docker with command:
+```
+npm run start.mongo
+```
+MongoDB will start on `localhost` with port `27017`, db name `admin`, user `admin-user`, and password `test`.
+
+And stop it with command:
+```
+npm run stop.mongo
 ```
 
 ### For Node/Amazon

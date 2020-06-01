@@ -69,12 +69,14 @@ router.route('/:id').get(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
   // TODO check that the user owns the upload
 
   const id = req.params.id
-  db.getUpload(id).then(data => {
-    res.json(data)
-  }).catch(err => {
-    console.error(err)
-    res.status(500).end()
-  })
+  db.getUpload(id)
+    .then(data => {
+      res.json(data);
+    })
+    .catch(err => {
+      console.error(err)
+      res.status(500).end()
+    });
 })
 
 module.exports = router
