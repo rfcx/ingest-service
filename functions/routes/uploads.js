@@ -19,7 +19,7 @@ const storage = require(`../services/storage/${platform}`);
  * @param {Object} req Cloud Function request context.
  * @param {Object} res Cloud Function response context.
  */
-router.route('/').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
+router.route('/').post(verifyToken(), hasRole(['rfcxUser', 'systemUser']), (req, res) => {
   const originalFilename = req.body.filename
   const timestamp = req.body.timestamp
   const streamId = req.body.stream
@@ -35,7 +35,7 @@ router.route('/').post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
   }
 
   // TODO check that the user is authorized to upload (to the given streamId)
-  const userId = req.user.guid;
+  let userId = req.user.guid || req.user.sub || 'unknown';
 
   const fileExtension = originalFilename.split('.').pop().toLowerCase()
 
