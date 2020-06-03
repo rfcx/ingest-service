@@ -9,9 +9,9 @@ const streamsCollection = 'streams'
 
 function generateUpload (opts) {
 
-  const { streamId, userId, timestamp, originalFilename, sampleRate, targetBitrate, checksum  } = opts;
+  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum  } = opts;
   let ref = db.collection(uploadsCollection).doc()
-  let path = 'uploaded/' + streamId + '/' + ref.id + '.' + fileType
+  let path = 'uploaded/' + streamId + '/' + ref.id + '.' + fileExtension
   return ref.set({
     streamId: streamId,
     userId: userId,

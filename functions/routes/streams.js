@@ -12,7 +12,7 @@ const platform = process.env.PLATFORM || 'google'
 const db = require(`../services/db/${platform}`)
 const rfcx = require('../services/rfcx/register')
 const streamService = require('../services/rfcx/streams');
-const errors = require('../utils/errors')
+const errors = require('../utils/error-messages')
 
 router.route('/')
   .get(verifyToken(), hasRole(['rfcxUser']), (req, res) => {

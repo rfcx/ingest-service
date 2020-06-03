@@ -1,5 +1,5 @@
 const axios = require('axios')
-const errors = require('../../utils/errors')
+const errors = require('../../utils/error-messages')
 
 const apiHostName = process.env.API_HOST
 

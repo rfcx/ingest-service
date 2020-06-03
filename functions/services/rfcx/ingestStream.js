@@ -13,6 +13,9 @@ const sha1File = require('sha1-file');
 
 const supportedExtensions = ['.wav', '.flac', '.opus'];
 const losslessExtensions = ['.wav', '.flac'];
+const extensionsRequiringAdditionalData = ['.opus'];
+
+const { IngestionError } = require('../../utils/errors');
 
 // Parameters set is different compared to legacy ingest methods
 
@@ -37,7 +40,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
   return dirUtil.ensureDirExists(process.env.CACHE_DIRECTORY)
     .then(() => {
       if (!supportedExtensions.includes(fileExtension)) {
-        throw { message: 'File extension is not supported' }
+        throw new IngestionError('File extension is not supported', db.status.FAILED)
       }
       return dirUtil.ensureDirExists(streamLocalPath)
     })
@@ -55,8 +58,9 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       }
       let fileData = await audioService.identify(fileLocalPath);
       upload = await db.getUpload(uploadId);
-      console.log('\n\nupload', upload, '\n\n')
+      console.log('Upload data', upload)
       let opts = fileData;
+      console.log('Ffprobe result', fileData)
       opts.guid = uploadId;
       const token = await auth0Service.getToken();
       opts.stream = upload.streamId,
@@ -64,33 +68,47 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       opts.filename = upload.originalFilename;
       opts.sha1_checksum = sha1File(fileLocalPath);
       if (isNaN(opts.duration) || opts.duration === 0) {
-        throw { message: 'Audio duration is zero' };
+        throw new IngestionError('Audio duration is zero');
       }
       if (isNaN(opts.sampleCount) || opts.sampleCount === 0) {
-        throw { message: 'Audio sampleCount is zero' };
+        throw new IngestionError('Audio sampleCount is zero' );
+      }
+      if (extensionsRequiringAdditionalData.includes(fileExtension)) {
+        if (!upload.sampleRate) {
+          throw new IngestionError(`"sampleRate" must be provided for "${fileExtension}" file ingestion.`);
+        }
+        if (!upload.targetBitrate) {
+          throw new IngestionError(`"targetBitrate" must be provided for ${fileExtension} file ingestion.`);
+        }
       }
       if (requiresConvToWav) {
         opts.bitRate = filedataWav.bitRate;
         opts.duration = filedataWav.duration;
       }
+      // if sampleRate and bitRate were specified on upload request, then set them implicitly
+      if (upload.sampleRate) opts.sampleRate = upload.sampleRate;
+      if (upload.targetBitrate) opts.bitRate = upload.targetBitrate;
+
       return segmentService.createMasterSegment(opts)
         .then(() => {
           transactionData.masterSegmentGuid = opts.guid;
         })
         .catch((err) => {
           if (err.response && err.response.data && err.response.data.message) {
-            throw { message: err.response.data.message }
+            let message = err.response.data.message;
+            let status = message === 'Duplicate file. Matching sha1 signature already ingested.'? db.status.DUPLICATE : db.status.FAILED;
+            throw new IngestionError(message, status)
           } else {
             throw err
           }
         });
     })
     .then(() => {
-      console.log('\n\nmaster segment is created in db\n\n');
+      console.log('Master segment is created in db');
       return audioService.split(requiresConvToWav? fileLocalPathWav : fileLocalPath, path.dirname(fileLocalPath), fileDurationMs/1000);
     })
     .then(async (outputFiles) => {
-      console.log('\n\nfile is splitted', outputFiles, '\n\n');
+      console.log('File is splitted', outputFiles);
       // convert lossless files to flac format
       if (isLosslessFile) {
         for (let file of outputFiles) {
@@ -109,12 +127,12 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         totalDurationMs += duration;
         transactionData.segmentsFileUrls.push(remotePath);
         await storage.upload(remotePath, file.path);
-        console.log('\nsegment', file.path, 'has been uploaded to', remotePath, '\n');
+        console.log('Segment', file.path, 'has been uploaded to', remotePath);
       }
       return outputFiles;
     })
     .then(async (outputFiles) => {
-      console.log('\n\nsegments are uploaded\n\n');
+      console.log('Segments are uploaded');
       const timestamp = moment.tz(upload.timestamp, 'UTC').valueOf();
       let totalDurationMs = 0
       const token = await auth0Service.getToken();
@@ -132,47 +150,33 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         };
         totalDurationMs += duration;
         await segmentService.createSegment(segmentOpts)
-        console.log('\nsegment', segmentOpts, 'has been saved in DB\n');
+        console.log('Segment', segmentOpts, 'has been saved in DB');
         transactionData.segmentsGuids.push(segmentOpts.guid);
       }
       return outputFiles;
     })
     .then(() => {
-      console.log('\n\nsegments are saved in db\n\n')
+      console.log('Segments are saved in db')
       return db.updateUploadStatus(uploadId, db.status.INGESTED)
     })
     .then(() => {
-      console.log(`\n\nupload status is changed to INGESTED (${db.status.INGESTED})`, '\n\n')
+      console.log(`Upload status is changed to INGESTED (${db.status.INGESTED})`)
       return storage.deleteObject(storageFilePath);
     })
     .then(() => {
-      console.log('\n\ndeleted original file', storageFilePath, '\n\n');
+      console.log('Deleted original file', storageFilePath);
       return dirUtil.removeDirRecursively(streamLocalPath)
     })
     .then(() => {
-      console.log('\n\nremoved stream directory', streamLocalPath, '\n\n');
+      console.log('Removed stream directory', streamLocalPath);
       stream = null;
       uploadId = null;
     })
     .catch(async (err) => {
-      console.log('\n\ncatch error', err, '\n\n');
-      let message = `${err.message}`;
-      if (message === 'Duplicate file. Matching sha1 signature already ingested.') {
-        db.updateUploadStatus(uploadId, db.status.DUPLICATE, message);
-      }
-      else if (message === 'File extension is not supported') {
-        db.updateUploadStatus(uploadId, db.status.FAILED, message);
-      }
-      else if (message === 'Audio duration is zero') {
-        db.updateUploadStatus(uploadId, db.status.FAILED, 'Audio duration is zero');
-      }
-      else if (message === 'Audio sampleCount is zero') {
-        db.updateUploadStatus(uploadId, db.status.FAILED, 'Audio sampleCount is zero');
-      }
-      else {
-        message = 'Server failed with processing your file. Please try again later.';
-        db.updateUploadStatus(uploadId, db.status.FAILED, message);
-      }
+      console.error(`Error thrown for upload ${uploadId}`, err);
+      let message = err instanceof IngestionError? err.message : 'Server failed with processing your file. Please try again later.';
+      let status = err instanceof IngestionError? err.status : db.status.FAILED;
+      db.updateUploadStatus(uploadId, status, message);
       for (let filePath of transactionData.segmentsFileUrls) {
         await storage.deleteObject(filePath);
       }

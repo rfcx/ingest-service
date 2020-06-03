@@ -9,7 +9,7 @@ const statusNumbers = Object.values(status)
 
 function generateUpload (opts) {
 
-  const { streamId, userId, timestamp, originalFilename, fileType, sampleRate, targetBitrate, checksum  } = opts;
+  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum  } = opts;
 
   let upload = new UploadModel({
     streamId,
@@ -28,7 +28,7 @@ function generateUpload (opts) {
         const id = data._id;
         return {
           id,
-          path: `${streamId}/${id}.${fileType}`
+          path: `${streamId}/${id}.${fileExtension}`
         }
       }
       else {

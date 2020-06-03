@@ -55,7 +55,7 @@ router.route('/').post(verifyToken(), hasRole(['rfcxUser', 'systemUser']), (req,
             res.status(500).end()
           }
           else {
-            res.json({ uploadId, url })
+            res.json({ uploadId, url, path: data.path })
           }
           return
         })
