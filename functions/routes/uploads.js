@@ -20,9 +20,16 @@ const storage = require(`../services/storage/${platform}`);
  * @param {Object} res Cloud Function response context.
  */
 router.route('/').post(verifyToken(), hasRole(['rfcxUser', 'systemUser']), (req, res) => {
+
+  // required params
   const originalFilename = req.body.filename
   const timestamp = req.body.timestamp
   const streamId = req.body.stream
+  // optional params
+  const sampleRate = req.body.sampleRate;
+  const targetBitrate = req.body.targetBitrate;
+  // TODO: make checksum required param when Ingest App will send it
+  const checksum = req.body.checksum;
 
   if (originalFilename === undefined || streamId === undefined || timestamp === undefined) {
     res.status(400).send('Required: filename, stream, timestamp')
@@ -39,7 +46,7 @@ router.route('/').post(verifyToken(), hasRole(['rfcxUser', 'systemUser']), (req,
 
   const fileExtension = originalFilename.split('.').pop().toLowerCase()
 
-  db.generateUpload(streamId, userId, timestamp, originalFilename, fileExtension)
+  db.generateUpload({ streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum })
     .then(data => {
       const uploadId = data.id
       return storage.getSignedUrl(data.path, 'audio/' + fileExtension)

@@ -11,6 +11,9 @@ const UploadSchema = new mongoose.Schema({
   timestamp: Date,
   originalFilename: String,
   failureMessage: String,
+  sampleRate: Number,
+  targetBitrate: Number,
+  checksum: String,
 });
 
 const Upload = mongoose.model('StreamUpload', UploadSchema);

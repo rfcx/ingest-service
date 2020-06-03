@@ -7,7 +7,9 @@ const hash = require('../../utils/hash');
 const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31 }
 const statusNumbers = Object.values(status)
 
-function generateUpload (streamId, userId, timestamp, originalFilename, fileType) {
+function generateUpload (opts) {
+
+  const { streamId, userId, timestamp, originalFilename, fileType, sampleRate, targetBitrate, checksum  } = opts;
 
   let upload = new UploadModel({
     streamId,
@@ -15,6 +17,9 @@ function generateUpload (streamId, userId, timestamp, originalFilename, fileType
     status: status.WAITING,
     timestamp,
     originalFilename,
+    sampleRate,
+    targetBitrate,
+    checksum
   });
 
   return upload.save()
