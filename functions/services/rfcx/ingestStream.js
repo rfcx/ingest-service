@@ -81,6 +81,9 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
           throw new IngestionError(`"targetBitrate" must be provided for ${fileExtension} file ingestion.`);
         }
       }
+      if (upload.checksum && upload.checksum !== opts.sha1_checksum) {
+        throw new IngestionError(`Checksum mismatch.`, db.status.CHECKSUM);
+      }
       if (requiresConvToWav) {
         opts.bitRate = filedataWav.bitRate;
         opts.duration = filedataWav.duration;

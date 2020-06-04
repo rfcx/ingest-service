@@ -4,7 +4,7 @@ const StreamModel = require('./models/mongoose/stream').Stream;
 const moment = require('moment-timezone');
 const hash = require('../../utils/hash');
 
-const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31 }
+const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31, CHECKSUM: 32 }
 const statusNumbers = Object.values(status)
 
 function generateUpload (opts) {
