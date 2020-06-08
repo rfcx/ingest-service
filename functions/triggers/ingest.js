@@ -29,7 +29,8 @@ module.exports = async (context) => {
     logPerf('Downloaded', startTime)
 
     // Get the stream info
-    const stream = await db.getStream(upload.streamId)
+    // const stream = await db.getStream(upload.streamId)
+    const stream = { token: '1234', idToken: '' } // stream is not used for intestStream script now
     logPerf('Got stream', startTime)
 
     // Upload to RFCx

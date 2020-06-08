@@ -1,5 +1,5 @@
 const axios = require('axios')
-const errors = require('../../utils/errors')
+const errors = require('../../utils/error-messages')
 
 const apiHostName = process.env.API_HOST
 
@@ -14,6 +14,21 @@ async function createStream (opts) {
   if (opts.site) {
     data.site = opts.site;
   }
+
+  const headers = {
+    'Authorization': opts.idToken,
+    'Content-Type': 'application/json'
+  }
+
+  return axios.post(url, data, { headers })
+}
+
+async function updateStream (opts) {
+
+  const url = `${apiHostName}v2/streams/${opts.streamId}`;
+  let data = {};
+  if (opts.name) data.name = opts.name;
+  if (opts.site) data.site = opts.site;
 
   const headers = {
     'Authorization': opts.idToken,
@@ -72,6 +87,7 @@ async function getUserStreams (idToken, access) {
 
 module.exports = {
   createStream,
+  updateStream,
   moveStreamToTrash,
   deleteStream,
   getUserStreams,

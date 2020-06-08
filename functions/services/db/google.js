@@ -3,13 +3,15 @@ const db = firebase.firestore()
 const FieldValue = require('firebase-admin').firestore.FieldValue;
 
 const uploadsCollection = 'uploads'
-const status = { WAITING: 0, UPLOADED: 10, INGESTING: 19, INGESTED: 20, FAILED: 30, DUPLICATE: 31 }
+const status = { WAITING: 0, UPLOADED: 10, INGESTING: 19, INGESTED: 20, FAILED: 30, DUPLICATE: 31, CHECKSUM: 32 }
 const statusNumbers = Object.values(status)
 const streamsCollection = 'streams'
 
-function generateUpload (streamId, userId, timestamp, originalFilename, fileType) {
+function generateUpload (opts) {
+
+  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum  } = opts;
   let ref = db.collection(uploadsCollection).doc()
-  let path = 'uploaded/' + streamId + '/' + ref.id + '.' + fileType
+  let path = 'uploaded/' + streamId + '/' + ref.id + '.' + fileExtension
   return ref.set({
     streamId: streamId,
     userId: userId,
@@ -18,7 +20,10 @@ function generateUpload (streamId, userId, timestamp, originalFilename, fileType
     updatedAt: FieldValue.serverTimestamp(),
     timestamp: timestamp,
     originalFilename: originalFilename,
-    path: path
+    path,
+    sampleRate,
+    targetBitrate,
+    checksum
   }).then(() => {
     return { id: ref.id, path: path }
   })

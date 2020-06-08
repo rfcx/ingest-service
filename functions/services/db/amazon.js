@@ -1,44 +1,44 @@
-const db = require('../../utils/redis');
+const db = require('../../utils/mongo');
+const UploadModel = require('./models/mongoose/upload').Upload;
+const StreamModel = require('./models/mongoose/stream').Stream;
 const moment = require('moment-timezone');
-const uuid = require('uuid/v4');
 const hash = require('../../utils/hash');
 
-const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31 }
+const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31, CHECKSUM: 32 }
 const statusNumbers = Object.values(status)
 
-function generateUpload (streamId, userId, timestamp, originalFilename, fileType) {
-  const now = moment().tz('UTC').valueOf();
-  const uploadId = uuid();
-  const path = `${streamId}/${uploadId}.${fileType}`;
-  const opts = {
+function generateUpload (opts) {
+
+  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum  } = opts;
+
+  let upload = new UploadModel({
     streamId,
     userId,
     status: status.WAITING,
-    createdAt: now,
-    updatedAt: now,
     timestamp,
     originalFilename,
-    path
-  };
-  return db.setAsync(`upload-${uploadId}`, JSON.stringify(opts))
-    .then((data) => {
-      console.log('generateUpload redis data', data);
-      return {
-        id: uploadId,
-        path
-      };
-    });
-}
+    sampleRate,
+    targetBitrate,
+    checksum
+  });
 
-function getKeyJSONValue (key) {
-  return db.getAsync(key)
+  return upload.save()
     .then((data) => {
-      return JSON.parse(data);
+      if (data && data._id) {
+        const id = data._id;
+        return {
+          id,
+          path: `${streamId}/${id}.${fileExtension}`
+        }
+      }
+      else {
+        throw Error('Can not create upload.');
+      }
     });
 }
 
 function getUpload (id) {
-  return getKeyJSONValue(`upload-${id}`);
+  return UploadModel.findById(id);
 }
 
 function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
@@ -46,48 +46,50 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
     return Promise.reject('Invalid status')
   }
   return getUpload(uploadId)
-    .then((data) => {
-      data.status = statusNumber;
-      data.updatedAt = moment().tz('UTC').valueOf();
+    .then((upload) => {
+      upload.status = statusNumber;
+      upload.updatedAt = moment().tz('UTC').toDate();
       if (failureMessage != null) {
-        data.failureMessage = failureMessage;
+        upload.failureMessage = failureMessage;
       }
-      return db.setAsync(`upload-${uploadId}`, JSON.stringify(data));
+      return upload.save();
     })
 }
+
+// The following functions for Streams are not used for ingestStream script at the current time. They are here just for consistency with `google` approach.
 
 function createStream (name) {
   const token = '1234' // TODO: this is only here for legacy calls to checkin api
   const streamGuid = hash.randomString(12);
-  return db.setAsync(`stream-${streamGuid}`, JSON.stringify({ name, token }))
-    .then((data) => {
-      console.log('createStream redis data', data);
-      return {
-        id: streamGuid,
-        token,
-      };
+  let stream = new StreamModel({
+    guid: streamGuid,
+    token,
+    name
+  })
+
+  return stream.save()
+    .then(() => {
+      return { id: streamGuid, token };
     });
 }
 
-function getStream (id) {
-  return getKeyJSONValue(`stream-${id}`)
+function getStream (guid) {
+  return StreamModel.find({ guid });
 }
 
-function editStream (id, name, site) { // TODO needs testing
-  return getKeyJSONValue(`stream-${id}`).then(stream => {
-    stream.name = name
-    if (site !== undefined) {
-      stream.site = site
-    }
-    return db.setAsync(`stream-${id}`, JSON.stringify(stream))
-      .then((data) => {
-        console.log('editStream redis data', data)
-      })
-  })
+function editStream (guid, name, site) {
+  return getStream(guid)
+    .then((stream) => {
+      stream.name = name
+      if (site !== undefined) {
+        stream.site = site
+      }
+      return stream.save();
+    })
 }
 
-function deleteStream (id) {
-  return db.delAsync(`stream-${id}`)
+function deleteStream (guid) {
+  return StreamModel.deleteOne({ guid });
 }
 
 

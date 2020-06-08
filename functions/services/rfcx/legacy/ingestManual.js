@@ -59,6 +59,7 @@ async function putFile (localPath, remotePath) {
 
 async function ingest (filePath, originalFilename, timestampIso, guardianGuid, guardianToken, idToken) {
 
+  // TODO: get idToken for server app from Auth0 - don't use client's token
   // Get sha1, sample count, size
   const sha1 = sha1File(filePath)
   const meta = await identify(filePath)
