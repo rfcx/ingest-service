@@ -70,30 +70,31 @@ router.route('/')
 /**
  * HTTP function that updates a stream
  */
-router.route('/:id')
-  .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
+function updateEndpoint(req, res) {
+  const streamId = req.params.id;
+  const name = req.body.name;
+  const latitude = req.body.latitude
+  const longitude = req.body.longitude
+  const description = req.body.description
+  const is_private = req.body.is_private
+  const idToken = req.headers['authorization'];
 
-    const streamId = req.params.id;
-    const name = req.body.name;
-    const latitude = req.body.latitude
-    const longitude = req.body.longitude
-    const description = req.body.description
-    const is_private = req.body.is_private
-    const idToken = req.headers['authorization'];
+  const defaultErrorMessage = 'Error while updating a stream.'
 
-    const defaultErrorMessage = 'Error while updating a stream.'
+  return streamService.updateStream({ streamId, name, latitude, longitude, description, is_private, idToken })
+    .then((response) => {
+      if (response && response.status === 200) {
+        res.json(response.data)
+      }
+      else {
+        res.status(500).send(defaultErrorMessage)
+      }
+    })
+    .catch(httpErrorHandler(req, res, defaultErrorMessage))
+}
 
-    return streamService.updateStream({ streamId, name, latitude, longitude, description, is_private, idToken })
-      .then((response) => {
-        if (response && response.status === 200) {
-          res.json(response.data)
-        }
-        else {
-          res.status(500).send(defaultErrorMessage)
-        }
-      })
-      .catch(httpErrorHandler(req, res, defaultErrorMessage))
-  })
+router.route('/:id').post(verifyToken(), hasRole(['rfcxUser']), updateEndpoint)
+router.route('/:id').patch(verifyToken(), hasRole(['rfcxUser']), updateEndpoint)
 
 router.route('/:id/move-to-trash')
   .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
