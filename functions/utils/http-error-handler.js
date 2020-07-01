@@ -9,7 +9,7 @@ function httpErrorHandler (req, res, defaultMessage) {
     catch (e) { }
     if (err.response) { // The request was made and the server responded with a status code
       let apiStatusCode = err.response.status
-      if ([400, 401, 403].includes(apiStatusCode)) {
+      if ([400, 401, 403, 404].includes(apiStatusCode)) {
         statusCode = apiStatusCode
       }
       if (apiStatusCode === 400) {

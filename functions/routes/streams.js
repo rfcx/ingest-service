@@ -62,7 +62,7 @@ router.route('/')
     const defaultErrorMessage = 'Error while creating a stream.'
 
     return streamService
-      .createStream({ name, latitude, longitude, description, is_private, idToken })
+      .create({ name, latitude, longitude, description, is_private, idToken })
       .then((response) => {
         if (response && response.status === 201) {
           res.json(response.data)
@@ -88,7 +88,7 @@ function updateEndpoint(req, res) {
 
   const defaultErrorMessage = 'Error while updating the stream.'
 
-  return streamService.updateStream({ streamId, name, latitude, longitude, description, is_private, idToken })
+  return streamService.update({ streamId, name, latitude, longitude, description, is_private, idToken })
     .then((response) => {
       if (response && response.status === 200) {
         res.json(response.data)
@@ -103,63 +103,20 @@ function updateEndpoint(req, res) {
 router.route('/:id').post(verifyToken(), hasRole(['rfcxUser']), updateEndpoint)
 router.route('/:id').patch(verifyToken(), hasRole(['rfcxUser']), updateEndpoint)
 
-router.route('/:id/move-to-trash')
-  .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
+function deleteEndpoint(req, res) {
+  const streamId = req.params.id
+  const idToken = req.headers['authorization'];
+  const defaultErrorMessage = 'Error while deleting the stream.'
 
-    const streamId = req.params.id
-    const idToken = req.headers['authorization'];
+  return streamService
+    .remove({ streamId, idToken })
+    .then(() => {
+      res.sendStatus(204)
+    })
+    .catch(httpErrorHandler(req, res, defaultErrorMessage))
+}
 
-    return streamService
-      .moveStreamToTrash({ streamId, idToken })
-      .then(() => {
-        res.json({ success: true })
-      })
-      .catch(err => {
-        let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while moving stream to trash.'
-        if (err.response && err.response.data && err.response.data == errors.UNAUTHORIZED) {
-          res.status(401).send(message)
-        }
-        else if (message === `You don't have enough permissions for this action.`) {
-          res.status(403).send(message)
-        }
-        else if (message === `Stream with given guid not found.`) {
-          res.status(404).send(message)
-        }
-        else {
-          console.log(err)
-          res.status(500).send(message)
-        }
-      })
-  })
-
-router.route('/:id')
-  .delete(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
-
-    const streamId = req.params.id
-    const idToken = req.headers['authorization'];
-
-    return streamService
-      .deleteStream({ streamId, idToken })
-      .then(() => {
-        res.json({ success: true })
-      })
-      .catch(err => {
-        let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while deleting a stream.'
-        if (err.response && err.response.data && err.response.data == errors.UNAUTHORIZED) {
-          res.status(401).send(message)
-        }
-        else if (message === `You don't have permissions to delete non-empty stream.` ||
-                 message === `You don't have enough permissions for this action.`) {
-          res.status(403).send(message)
-        }
-        else if (message === `Stream with given guid not found.`) {
-          res.status(404).send(message)
-        }
-        else {
-          console.log(err)
-          res.status(500).send(message)
-        }
-      })
-  })
+router.route('/:id/move-to-trash').post(verifyToken(), hasRole(['rfcxUser']), deleteEndpoint) // deprecated. TODO: update Ingest App to use DELETE /streams/{id} endpoint
+router.route('/:id').delete(verifyToken(), hasRole(['rfcxUser']), deleteEndpoint)
 
 module.exports = router

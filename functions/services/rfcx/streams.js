@@ -13,7 +13,7 @@ function combineRequestPayload(opts) {
   }
 }
 
-async function createStream (opts) {
+async function create (opts) {
 
   const url = `${apiHostName}streams`;
   const data = combineRequestPayload(opts)
@@ -26,7 +26,7 @@ async function createStream (opts) {
   return axios.post(url, data, { headers })
 }
 
-async function updateStream (opts) {
+async function update (opts) {
 
   const url = `${apiHostName}streams/${opts.streamId}`;
   const data = combineRequestPayload(opts)
@@ -39,20 +39,9 @@ async function updateStream (opts) {
   return axios.patch(url, data, { headers })
 }
 
-async function moveStreamToTrash (opts) {
+async function remove (opts) {
 
-  const url = `${apiHostName}v2/streams/${opts.streamId}/move-to-trash`;
-  const headers = {
-    'Authorization': opts.idToken,
-    'Content-Type': 'application/json'
-  }
-
-  return axios.post(url, {}, { headers })
-}
-
-async function deleteStream (opts) {
-
-  const url = `${apiHostName}v2/streams/${opts.streamId}`;
+  const url = `${apiHostName}streams/${opts.streamId}`;
   const headers = {
     'Authorization': opts.idToken,
     'Content-Type': 'application/json'
@@ -83,9 +72,8 @@ async function query (idToken, opts) {
 }
 
 module.exports = {
-  createStream,
-  updateStream,
-  moveStreamToTrash,
-  deleteStream,
+  create,
+  update,
+  remove,
   query,
 }
