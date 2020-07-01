@@ -13,6 +13,7 @@ const db = require(`../services/db/${platform}`)
 const rfcx = require('../services/rfcx/register')
 const streamService = require('../services/rfcx/streams');
 const errors = require('../utils/error-messages')
+const httpErrorHandler = require('../utils/http-error-handler')
 
 router.route('/')
   .get(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
@@ -38,72 +39,60 @@ router.route('/')
 router.route('/')
   .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
 
-    const streamId = hash.randomString(12);
     const name = req.body.name
-    const site = req.body.site
-    const visibility = req.body.visibility || 'private';
+    const latitude = req.body.latitude
+    const longitude = req.body.longitude
+    const description = req.body.description
+    const is_private = req.body.is_private
+
     const idToken = req.headers['authorization'];
 
     if (!name) {
       res.status(400).send('Required: name')
       return
     }
-    if (!site) {
-      res.status(400).send('Required: site')
-      return
-    }
+
+    const defaultErrorMessage = 'Error while creating a stream.'
 
     return streamService
-      .createStream({ streamId, name, site, visibility, idToken })
-      .then(() => {
-        res.json({ id: streamId })
-      })
-      .catch(err => {
-        let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while creating a stream.'
-        if (err.response && err.response.data && err.response.data == errors.UNAUTHORIZED) {
-          res.status(401).send(message)
-        }
-        else if (message === 'Site with given guid not found.') {
-          res.status(400).send(message)
-        }
-        else if (message === `You are not allowed to add a stream with the site ${site}`) {
-          res.status(403).send(message)
+      .createStream({ name, latitude, longitude, description, is_private, idToken })
+      .then((response) => {
+        if (response && response.status === 201) {
+          res.json(response.data)
         }
         else {
-          console.log(err)
-          res.status(500).send(message)
+          res.status(500).send(defaultErrorMessage)
         }
       })
+      .catch(httpErrorHandler(req, res, defaultErrorMessage))
   })
 
 /**
- * HTTP function that edits a stream (e.g. rename)
+ * HTTP function that updates a stream
  */
 router.route('/:id')
   .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
 
     const streamId = req.params.id;
     const name = req.body.name;
-    const site = req.body.site;
+    const latitude = req.body.latitude
+    const longitude = req.body.longitude
+    const description = req.body.description
+    const is_private = req.body.is_private
     const idToken = req.headers['authorization'];
 
-    if (name === undefined) {
-      res.status(400).send('Required: name')
-      return
-    }
+    const defaultErrorMessage = 'Error while updating a stream.'
 
-    return streamService.updateStream({ streamId, name, site, idToken })
-      .then(() => {
-        res.json({});
-      })
-      .catch(err => {
-        if (err.message === errors.UNAUTHORIZED) {
-          res.status(401).send(err.message)
-        } else {
-          console.log(err)
-          res.status(500).send(err.message)
+    return streamService.updateStream({ streamId, name, latitude, longitude, description, is_private, idToken })
+      .then((response) => {
+        if (response && response.status === 200) {
+          res.json(response.data)
+        }
+        else {
+          res.status(500).send(defaultErrorMessage)
         }
       })
+      .catch(httpErrorHandler(req, res, defaultErrorMessage))
   })
 
 router.route('/:id/move-to-trash')

@@ -3,17 +3,20 @@ const errors = require('../../utils/error-messages')
 
 const apiHostName = process.env.API_HOST
 
+function combineRequestPayload(opts) {
+  return {
+    ...opts.name !== undefined && { name: opts.name },
+    ...opts.latitude !== undefined && { latitude: opts.latitude },
+    ...opts.longitude !== undefined && { longitude: opts.longitude },
+    ...opts.description !== undefined && { description: opts.description },
+    ...opts.is_private !== undefined && { is_private: opts.is_private },
+  }
+}
+
 async function createStream (opts) {
 
-  const url = `${apiHostName}v2/streams`;
-  const data = {
-    guid: opts.streamId,
-    name: opts.name,
-    visibility: opts.visibility
-  }
-  if (opts.site) {
-    data.site = opts.site;
-  }
+  const url = `${apiHostName}streams`;
+  const data = combineRequestPayload(opts)
 
   const headers = {
     'Authorization': opts.idToken,
@@ -25,17 +28,15 @@ async function createStream (opts) {
 
 async function updateStream (opts) {
 
-  const url = `${apiHostName}v2/streams/${opts.streamId}`;
-  let data = {};
-  if (opts.name) data.name = opts.name;
-  if (opts.site) data.site = opts.site;
+  const url = `${apiHostName}streams/${opts.streamId}`;
+  const data = combineRequestPayload(opts)
 
   const headers = {
     'Authorization': opts.idToken,
     'Content-Type': 'application/json'
   }
 
-  return axios.post(url, data, { headers })
+  return axios.patch(url, data, { headers })
 }
 
 async function moveStreamToTrash (opts) {
