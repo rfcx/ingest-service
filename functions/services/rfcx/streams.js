@@ -61,29 +61,25 @@ async function deleteStream (opts) {
   return axios.delete(url, { headers })
 }
 
-async function getUserStreams (idToken, access) {
+async function query (idToken, opts) {
 
-  const url = `${apiHostName}v2/streams`
+  const url = `${apiHostName}streams`
+  const params = {
+    ...opts.is_private !== undefined && { is_private: opts.is_private },
+    ...opts.is_deleted !== undefined && { is_deleted: opts.is_deleted },
+    ...opts.created_by !== undefined && { created_by: opts.created_by },
+    ...opts.start !== undefined && { start: opts.start },
+    ...opts.end !== undefined && { end: opts.end },
+    ...opts.keyword !== undefined && { keyword: opts.keyword },
+    ...opts.limit !== undefined && { limit: opts.limit },
+    ...opts.offset !== undefined && { offset: opts.offset },
+  }
   const headers = {
     'Authorization': `${idToken}`,
     'Content-Type': 'application/json'
   }
-  let params = { }
-  if (access) {
-    params.access = access;
-  }
 
   return axios.get(url, { headers, params })
-    .then(response => {
-      return response.data
-    })
-    .catch(err => {
-      if (err.response && err.response.status === 401) {
-        throw new Error(errors.UNAUTHORIZED)
-      }
-      throw err
-    })
-
 }
 
 module.exports = {
@@ -91,5 +87,5 @@ module.exports = {
   updateStream,
   moveStreamToTrash,
   deleteStream,
-  getUserStreams,
+  query,
 }

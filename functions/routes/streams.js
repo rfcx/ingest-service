@@ -19,18 +19,25 @@ router.route('/')
   .get(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
 
     const idToken = req.headers.authorization
+    const defaultErrorMessage = 'Error while getting streams'
 
-    return streamService.getUserStreams(idToken, 'personal-all')
-      .then((data) => {
-        res.json( data )
-      })
-      .catch(err => {
-        if (err.message === errors.UNAUTHORIZED) {
-          res.status(401).send(err.message)
-        } else {
-          res.status(500).send(err.message)
+    return streamService.query(idToken, { created_by: 'me' })
+      .then((response) => {
+        if (response && response.status === 200) {
+          const total = parseInt(response.headers['total-items']) || 0
+          const streams = (response.data || []).map((x) => {
+            x.guid = x.id;
+            return x
+          });
+          res
+            .header('Total-Items', response.headers['total-items'])
+            .json({ total, streams }) // TODO: change format for next release of the Ingest App
+        }
+        else {
+          res.status(500).send(defaultErrorMessage)
         }
       })
+      .catch(httpErrorHandler(req, res, defaultErrorMessage))
   })
 
 /**
@@ -79,7 +86,7 @@ function updateEndpoint(req, res) {
   const is_private = req.body.is_private
   const idToken = req.headers['authorization'];
 
-  const defaultErrorMessage = 'Error while updating a stream.'
+  const defaultErrorMessage = 'Error while updating the stream.'
 
   return streamService.updateStream({ streamId, name, latitude, longitude, description, is_private, idToken })
     .then((response) => {
