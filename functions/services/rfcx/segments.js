@@ -8,14 +8,13 @@ async function createStreamSourceFile (opts) {
   const url = `${apiHostName}streams/${opts.stream}/stream-source-files`
   const data = {
     filename: opts.filename,
-    format: opts.format,
+    audio_file_format: opts.format,
     duration: Math.abs(opts.duration * 1000),
     sample_count: opts.sampleCount,
-    channel_layout: opts.channelLayout,
     channels_count: opts.channelCount,
     bit_rate: opts.bitRate,
     sample_rate: opts.sampleRate,
-    codec: opts.codec,
+    audio_codec: opts.codec,
     sha1_checksum: opts.sha1_checksum,
     meta: opts.tags,
   }
@@ -30,7 +29,7 @@ async function createStreamSourceFile (opts) {
 
 async function deleteStreamSourceFile (opts) {
 
-  const url = `${apiHostName}v2/streams/master-segments/${opts.guid}`
+  const url = `${apiHostName}stream-source-files/${opts.guid}`
 
   const token = await auth0Service.getToken();
   const headers = {
