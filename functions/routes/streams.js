@@ -50,7 +50,17 @@ router.route('/')
     const latitude = req.body.latitude
     const longitude = req.body.longitude
     const description = req.body.description
-    const is_private = req.body.is_private
+    const visibility = req.body.visibility // TODO: remove with the next release of Ingest App
+    let is_public = req.body.is_public
+
+    if (is_public === undefined) {
+      if (visibility === 'private') {
+        is_public = false
+      }
+      else {
+        is_public = true
+      }
+    }
 
     const idToken = req.headers['authorization'];
 
@@ -62,7 +72,7 @@ router.route('/')
     const defaultErrorMessage = 'Error while creating a stream.'
 
     return streamService
-      .create({ name, latitude, longitude, description, is_private, idToken })
+      .create({ name, latitude, longitude, description, is_public, idToken })
       .then((response) => {
         if (response && response.status === 201) {
           res.json(response.data)
@@ -83,12 +93,12 @@ function updateEndpoint(req, res) {
   const latitude = req.body.latitude
   const longitude = req.body.longitude
   const description = req.body.description
-  const is_private = req.body.is_private
+  const is_public = req.body.is_public
   const idToken = req.headers['authorization'];
 
   const defaultErrorMessage = 'Error while updating the stream.'
 
-  return streamService.update({ streamId, name, latitude, longitude, description, is_private, idToken })
+  return streamService.update({ streamId, name, latitude, longitude, description, is_public, idToken })
     .then((response) => {
       if (response && response.status === 200) {
         res.json(response.data)

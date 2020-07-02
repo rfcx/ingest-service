@@ -9,7 +9,7 @@ function combineRequestPayload(opts) {
     ...opts.latitude !== undefined && { latitude: opts.latitude },
     ...opts.longitude !== undefined && { longitude: opts.longitude },
     ...opts.description !== undefined && { description: opts.description },
-    ...opts.is_private !== undefined && { is_private: opts.is_private },
+    ...opts.is_public !== undefined && { is_public: opts.is_public },
   }
 }
 
@@ -54,7 +54,7 @@ async function query (idToken, opts) {
 
   const url = `${apiHostName}streams`
   const params = {
-    ...opts.is_private !== undefined && { is_private: opts.is_private },
+    ...opts.is_public !== undefined && { is_public: opts.is_public },
     ...opts.is_deleted !== undefined && { is_deleted: opts.is_deleted },
     ...opts.created_by !== undefined && { created_by: opts.created_by },
     ...opts.start !== undefined && { start: opts.start },
