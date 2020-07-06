@@ -3,20 +3,18 @@ const auth0Service = require('../auth0');
 
 const apiHostName = process.env.API_HOST;
 
-async function createMasterSegment (opts) {
+async function createStreamSourceFile (opts) {
 
-  const url = `${apiHostName}v2/streams/${opts.stream}/master-segments`
+  const url = `${apiHostName}streams/${opts.stream}/stream-source-files`
   const data = {
-    guid: opts.guid,
     filename: opts.filename,
-    format: opts.format,
+    audio_file_format: opts.format,
     duration: Math.abs(opts.duration * 1000),
     sample_count: opts.sampleCount,
-    channel_layout: opts.channelLayout,
     channels_count: opts.channelCount,
     bit_rate: opts.bitRate,
     sample_rate: opts.sampleRate,
-    codec: opts.codec,
+    audio_codec: opts.codec,
     sha1_checksum: opts.sha1_checksum,
     meta: opts.tags,
   }
@@ -29,9 +27,9 @@ async function createMasterSegment (opts) {
   return axios.post(url, data, { headers })
 }
 
-async function deleteMasterSegment (opts) {
+async function deleteStreamSourceFile (opts) {
 
-  const url = `${apiHostName}v2/streams/master-segments/${opts.guid}`
+  const url = `${apiHostName}stream-source-files/${opts.guid}`
 
   const token = await auth0Service.getToken();
   const headers = {
@@ -44,12 +42,12 @@ async function deleteMasterSegment (opts) {
 
 async function createSegment (opts) {
 
-  const url = `${apiHostName}v2/streams/${opts.stream}/segments`
+  const url = `${apiHostName}streams/${opts.stream}/stream-segments`
   const data = {
-    guid: opts.guid,
-    master_segment: opts.masterSegment,
-    starts: opts.starts,
-    ends: opts.ends,
+    id: opts.id,
+    stream_source_file_id: opts.streamSourceFileId,
+    start: opts.start,
+    end: opts.end,
     sample_count: opts.sample_count,
     file_extension: opts.file_extension,
   }
@@ -64,7 +62,7 @@ async function createSegment (opts) {
 
 async function deleteSegment (opts) {
 
-  const url = `${apiHostName}v2/streams/segments/${opts.guid}`
+  const url = `${apiHostName}stream-segments/${opts.guid}`
   const token = await auth0Service.getToken();
   const headers = {
     'Authorization': `Bearer ${token.access_token}`,
@@ -75,8 +73,8 @@ async function deleteSegment (opts) {
 }
 
 module.exports = {
-  createMasterSegment,
-  deleteMasterSegment,
+  createStreamSourceFile,
+  deleteStreamSourceFile,
   createSegment,
   deleteSegment,
 }

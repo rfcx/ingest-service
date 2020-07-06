@@ -3,17 +3,20 @@ const errors = require('../../utils/error-messages')
 
 const apiHostName = process.env.API_HOST
 
-async function createStream (opts) {
+function combineRequestPayload(opts) {
+  return {
+    ...opts.name !== undefined && { name: opts.name },
+    ...opts.latitude !== undefined && { latitude: opts.latitude },
+    ...opts.longitude !== undefined && { longitude: opts.longitude },
+    ...opts.description !== undefined && { description: opts.description },
+    ...opts.is_public !== undefined && { is_public: opts.is_public },
+  }
+}
 
-  const url = `${apiHostName}v2/streams`;
-  const data = {
-    guid: opts.streamId,
-    name: opts.name,
-    visibility: opts.visibility
-  }
-  if (opts.site) {
-    data.site = opts.site;
-  }
+async function create (opts) {
+
+  const url = `${apiHostName}streams`;
+  const data = combineRequestPayload(opts)
 
   const headers = {
     'Authorization': opts.idToken,
@@ -23,35 +26,22 @@ async function createStream (opts) {
   return axios.post(url, data, { headers })
 }
 
-async function updateStream (opts) {
+async function update (opts) {
 
-  const url = `${apiHostName}v2/streams/${opts.streamId}`;
-  let data = {};
-  if (opts.name) data.name = opts.name;
-  if (opts.site) data.site = opts.site;
+  const url = `${apiHostName}streams/${opts.streamId}`;
+  const data = combineRequestPayload(opts)
 
   const headers = {
     'Authorization': opts.idToken,
     'Content-Type': 'application/json'
   }
 
-  return axios.post(url, data, { headers })
+  return axios.patch(url, data, { headers })
 }
 
-async function moveStreamToTrash (opts) {
+async function remove (opts) {
 
-  const url = `${apiHostName}v2/streams/${opts.streamId}/move-to-trash`;
-  const headers = {
-    'Authorization': opts.idToken,
-    'Content-Type': 'application/json'
-  }
-
-  return axios.post(url, {}, { headers })
-}
-
-async function deleteStream (opts) {
-
-  const url = `${apiHostName}v2/streams/${opts.streamId}`;
+  const url = `${apiHostName}streams/${opts.streamId}`;
   const headers = {
     'Authorization': opts.idToken,
     'Content-Type': 'application/json'
@@ -60,35 +50,30 @@ async function deleteStream (opts) {
   return axios.delete(url, { headers })
 }
 
-async function getUserStreams (idToken, access) {
+async function query (idToken, opts) {
 
-  const url = `${apiHostName}v2/streams`
+  const url = `${apiHostName}streams`
+  const params = {
+    ...opts.is_public !== undefined && { is_public: opts.is_public },
+    ...opts.is_deleted !== undefined && { is_deleted: opts.is_deleted },
+    ...opts.created_by !== undefined && { created_by: opts.created_by },
+    ...opts.start !== undefined && { start: opts.start },
+    ...opts.end !== undefined && { end: opts.end },
+    ...opts.keyword !== undefined && { keyword: opts.keyword },
+    ...opts.limit !== undefined && { limit: opts.limit },
+    ...opts.offset !== undefined && { offset: opts.offset },
+  }
   const headers = {
     'Authorization': `${idToken}`,
     'Content-Type': 'application/json'
   }
-  let params = { }
-  if (access) {
-    params.access = access;
-  }
 
   return axios.get(url, { headers, params })
-    .then(response => {
-      return response.data
-    })
-    .catch(err => {
-      if (err.response && err.response.status === 401) {
-        throw new Error(errors.UNAUTHORIZED)
-      }
-      throw err
-    })
-
 }
 
 module.exports = {
-  createStream,
-  updateStream,
-  moveStreamToTrash,
-  deleteStream,
-  getUserStreams,
+  create,
+  update,
+  remove,
+  query,
 }

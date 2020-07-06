@@ -13,23 +13,31 @@ const db = require(`../services/db/${platform}`)
 const rfcx = require('../services/rfcx/register')
 const streamService = require('../services/rfcx/streams');
 const errors = require('../utils/error-messages')
+const httpErrorHandler = require('../utils/http-error-handler')
 
 router.route('/')
   .get(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
 
     const idToken = req.headers.authorization
+    const defaultErrorMessage = 'Error while getting streams'
 
-    return streamService.getUserStreams(idToken, 'personal-all')
-      .then((data) => {
-        res.json( data )
-      })
-      .catch(err => {
-        if (err.message === errors.UNAUTHORIZED) {
-          res.status(401).send(err.message)
-        } else {
-          res.status(500).send(err.message)
+    return streamService.query(idToken, { created_by: 'me' })
+      .then((response) => {
+        if (response && response.status === 200) {
+          const total = parseInt(response.headers['total-items']) || 0
+          const streams = (response.data || []).map((x) => {
+            x.guid = x.id;
+            return x
+          });
+          res
+            .header('Total-Items', response.headers['total-items'])
+            .json({ total, streams }) // TODO: change format for next release of the Ingest App
+        }
+        else {
+          res.status(500).send(defaultErrorMessage)
         }
       })
+      .catch(httpErrorHandler(req, res, defaultErrorMessage))
   })
 
 /**
@@ -38,131 +46,87 @@ router.route('/')
 router.route('/')
   .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
 
-    const streamId = hash.randomString(12);
     const name = req.body.name
-    const site = req.body.site
-    const visibility = req.body.visibility || 'private';
+    const latitude = req.body.latitude
+    const longitude = req.body.longitude
+    const description = req.body.description
+    const visibility = req.body.visibility // TODO: remove with the next release of Ingest App
+    let is_public = req.body.is_public
+
+    if (is_public === undefined) {
+      if (visibility === 'private') {
+        is_public = false
+      }
+      else {
+        is_public = true
+      }
+    }
+
     const idToken = req.headers['authorization'];
 
     if (!name) {
       res.status(400).send('Required: name')
       return
     }
-    if (!site) {
-      res.status(400).send('Required: site')
-      return
-    }
+
+    const defaultErrorMessage = 'Error while creating a stream.'
 
     return streamService
-      .createStream({ streamId, name, site, visibility, idToken })
-      .then(() => {
-        res.json({ id: streamId })
-      })
-      .catch(err => {
-        let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while creating a stream.'
-        if (err.response && err.response.data && err.response.data == errors.UNAUTHORIZED) {
-          res.status(401).send(message)
-        }
-        else if (message === 'Site with given guid not found.') {
-          res.status(400).send(message)
-        }
-        else if (message === `You are not allowed to add a stream with the site ${site}`) {
-          res.status(403).send(message)
+      .create({ name, latitude, longitude, description, is_public, idToken })
+      .then((response) => {
+        if (response && response.status === 201) {
+          res.json(response.data)
         }
         else {
-          console.log(err)
-          res.status(500).send(message)
+          res.status(500).send(defaultErrorMessage)
         }
       })
+      .catch(httpErrorHandler(req, res, defaultErrorMessage))
   })
 
 /**
- * HTTP function that edits a stream (e.g. rename)
+ * HTTP function that updates a stream
  */
-router.route('/:id')
-  .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
+function updateEndpoint(req, res) {
+  const streamId = req.params.id;
+  const name = req.body.name;
+  const latitude = req.body.latitude
+  const longitude = req.body.longitude
+  const description = req.body.description
+  const is_public = req.body.is_public
+  const idToken = req.headers['authorization'];
 
-    const streamId = req.params.id;
-    const name = req.body.name;
-    const site = req.body.site;
-    const idToken = req.headers['authorization'];
+  const defaultErrorMessage = 'Error while updating the stream.'
 
-    if (name === undefined) {
-      res.status(400).send('Required: name')
-      return
-    }
+  return streamService.update({ streamId, name, latitude, longitude, description, is_public, idToken })
+    .then((response) => {
+      if (response && response.status === 200) {
+        res.json(response.data)
+      }
+      else {
+        res.status(500).send(defaultErrorMessage)
+      }
+    })
+    .catch(httpErrorHandler(req, res, defaultErrorMessage))
+}
 
-    return streamService.updateStream({ streamId, name, site, idToken })
-      .then(() => {
-        res.json({});
-      })
-      .catch(err => {
-        if (err.message === errors.UNAUTHORIZED) {
-          res.status(401).send(err.message)
-        } else {
-          console.log(err)
-          res.status(500).send(err.message)
-        }
-      })
-  })
+router.route('/:id').post(verifyToken(), hasRole(['rfcxUser']), updateEndpoint)
+router.route('/:id').patch(verifyToken(), hasRole(['rfcxUser']), updateEndpoint)
 
-router.route('/:id/move-to-trash')
-  .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
+function deleteEndpoint(req, res) {
+  const streamId = req.params.id
+  const idToken = req.headers['authorization'];
+  const defaultErrorMessage = 'Error while deleting the stream.'
 
-    const streamId = req.params.id
-    const idToken = req.headers['authorization'];
+  return streamService
+    .remove({ streamId, idToken })
+    .then(() => {
+      res.sendStatus(204)
+    })
+    .catch(httpErrorHandler(req, res, defaultErrorMessage))
+}
 
-    return streamService
-      .moveStreamToTrash({ streamId, idToken })
-      .then(() => {
-        res.json({ success: true })
-      })
-      .catch(err => {
-        let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while moving stream to trash.'
-        if (err.response && err.response.data && err.response.data == errors.UNAUTHORIZED) {
-          res.status(401).send(message)
-        }
-        else if (message === `You don't have enough permissions for this action.`) {
-          res.status(403).send(message)
-        }
-        else if (message === `Stream with given guid not found.`) {
-          res.status(404).send(message)
-        }
-        else {
-          console.log(err)
-          res.status(500).send(message)
-        }
-      })
-  })
-
-router.route('/:id')
-  .delete(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
-
-    const streamId = req.params.id
-    const idToken = req.headers['authorization'];
-
-    return streamService
-      .deleteStream({ streamId, idToken })
-      .then(() => {
-        res.json({ success: true })
-      })
-      .catch(err => {
-        let message = err.response && err.response.data && err.response.data.message? err.response.data.message : 'Error while deleting a stream.'
-        if (err.response && err.response.data && err.response.data == errors.UNAUTHORIZED) {
-          res.status(401).send(message)
-        }
-        else if (message === `You don't have permissions to delete non-empty stream.` ||
-                 message === `You don't have enough permissions for this action.`) {
-          res.status(403).send(message)
-        }
-        else if (message === `Stream with given guid not found.`) {
-          res.status(404).send(message)
-        }
-        else {
-          console.log(err)
-          res.status(500).send(message)
-        }
-      })
-  })
+router.route('/:id/move-to-trash').post(verifyToken(), hasRole(['rfcxUser']), deleteEndpoint) // deprecated. TODO: update Ingest App to use DELETE /streams/{id} endpoint
+router.route('/:id').delete(verifyToken(), hasRole(['rfcxUser']), deleteEndpoint)
 
 module.exports = router

@@ -32,7 +32,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
   const fileLocalPathWav = requiresConvToWav? fileLocalPath.replace(path.extname(fileLocalPath), '.wav') : null;
 
   let transactionData = {
-    masterSegmentGuid: null,
+    streamSourceFileId: null,
     segmentsGuids: [],
     segmentsFileUrls: []
   }
@@ -61,7 +61,6 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       console.log('Upload data', upload)
       let opts = fileData;
       console.log('Ffprobe result', fileData)
-      opts.guid = uploadId;
       const token = await auth0Service.getToken();
       opts.stream = upload.streamId,
       opts.idToken = `${token.access_token}`;
@@ -92,9 +91,12 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       if (upload.sampleRate) opts.sampleRate = upload.sampleRate;
       if (upload.targetBitrate) opts.bitRate = upload.targetBitrate;
 
-      return segmentService.createMasterSegment(opts)
-        .then(() => {
-          transactionData.masterSegmentGuid = opts.guid;
+      return segmentService.createStreamSourceFile(opts)
+        .then((response) => {
+          if (!response || response.status !== 201) {
+            throw new Error('Stream source file was not created')
+          }
+          transactionData.streamSourceFileId = response.data.id;
         })
         .catch((err) => {
           if (err.response && err.response.data && err.response.data.message) {
@@ -107,7 +109,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         });
     })
     .then(() => {
-      console.log('Master segment is created in db');
+      console.log('Stream source file is created in db');
       return audioService.split(requiresConvToWav? fileLocalPathWav : fileLocalPath, path.dirname(fileLocalPath), fileDurationMs/1000);
     })
     .then(async (outputFiles) => {
@@ -142,19 +144,19 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       for (let file of outputFiles) {
         const duration = Math.floor(file.meta.duration * 1000);
         const segmentOpts = {
-          guid: file.guid,
+          id: file.guid,
           stream: upload.streamId,
           idToken: `${token.access_token}`,
-          masterSegment: uploadId,
-          starts: timestamp + totalDurationMs,
-          ends: timestamp + totalDurationMs + duration,
+          streamSourceFileId: transactionData.streamSourceFileId,
+          start: moment.tz(timestamp + totalDurationMs, 'UTC').toISOString(),
+          end: moment.tz(timestamp + totalDurationMs + duration, 'UTC').toISOString(),
           sample_count: file.meta.sampleCount,
           file_extension: path.extname(file.path),
         };
         totalDurationMs += duration;
         await segmentService.createSegment(segmentOpts)
         console.log('Segment', segmentOpts, 'has been saved in DB');
-        transactionData.segmentsGuids.push(segmentOpts.guid);
+        transactionData.segmentsGuids.push(segmentOpts.id);
       }
       return outputFiles;
     })
@@ -186,8 +188,8 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       for (let guid of transactionData.segmentsGuids) {
         await segmentService.deleteSegment({ guid });
       }
-      if (transactionData.masterSegmentGuid) {
-        await segmentService.deleteMasterSegment({ guid: transactionData.masterSegmentGuid });
+      if (transactionData.streamSourceFileId) {
+        await segmentService.deleteStreamSourceFile({ guid: transactionData.streamSourceFileId });
       }
       await storage.deleteObject(storageFilePath);
       dirUtil.removeDirRecursively(streamLocalPath);
