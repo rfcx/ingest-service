@@ -1,0 +1,12 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: ingest-service-service
+spec:
+  selector:
+    app: ingest-service
+  type: ClusterIP 
+  ports:
+  - name: node
+    port: 80
+    targetPort: 80

@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingest-service
+spec:
+  selector:
+    matchLabels:
+      app: ingest-service
+  template:
+    metadata:
+      labels:
+        app: ingest-service
+    spec:
+      containers:
+      - name: ingest-service
+        image: IMAGE_URL
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "1000m"
+      terminationGracePeriodSeconds: 600

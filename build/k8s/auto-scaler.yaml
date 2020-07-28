@@ -1,0 +1,44 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: ingest-service-autoscaler
+spec:
+  revisionHistoryLimit: 1
+  template:
+    metadata:
+      labels:
+        app: ingest-service-autoscaler
+    spec:
+      serviceAccountName: sqs-scaler
+      containers:
+      - name: ingest-service-autoscaler
+        image: 887044485231.dkr.ecr.eu-west-1.amazonaws.com/sqs-autoscaler:latest
+        command:
+          - ./k8s-sqs-autoscaler
+          - --sqs-queue-url=SQS_URL
+          - --kubernetes-deployment=ingest-service
+          - --kubernetes-namespace=NAMESPACE
+          - --aws-region=eu-west-1
+          - --poll-period=10
+          - --scale-down-cool-down=30
+          - --scale-up-cool-down=30
+          - --scale-up-messages=5
+          - --scale-down-messages=1
+          - --max-pods=30
+          - --min-pods=0
+        env:
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: AWS_DEFAULT_REGION
+            value: eu-west-1
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "1512Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 80
