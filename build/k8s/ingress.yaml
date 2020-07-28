@@ -1,0 +1,21 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/backend-protocol: "http"
+    nginx.ingress.kubernetes.io/use-proxy-protocol: "true"
+    nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
+  name: ingest-service-ingress
+  labels:
+      app: "ingest-service"
+spec:
+  rules:
+  - host: DOMAIN
+    http:
+      paths:
+      - backend:
+          serviceName: ingest-service-service
+          servicePort: 80
