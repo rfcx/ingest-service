@@ -19,6 +19,7 @@
     "node": "10"
   },
   "dependencies": {
+    "@google-cloud/pubsub": "^2.3.0",
     "@google-cloud/storage": "^3.3.1",
     "@mongoosejs/double": "^0.2.0",
     "aws-sdk": "^2.574.0",

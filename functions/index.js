@@ -1,17 +1,14 @@
 require('dotenv').config()
 
-if (process.env.PLATFORM === 'google') {
-  console.log('Environment set to google, but running as Node.js app')
-}
+const platform = process.env.PLATFORM
+console.log(`Environment set to ${platform}`)
 
 const api = require('./api')
 
 const port = process.env.PORT || 3030
-api.listen(port, function () {
+api.listen(port, () => {
   console.log(`App is listening on port ${port}`)
 })
 
-if (process.env.PLATFORM === 'amazon') {
-  let ingestSQSConsumer = require('./services/consumer/amazon');
-  ingestSQSConsumer.start();
-}
+const ingestConsumer = require(`./services/consumer/${platform}`);
+ingestConsumer.start();

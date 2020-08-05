@@ -1,3 +1,5 @@
 node_modules/
 rfcx.cert
 serviceAccountKeyStorage*.json
+.env-amazon
+service-account.json
