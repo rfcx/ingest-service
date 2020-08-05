@@ -1,5 +1,4 @@
-const platform = process.env.PLATFORM || 'google';
-const db = require(`../services/db/${platform}`);
+const db = require(`../services/db/mongo`);
 
 class IngestionError extends Error {
   constructor(message, status) {

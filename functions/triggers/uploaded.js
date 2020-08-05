@@ -1,6 +1,4 @@
-const path = require('path')
-const platform = process.env.PLATFORM || 'google';
-const db = require(`../services/db/${platform}`)
+const db = require(`../services/db/mongo`)
 
 module.exports = async (object) => {
   const filePath = object.name

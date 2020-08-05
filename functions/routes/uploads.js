@@ -9,7 +9,7 @@ const hasRole = authentication.hasRole;
 router.use(require('../middleware/cors'))
 
 const platform = process.env.PLATFORM || 'google';
-const db = require(`../services/db/${platform}`)
+const db = require(`../services/db/mongo`)
 const storage = require(`../services/storage/${platform}`);
 
 /**

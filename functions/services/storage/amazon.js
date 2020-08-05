@@ -70,11 +70,8 @@ function upload(remotePath, localPath) {
   return s3Client.putObject(opts).promise();
 }
 
-function deleteObject(remotePath) {
-  const opts = {
-    Bucket: uploadBucket,
-    Key: remotePath
-  };
+function deleteObject(Bucket, Key) {
+  const opts = { Bucket, Key };
   return s3Client.deleteObject(opts).promise();
 }
 
