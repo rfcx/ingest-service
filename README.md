@@ -19,15 +19,44 @@ Optional:
 
 ## Setup project in Google Cloud
 
-Create a Google Cloud project (e.g. `rfcx-ingest-staging`) -- preferably attached to the RFCx organization.
+Use existing or create a Google Cloud project (e.g. `rfcx-staging`) -- preferably attached to the RFCx organization.
 
 Follow [these](https://cloud.google.com/storage/docs/reporting-changes?authuser=1#prereqs) instructions to make sure you have Pub/Sub and Cloud Storage enabled for your project
 
-Get a Service Account key for the Google Cloud project with roles: `Pub/Sub Subscriber`, `Storage Object Admin`, `Storage Object Creator`, `Storage Object Viewer` following [these](https://cloud.google.com/pubsub/docs/access-control?authuser=1#console) instructions.
+Get a Service Account key for the Google Cloud project with roles: `Pub/Sub Subscriber`, `Storage Object Admin`, `Storage Object Creator`, `Storage Object Viewer` (replace `john-doe` and `John Doe` with your name):
+```sh
+gcloud iam service-accounts create ingest-service-john-doe --project rfcx-staging \
+    --description "Service Account for Ingest Service" \
+    --display-name "Ingest Service John Doe"
+
+gcloud projects add-iam-policy-binding rfcx-staging \
+  --member serviceAccount:ingest-service-john-doe@rfcx-staging.iam.gserviceaccount.com \
+  --role roles/pubsub.subscriber
+
+gcloud projects add-iam-policy-binding rfcx-staging \
+  --member serviceAccount:ingest-service-john-doe@rfcx-staging.iam.gserviceaccount.com \
+  --role roles/storage.objectAdmin
+
+gcloud projects add-iam-policy-binding rfcx-staging \
+  --member serviceAccount:ingest-service-john-doe@rfcx-staging.iam.gserviceaccount.com \
+  --role roles/storage.objectCreator
+
+gcloud projects add-iam-policy-binding rfcx-staging \
+  --member serviceAccount:ingest-service-john-doe@rfcx-staging.iam.gserviceaccount.com \
+  --role roles/storage.objectViewer
+
+gcloud iam service-accounts keys create functions/service-account.json \
+  --iam-account ingest-service-john-doe@rfcx-staging.iam.gserviceaccount.com --project rfcx-staging
+```
+:exclamation: Make sure that you won't add the service file to git repository!
 
 Create two Cloud Storage buckets: one for uploaded files, one for ingested files
+```sh
+gsutil mb -p rfcx-staging -c STANDARD -l US-EAST1 gs://rfcx-ingest-staging
+gsutil mb -p rfcx-staging -c STANDARD -l US-EAST1 gs://rfcx-streams-staging
+```
 
-Open Active Cloud Shell and create storage-pubsub notification:
+Create storage-pubsub notification for uploaded files:
 ```
 gsutil notification create -t ingest-service-upload-staging -e OBJECT_FINALIZE -f json gs://rfcx-ingest-staging
 ```
