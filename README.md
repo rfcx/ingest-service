@@ -5,39 +5,41 @@ A mockup service for ingesting files via GCS
 
 ## Requirements
 
-- Node 8+
+- Node 10.x.x
 - [FFmpeg](https://ffmpeg.org) for splitting and identifying audio files
-- [Google Cloud SDK](https://cloud.google.com/sdk/)
-- [Firebase CLI](https://firebase.google.com/docs/cli)
+- [MongoDB](https://www.mongodb.com/) for storing uploads data
+- [Google Cloud Pub/Sub](https://cloud.google.com/pubsub/) (when used in google mode) for receiving notifications about new ingestions
+- [Google Cloud Ctorage](https://cloud.google.com/storage/) (when used in google mode) for audio files downloading and uploading
+- [Amazon SQS](https://aws.amazon.com/sqs/) (when used in amazon mode) for receiving notifications about new ingestions
+- [Amazon S3](https://aws.amazon.com/s3/) (when used in amazon mode) for audio files downloading and uploading
 
 Optional:
 - [ES Lint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) for VS Code
 
 
-## Setup project
+## Setup project in Google Cloud
 
-Create a Google Cloud project (e.g. `rfcx-ingest-dev`) -- preferably attached to the RFCx organization.
+Create a Google Cloud project (e.g. `rfcx-ingest-staging`) -- preferably attached to the RFCx organization.
 
-Go to [Firebase console](https://console.firebase.google.com/) and create project for the Google Cloud project. Enable `Firestore` and `Storage` from the console.
+Follow [these](https://cloud.google.com/storage/docs/reporting-changes?authuser=1#prereqs) instructions to make sure you have Pub/Sub and Cloud Storage enabled for your project
 
-Get a Service Account key for the Google Cloud project with roles: `Storage Object Creator`, `Storage Object Viewer`.
+Get a Service Account key for the Google Cloud project with roles: `Pub/Sub Subscriber`, `Storage Object Admin`, `Storage Object Creator`, `Storage Object Viewer` following [these](https://cloud.google.com/pubsub/docs/access-control?authuser=1#console) instructions.
+
+Create two Cloud Storage buckets: one for uploaded files, one for ingested files
+
+Open Active Cloud Shell and create storage-pubsub notification:
 ```
-gcloud beta iam service-accounts create functions-storage --project rfcx-ingest-dev \
-    --description "Upload and download GCS files from CF" \
-    --display-name "Functions to Storage"
-gcloud projects add-iam-policy-binding rfcx-ingest-dev \
-  --member serviceAccount:functions-storage@rfcx-ingest-dev.iam.gserviceaccount.com \
-  --role roles/storage.objectViewer
-gcloud projects add-iam-policy-binding rfcx-ingest-dev \
-  --member serviceAccount:functions-storage@rfcx-ingest-dev.iam.gserviceaccount.com \
-  --role roles/storage.objectCreator
-gcloud iam service-accounts keys create functions/serviceAccountKeyStorage.json \
-  --iam-account functions-storage@rfcx-ingest-dev.iam.gserviceaccount.com --project rfcx-ingest-dev
+gsutil notification create -t ingest-service-upload-staging -e OBJECT_FINALIZE -f json gs://rfcx-ingest-staging
+```
+
+Check notifications:
+```
+gsutil notification list gs://rfcx-ingest-staging
 ```
 
 ## Local development
 
-Copy `functions/.env.example` to `functions/.env`. Minimum setup requires `PLATFORM`, `API_HOST`, `UPLOAD_BUCKET` (follow the instructions for other vars).
+Copy `functions/.env.example` to `functions/.env`. (follow the instructions in .env.example for minimum set of env vars).
 
 Install dependencies:
 ```
@@ -74,56 +76,12 @@ Use these [instructions](https://confluence.rfcx.org/display/RD/Configuring+S3+n
 TODO: How to run the background job (SQS Consumer) and test the triggers from S3 to ingest
 
 
-### For Google
-
-Cloud Functions use envrionment variables from .runtimeconfig.json. To generate this file from your .env file:
-```
-node devtools/convertEnvToFirebaseConfig.js
-```
-
-Run the API endpoints only:
-```
-npm run servefb
-```
-
-Test the cloud functions that trigger on new storage objects (and also run the API endpoints):
-```
-npm run shellfb
-```
-
-then emulate a new object added to the bucket:
-```
-uploaded({name:'uploaded/test/9hSBSHakAw8gjT7Pz6pe.mp3', contentType: 'audio/mp3'})
-```
-
-and trigger the next ingest:
-```
-ingest()
-```
-
 ## Lint
 
 The project uses ES Lint. It is installed as a dev dependency, so simply `npm run lint` to check for errors or `npm run lint-fix` to attempt to auto-fix the errors.
 
 VS Code support for lint is via the [ES Lint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint).
 
-## Deployment
-
-Before deploying the functions, upload the config to the server:
-```
-npm run deployfbconfig
-```
-Note that config can be updated independently of the code in the functions.
-
-Deploy to Firebase Cloud Functions:
-```
-npm run deployfb
-```
-
-To set the CORS on GCS (to enable the ingest app to PUT a file):
-```
-gsutil cors set storage.cors.json gs://rfcx-ingest-dev.appspot.com
-```
 
 ## Testing
 
