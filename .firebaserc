@@ -1,6 +1,0 @@
-{
-  "projects": {
-    "default": "rfcx-ingest-dev",
-    "prod": "rfcx-ingest-257610"
-  }
-}

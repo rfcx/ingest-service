@@ -4,15 +4,10 @@ var router = express.Router()
 const authentication = require('../middleware/authentication')
 const verifyToken = authentication.verifyToken
 const hasRole = authentication.hasRole
-const hash = require('../utils/hash');
 
 router.use(require('../middleware/cors'))
 
-const platform = process.env.PLATFORM || 'google'
-const db = require(`../services/db/${platform}`)
-const rfcx = require('../services/rfcx/register')
 const streamService = require('../services/rfcx/streams');
-const errors = require('../utils/error-messages')
 const httpErrorHandler = require('../utils/http-error-handler')
 
 router.route('/')

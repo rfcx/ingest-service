@@ -1,7 +1,7 @@
 const platform = process.env.PLATFORM || 'google';
 
 const storage = require(`../storage/${platform}`);
-const db = require(`../db/${platform}`);
+const db = require(`../db/mongo`);
 const audioService = require('../audio');
 const dirUtil = require('../../utils/dir');
 const segmentService = require('../rfcx/segments')
@@ -10,6 +10,8 @@ const path = require('path');
 const moment = require('moment-timezone');
 const uuid = require('uuid/v4');
 const sha1File = require('sha1-file');
+const uploadBucket = process.env.UPLOAD_BUCKET;
+const ingestBucket = process.env.INGEST_BUCKET;
 
 const supportedExtensions = ['.wav', '.flac', '.opus'];
 const losslessExtensions = ['.wav', '.flac'];
@@ -166,7 +168,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
     })
     .then(() => {
       console.log(`Upload status is changed to INGESTED (${db.status.INGESTED})`)
-      return storage.deleteObject(storageFilePath);
+      return storage.deleteObject(uploadBucket, storageFilePath);
     })
     .then(() => {
       console.log('Deleted original file', storageFilePath);
@@ -183,7 +185,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       let status = err instanceof IngestionError? err.status : db.status.FAILED;
       db.updateUploadStatus(uploadId, status, message);
       for (let filePath of transactionData.segmentsFileUrls) {
-        await storage.deleteObject(filePath);
+        await storage.deleteObject(ingestBucket, filePath);
       }
       for (let guid of transactionData.segmentsGuids) {
         await segmentService.deleteSegment({ guid });
@@ -191,7 +193,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       if (transactionData.streamSourceFileId) {
         await segmentService.deleteStreamSourceFile({ guid: transactionData.streamSourceFileId });
       }
-      await storage.deleteObject(storageFilePath);
+      await storage.deleteObject(uploadBucket, storageFilePath);
       dirUtil.removeDirRecursively(streamLocalPath);
     });
 

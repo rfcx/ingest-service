@@ -1,7 +1,7 @@
 const { Consumer } = require('sqs-consumer');
-const path = require('path');
 const AWS = require('../../utils/aws');
 const { ingest } = require('../rfcx/ingestStream');
+const { parseUploadFromFileName } = require('./misc');
 
 const consumer = Consumer.create({
   queueUrl: process.env.SQS_INGEST_TRIGGER_QUEUE_URL,
@@ -9,9 +9,7 @@ const consumer = Consumer.create({
   handleMessage: async (message) => {
     let files = parseIngestSQSMessage(message);
     for (let file of files) {
-      const fileLocalPath = `${process.env.CACHE_DIRECTORY}${file.key}`;
-      const streamId = path.dirname(file.key);
-      const uploadId = path.basename(file.key, path.extname(file.key));
+      const { fileLocalPath, streamId, uploadId } = parseUploadFromFileName(file.key);
       await ingest(file.key, fileLocalPath, streamId, uploadId);
     }
     return true;
