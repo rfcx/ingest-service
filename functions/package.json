@@ -32,7 +32,7 @@
     "https-localhost": "^4.5.0",
     "moment": "^2.24.0",
     "moment-timezone": "0.5.27",
-    "mongoose": "^5.9.16",
+    "mongoose": "^5.10.0",
     "mongoose-long": "^0.3.0",
     "nuts-serve": "git+https://github.com/rassokhina-e/nuts.git",
     "querystring": "^0.2.0",
