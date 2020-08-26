@@ -46,6 +46,9 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
   }
   return getUpload(uploadId)
     .then((upload) => {
+      if (!upload) {
+        return Promise.reject('Upload does not exist')
+      }
       upload.status = statusNumber;
       upload.updatedAt = moment().tz('UTC').toDate();
       if (failureMessage != null) {
