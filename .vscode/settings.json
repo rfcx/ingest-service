@@ -1,6 +1,6 @@
 {
-    "eslint.workingDirectories": [
-        "functions"
-    ],
-    "eslint.autoFixOnSave": true
+  "eslint.workingDirectories": ["functions"],
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  }
 }
