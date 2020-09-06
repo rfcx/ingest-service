@@ -56,9 +56,9 @@ function split (sourceFile, destinationPath, maxDuration) {
         // '-segment_frames 0,24000,48000' // split into segments by frame boundaries - maybe useful in future
         '-segment_list pipe:1' // output a list of the created segments to stdout
       ]).on('start', function (commandLine) {
-        console.log('Spawned Ffmpeg with command: ' + commandLine)
+        // console.log('Spawned Ffmpeg with command: ' + commandLine)
       }).on('progress', function (progress) {
-        console.log('Processing: ' + progress.percent + '% done')
+        // console.log('Processing: ' + progress.percent + '% done')
       })
 
     const timeout = setTimeout(function () {
@@ -96,9 +96,9 @@ function convert (sourceFile, destinationPath) {
       .noVideo()
       .output(destinationPath)
       .on('start', function (commandLine) {
-        console.log('Spawned Ffmpeg with command: ' + commandLine)
+        // console.log('Spawned Ffmpeg with command: ' + commandLine)
       }).on('progress', function (progress) {
-        console.log('Processing: ' + progress.percent + '% done')
+        // console.log('Processing: ' + progress.percent + '% done')
       })
 
     const timeout = setTimeout(function () {
