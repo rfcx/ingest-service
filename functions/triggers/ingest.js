@@ -15,7 +15,7 @@ module.exports = async (context) => {
   try {
     upload = await db.lockUploadForIngest()
   } catch (err) {
-    console.log(err)
+    console.error(err)
     return
   }
   logPerf(`Found id ${upload.id} original filename ${upload.originalFilename}`, startTime)
