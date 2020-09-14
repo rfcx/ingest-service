@@ -19,7 +19,7 @@ const storage = require(`../services/storage/${platform}`);
  * @param {Object} req Cloud Function request context.
  * @param {Object} res Cloud Function response context.
  */
-router.route('/').post(verifyToken(), hasRole(['rfcxUser', 'systemUser']), (req, res) => {
+router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), (req, res) => {
 
   // required params
   const originalFilename = req.body.filename
@@ -77,7 +77,7 @@ router.route('/').post(verifyToken(), hasRole(['rfcxUser', 'systemUser']), (req,
  * @param {Object} req Cloud Function request context.
  * @param {Object} res Cloud Function response context.
  */
-router.route('/:id').get(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
+router.route('/:id').get(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
   // TODO check that the user owns the upload
 
   const id = req.params.id
