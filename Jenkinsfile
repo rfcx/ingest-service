@@ -59,6 +59,12 @@ spec:
            }
         }
         stage('Deploy') {
+            agent {
+                label 'slave'
+            }
+            options {
+                skipDefaultCheckout true
+            }
             when {
                  expression { BRANCH_NAME ==~ /(master|staging)/ }
             }
@@ -68,6 +74,12 @@ spec:
 
         }
         stage('Verifying') {
+            agent {
+                label 'slave'
+            }
+            options {
+                skipDefaultCheckout true
+            }
             when {
                  expression { BRANCH_NAME ==~ /(master|staging)/ }
             }
