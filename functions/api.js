@@ -31,7 +31,11 @@ if (process.env.PLATFORM === 'amazon') {
     msg: "HTTP {{req.method}} {{req.url}} | {{res.statusCode}} {{res.responseTime}}ms",
     expressFormat: true,
     colorize: true,
-    ignoreRoute: function (req, res) { return false; }
+    ignoreRoute: function (req, res) {
+      if (req.method === 'GET' && (/\/uploads\/.+/).test(req.url)) {
+        return true
+      }
+      return false;}
   }));
 }
 

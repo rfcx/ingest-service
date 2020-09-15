@@ -26,7 +26,8 @@ function identify (sourceFile) {
             (result.format && result.format.bit_rate && result.format.bit_rate !== 'N/A'? parseInt(result.format.bit_rate) : 0);
           const codec = stream.codec_name
           const tags = result.format && result.format.tags? result.format.tags : {}
-          resolve({ format, duration, sampleCount, channelLayout, channelCount, bitRate, sampleRate, codec, tags })
+          const size = result.format && result.format.size? result.format.size : 0
+          resolve({ format, duration, sampleCount, channelLayout, channelCount, bitRate, sampleRate, codec, tags, size })
         }
       })
   })
