@@ -14,7 +14,7 @@ router.route('/')
   .get(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
 
     const idToken = req.headers.authorization
-    const defaultErrorMessage = 'Error while getting sites'
+    const defaultErrorMessage = 'Error while getting streams'
 
     return streamService.query(idToken, { created_by: 'me' })
       .then((response) => {
