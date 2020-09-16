@@ -27,8 +27,8 @@ if (process.env.PLATFORM === 'amazon') {
       winston.format.colorize(),
       winston.format.json()
     ),
-    meta: true,
-    msg: "HTTP {{req.method}} {{req.url}} | {{res.statusCode}} {{res.responseTime}}ms",
+    meta: false,
+    msg: 'HTTP {{req.method}} {{req.url}} | {{res.statusCode}} {{res.responseTime}}ms',
     expressFormat: true,
     colorize: true,
     ignoreRoute: function (req, res) { return false; }

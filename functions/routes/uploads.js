@@ -26,10 +26,12 @@ router.route('/').post(verifyToken(), hasRole(['rfcxUser', 'systemUser']), (req,
   const timestamp = req.body.timestamp
   const streamId = req.body.stream
   // optional params
-  const sampleRate = req.body.sampleRate;
-  const targetBitrate = req.body.targetBitrate;
+  const sampleRate = req.body.sampleRate
+  const targetBitrate = req.body.targetBitrate
   // TODO: make checksum required param when Ingest App will send it
-  const checksum = req.body.checksum;
+  const checksum = req.body.checksum
+
+  console.log(`Upload request | ${streamId} | ${originalFilename} | ${timestamp} | ${checksum}`)
 
   if (originalFilename === undefined || streamId === undefined || timestamp === undefined) {
     res.status(400).send('Required: filename, stream, timestamp')
