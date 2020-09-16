@@ -14,19 +14,14 @@ router.route('/')
   .get(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
 
     const idToken = req.headers.authorization
-    const defaultErrorMessage = 'Error while getting streams'
+    const defaultErrorMessage = 'Error while getting sites'
 
     return streamService.query(idToken, { created_by: 'me' })
       .then((response) => {
         if (response && response.status === 200) {
-          const total = parseInt(response.headers['total-items']) || 0
-          const streams = (response.data || []).map((x) => {
-            x.guid = x.id;
-            return x
-          });
           res
             .header('Total-Items', response.headers['total-items'])
-            .json({ total, streams }) // TODO: change format for next release of the Ingest App
+            .json(response.data)
         }
         else {
           res.status(500).send(defaultErrorMessage)
