@@ -11,7 +11,7 @@ const streamService = require('../services/rfcx/streams');
 const httpErrorHandler = require('../utils/http-error-handler')
 
 router.route('/')
-  .get(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
+  .get(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
 
     const idToken = req.headers.authorization
     const defaultErrorMessage = 'Error while getting streams'
@@ -19,14 +19,9 @@ router.route('/')
     return streamService.query(idToken, { created_by: 'me' })
       .then((response) => {
         if (response && response.status === 200) {
-          const total = parseInt(response.headers['total-items']) || 0
-          const streams = (response.data || []).map((x) => {
-            x.guid = x.id;
-            return x
-          });
           res
             .header('Total-Items', response.headers['total-items'])
-            .json({ total, streams }) // TODO: change format for next release of the Ingest App
+            .json(response.data)
         }
         else {
           res.status(500).send(defaultErrorMessage)
@@ -39,7 +34,7 @@ router.route('/')
  * HTTP function that creates a stream
  */
 router.route('/')
-  .post(verifyToken(), hasRole(['rfcxUser']), (req, res) => {
+  .post(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
 
     const name = req.body.name
     const latitude = req.body.latitude
@@ -105,8 +100,8 @@ function updateEndpoint(req, res) {
     .catch(httpErrorHandler(req, res, defaultErrorMessage))
 }
 
-router.route('/:id').post(verifyToken(), hasRole(['rfcxUser']), updateEndpoint)
-router.route('/:id').patch(verifyToken(), hasRole(['rfcxUser']), updateEndpoint)
+router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), updateEndpoint)
+router.route('/:id').patch(verifyToken(), hasRole(['appUser', 'rfcxUser']), updateEndpoint)
 
 function deleteEndpoint(req, res) {
   const streamId = req.params.id
@@ -121,7 +116,7 @@ function deleteEndpoint(req, res) {
     .catch(httpErrorHandler(req, res, defaultErrorMessage))
 }
 
-router.route('/:id/move-to-trash').post(verifyToken(), hasRole(['rfcxUser']), deleteEndpoint) // deprecated. TODO: update Ingest App to use DELETE /streams/{id} endpoint
-router.route('/:id').delete(verifyToken(), hasRole(['rfcxUser']), deleteEndpoint)
+router.route('/:id/move-to-trash').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), deleteEndpoint) // deprecated. TODO: update Ingest App to use DELETE /streams/{id} endpoint
+router.route('/:id').delete(verifyToken(), hasRole(['appUser', 'rfcxUser']), deleteEndpoint)
 
 module.exports = router
