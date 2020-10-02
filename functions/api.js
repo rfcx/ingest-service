@@ -24,13 +24,16 @@ if (process.env.PLATFORM === 'amazon') {
       new winston.transports.Console()
     ],
     format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.json()
+      winston.format.json(),
+      winston.format.prettyPrint()
     ),
     meta: true,
-    msg: "HTTP {{req.method}} {{req.url}} | {{res.statusCode}} {{res.responseTime}}ms",
+    requestWhitelist: ['headers', 'body'],
+    headerBlacklist: [
+      'host', 'x-request-id', 'x-real-ip', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-port',' x-forwarded-proto',
+      'x-original-uri', 'x-scheme', 'x-original-forwarded-for', 'content-length', 'accept', 'connection', 'origin', 'sec-fetch-mode',
+      'sec-fetch-site', 'referer', 'accept-encoding', 'accept-language', 'user-agent'],
     expressFormat: true,
-    colorize: true,
     ignoreRoute: function (req, res) {
       if (req.method === 'GET' && (/\/uploads\/.+/).test(req.url)) {
         return true
