@@ -8,6 +8,7 @@ const hasRole = authentication.hasRole
 router.use(require('../middleware/cors'))
 
 const streamService = require('../services/rfcx/streams');
+const arbimonService = require('../services/arbimon');
 const httpErrorHandler = require('../utils/http-error-handler')
 
 router.route('/')
@@ -39,6 +40,7 @@ router.route('/')
     const name = req.body.name
     const latitude = req.body.latitude
     const longitude = req.body.longitude
+    const altitude = req.body.altitude
     const description = req.body.description
     const visibility = req.body.visibility // TODO: remove with the next release of Ingest App
     let is_public = req.body.is_public
@@ -63,8 +65,21 @@ router.route('/')
 
     return streamService
       .create({ name, latitude, longitude, description, is_public, idToken })
-      .then((response) => {
+      .then(async (response) => {
         if (response && response.status === 201) {
+          if (process.env.ARBIMON_ENABLED) {
+            const streamData = response.data
+            const userProject = await arbimonService.userProject(idToken)
+            const arbimonSiteData = {
+              project_id: userProject.project_id,
+              name,
+              external_id: streamData.id,
+              lat: latitude,
+              lon: longitude,
+              alt: altitude || 0
+            }
+            await arbimonService.createSite(arbimonSiteData, idToken)
+          }
           res.json(response.data)
         }
         else {

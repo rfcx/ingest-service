@@ -6,6 +6,7 @@ const audioService = require('../audio')
 const dirUtil = require('../../utils/dir')
 const segmentService = require('../rfcx/segments')
 const auth0Service = require('../../services/auth0')
+const arbimonService = require('../../services/arbimon')
 const path = require('path')
 const moment = require('moment-timezone')
 const uuid = require('uuid/v4')
@@ -129,11 +130,11 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         const duration = Math.floor(file.meta.duration * 1000)
         const ts = moment.tz(upload.timestamp, 'UTC').add(totalDurationMs, 'milliseconds')
         file.guid = uuid()
-        const remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${upload.streamId}/${file.guid}${path.extname(file.path)}`
+        file.remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${upload.streamId}/${file.guid}${path.extname(file.path)}`
         totalDurationMs += duration
-        transactionData.segmentsFileUrls.push(remotePath)
-        console.log(`Uploading segment ${file.path} to ${remotePath}`)
-        await storage.upload(remotePath, file.path)
+        transactionData.segmentsFileUrls.push(file.remotePath)
+        console.log(`Uploading segment ${file.path} to ${file.remotePath}`)
+        await storage.upload(file.remotePath, file.path)
       }
       return outputFiles
     })
@@ -143,13 +144,15 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       const token = await auth0Service.getToken()
       for (const file of outputFiles) {
         const duration = Math.floor(file.meta.duration * 1000)
+        file.start = moment.tz(timestamp + totalDurationMs, 'UTC').toISOString()
+        file.end = moment.tz(timestamp + totalDurationMs + duration, 'UTC').toISOString()
         const segmentOpts = {
           id: file.guid,
           stream: upload.streamId,
           idToken: `${token.access_token}`,
           streamSourceFileId: transactionData.streamSourceFileId,
-          start: moment.tz(timestamp + totalDurationMs, 'UTC').toISOString(),
-          end: moment.tz(timestamp + totalDurationMs + duration, 'UTC').toISOString(),
+          start: file.start,
+          end: file.end,
           sample_count: file.meta.sampleCount,
           file_extension: path.extname(file.path)
         }
@@ -160,9 +163,35 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       }
       return outputFiles
     })
-    .then(() => {
+    .then(async (outputFiles) => {
       console.log(`Modifying status to INGESTED (${db.status.INGESTED})`)
-      return db.updateUploadStatus(uploadId, db.status.INGESTED)
+      await db.updateUploadStatus(uploadId, db.status.INGESTED)
+      return outputFiles
+    })
+    .then(async (outputFiles) => {
+      if (process.env.ARBIMON_ENABLED) {
+        let totalDurationMs = 0
+        for (const file of outputFiles) {
+          const duration = file.meta.duration
+          const recording = {
+            site_external_id: upload.streamId,
+            uri: file.remotePath,
+            datetime: file.start,
+            sample_rate: upload.sampleRate || file.meta.sampleRate,
+            precision: 0,
+            duration,
+            samples: file.meta.sampleCount,
+            file_size: file.meta.size,
+            bit_rate: upload.targetBitrate || file.meta.bitRate,
+            sample_encoding: file.meta.codec
+          }
+          totalDurationMs += duration
+          console.log(`Creating recording ${recording.uri} in the Arbimon`, recording)
+          const token = await auth0Service.getToken()
+          const idToken = `Bearer ${token.access_token}`
+          await arbimonService.createRecording(recording, idToken)
+        }
+      }
     })
     .then(async () => {
       console.log('Cleaning up files')
