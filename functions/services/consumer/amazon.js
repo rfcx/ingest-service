@@ -10,7 +10,11 @@ const consumer = Consumer.create({
     let files = parseIngestSQSMessage(message);
     for (let file of files) {
       const { fileLocalPath, streamId, uploadId } = parseUploadFromFileName(file.key);
-      await ingest(file.key, fileLocalPath, streamId, uploadId);
+      try {
+        await ingest(file.key, fileLocalPath, streamId, uploadId);
+      } catch (e) {
+        return false;
+      }
     }
     return true;
   },
