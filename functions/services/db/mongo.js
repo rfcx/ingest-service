@@ -1,5 +1,6 @@
 const db = require('../../utils/mongo');
 const UploadModel = require('./models/mongoose/upload').Upload;
+const DeploymentInfoModel = require('./models/mongoose/deploymentInfo').DeploymentInfo;
 const moment = require('moment-timezone');
 const hash = require('../../utils/hash');
 
@@ -58,9 +59,32 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
     })
 }
 
+function saveDeploymentInfo (opts) {
+  const {deploymentId, locationName, latitude, longitude, deployedAt} = opts
+
+  let deploymentInfo = new DeploymentInfoModel({
+    deploymentId, 
+    locationName, 
+    latitude, 
+    longitude, 
+    deployedAt
+  })
+
+  return deploymentInfo.save()
+  .then((data) => {
+    if (data && data._id) {
+      return
+    }
+    else {
+      throw Error('Can not create upload.')
+    }
+  })
+}
+
 module.exports = {
   generateUpload,
   getUpload,
   updateUploadStatus,
+  saveDeploymentInfo,
   status
 }

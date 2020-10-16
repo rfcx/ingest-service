@@ -46,5 +46,6 @@ app.use(nuts.router);
 app.use('/uploads', require('./routes/uploads'))
 app.use('/streams', require('./routes/streams'))
 app.use('/users', require('./routes/users'))
+app.use('/deployments', require('./routes/deployments'))
 
 module.exports = app
