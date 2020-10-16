@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
-const Decimal = mongoose.Schema.Types.Decimal128;
+const Decimal = mongoose.Schema.Types.Number;
 
 const DeploymentInfoSchema = new mongoose.Schema({
   deploymentId: String,
   locationName: String,
-  latitude: Decimal,
-  longitude: Decimal,
+  latitude: Number,
+  longitude: Number,
   deployedAt: Date
 });
 
