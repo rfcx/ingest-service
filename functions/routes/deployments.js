@@ -8,7 +8,8 @@ const hasRole = authentication.hasRole;
 
 router.use(require('../middleware/cors'))
 
-const db = require(`../services/db/mongo`)
+const db = require(`../services/db/mongo`);
+const { route } = require('./uploads');
 
 router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), (req, res) => {
 
@@ -31,8 +32,21 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUse
     return
   }
 
-  db.saveDeploymentInfo({deploymentId, locationName, latitude, longitude, deployedAt})
+  db.saveDeploymentInfo({deploymentId, locationName, latitude, longitude, deployedAt}).then((data) =>{
+    res.json( data )
+  })
+})
 
+router.route('/:id').get(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), (req, res) => {
+  const id = req.params.id
+  db.getDeploymentInfo(id)
+    .then(data => {
+      res.json(data);
+    })
+    .catch(err => {
+      console.error(err)
+      res.status(500).end()
+    });
 })
 
 module.exports = router

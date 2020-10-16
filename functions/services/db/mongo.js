@@ -77,7 +77,8 @@ function saveDeploymentInfo (opts) {
   return deploymentInfo.save()
     .then((data) => {
       if (data && data._id) {
-        return
+        const id = data._id;
+        return { id }
       }
       else {
         throw Error('Can not create upload.')
@@ -103,6 +104,7 @@ function updateDeploymentInfo (deploymentId, locationName, latitude, longitude) 
 module.exports = {
   generateUpload,
   getUpload,
+  getDeploymentInfo,
   updateUploadStatus,
   saveDeploymentInfo,
   status
