@@ -59,6 +59,10 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
     })
 }
 
+function getDeploymentInfo (deploymentId) {
+  return DeploymentInfoModel.findById(deploymentId)
+}
+
 function saveDeploymentInfo (opts) {
   const {deploymentId, locationName, latitude, longitude, deployedAt} = opts
 
@@ -71,14 +75,29 @@ function saveDeploymentInfo (opts) {
   })
 
   return deploymentInfo.save()
-  .then((data) => {
-    if (data && data._id) {
-      return
-    }
-    else {
-      throw Error('Can not create upload.')
-    }
-  })
+    .then((data) => {
+      if (data && data._id) {
+        return
+      }
+      else {
+        throw Error('Can not create upload.')
+      }
+    })
+}
+
+function updateDeploymentInfo (deploymentId, locationName, latitude, longitude) {
+  return getDeploymentInfo(deploymentId)
+    .then((deploymentInfo) => {
+      if (!deploymentInfo) {
+        return Promise.reject('Upload does not exist')
+      }
+
+      deploymentId.locationName = locationName
+      deploymentId.latitude = latitude
+      deploymentId.longitude = longitude
+
+      return deploymentInfo.save;
+    })
 }
 
 module.exports = {
