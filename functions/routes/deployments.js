@@ -9,7 +9,6 @@ const hasRole = authentication.hasRole;
 router.use(require('../middleware/cors'))
 
 const db = require(`../services/db/mongo`);
-const { route } = require('./uploads');
 
 router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), (req, res) => {
 
@@ -42,7 +41,7 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUse
 
 router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), (req, res) => {
   // required params
-  const deploymentId = req.body.deploymentId
+  const deploymentId = req.params.id
   const locationName = req.body.locationName
   const latitude = req.body.latitude
   const longitude = req.body.longitude
@@ -50,8 +49,6 @@ router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'system
   // optional params
   const groupName = req.body.groupName
   const groupColor = req.body.groupColor
-
-  const id = req.params.id
 
   console.log(`DeploymentInfo request | ${deploymentId} | ${locationName} | ${latitude} | ${longitude} | ${deployedAt} | ${groupName} | ${groupColor}`)
 
