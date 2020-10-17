@@ -60,7 +60,13 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
 }
 
 function getDeploymentInfo (deploymentId) {
-  return DeploymentInfoModel.findById(deploymentId)
+  return DeploymentInfoModel.find( { deploymentId: deploymentId } ).then((result) => {
+    if (result[0] != undefined) {
+      return result[0]
+    } else {
+      return Promise.reject('DeploymentInfo does not exist')
+    }
+  })
 }
 
 function saveDeploymentInfo (opts) {
@@ -78,8 +84,7 @@ function saveDeploymentInfo (opts) {
   return deploymentInfo.save()
     .then((data) => {
       if (data && data._id) {
-        const id = data._id;
-        return { id }
+        return data
       }
       else {
         throw Error('Can not create DeploymentInfo.')
@@ -88,15 +93,14 @@ function saveDeploymentInfo (opts) {
 }
 
 function updateDeploymentInfo (opts) {
-  const {id, deploymentId, locationName, latitude, longitude, deployedAt, groupName, groupColor} = opts
+  const { deploymentId, locationName, latitude, longitude, deployedAt, groupName, groupColor } = opts
 
-  return getDeploymentInfo(id)
+  return getDeploymentInfo(deploymentId)
     .then((deploymentInfo) => {
       if (!deploymentInfo) {
         return Promise.reject('DeploymentInfo does not exist')
       }
 
-      deploymentInfo.deploymentId = deploymentId
       deploymentInfo.locationName = locationName
       deploymentInfo.latitude = latitude
       deploymentInfo.longitude = longitude

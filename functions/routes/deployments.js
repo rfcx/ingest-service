@@ -65,7 +65,7 @@ router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'system
     return
   }
 
-  db.updateDeploymentInfo({ id, deploymentId, locationName, latitude, longitude, deployedAt, groupName, groupColor }).then((data) => {
+  db.updateDeploymentInfo({ deploymentId, locationName, latitude, longitude, deployedAt, groupName, groupColor }).then((data) => {
     res.json(data)
   })
 })
