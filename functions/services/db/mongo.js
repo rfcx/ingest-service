@@ -64,14 +64,15 @@ function getDeploymentInfo (deploymentId) {
 }
 
 function saveDeploymentInfo (opts) {
-  const {deploymentId, locationName, latitude, longitude, deployedAt} = opts
+  const {deploymentId, locationName, latitude, longitude, deployedAt, groupName, groupColor} = opts
 
   let deploymentInfo = new DeploymentInfoModel({
-    deploymentId, 
-    locationName, 
-    latitude, 
-    longitude, 
-    deployedAt
+    deploymentId: deploymentId, 
+    locationName: locationName, 
+    latitude: latitude, 
+    longitude: longitude,
+    locationGroup: { groupName, groupColor },
+    deployedAt: deployedAt
   })
 
   return deploymentInfo.save()
@@ -81,23 +82,28 @@ function saveDeploymentInfo (opts) {
         return { id }
       }
       else {
-        throw Error('Can not create upload.')
+        throw Error('Can not create DeploymentInfo.')
       }
     })
 }
 
-function updateDeploymentInfo (deploymentId, locationName, latitude, longitude) {
-  return getDeploymentInfo(deploymentId)
+function updateDeploymentInfo (opts) {
+  const {id, deploymentId, locationName, latitude, longitude, deployedAt, groupName, groupColor} = opts
+
+  return getDeploymentInfo(id)
     .then((deploymentInfo) => {
       if (!deploymentInfo) {
-        return Promise.reject('Upload does not exist')
+        return Promise.reject('DeploymentInfo does not exist')
       }
 
-      deploymentId.locationName = locationName
-      deploymentId.latitude = latitude
-      deploymentId.longitude = longitude
+      deploymentInfo.deploymentId = deploymentId
+      deploymentInfo.locationName = locationName
+      deploymentInfo.latitude = latitude
+      deploymentInfo.longitude = longitude
+      deploymentInfo.deployedAt = deployedAt
+      deploymentInfo.locationGroup = {groupName, groupColor}
 
-      return deploymentInfo.save;
+      return deploymentInfo.save()
     })
 }
 
@@ -107,5 +113,6 @@ module.exports = {
   getDeploymentInfo,
   updateUploadStatus,
   saveDeploymentInfo,
+  updateDeploymentInfo,
   status
 }

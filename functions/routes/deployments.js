@@ -19,8 +19,11 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUse
   const latitude = req.body.latitude
   const longitude = req.body.longitude
   const deployedAt = req.body.deployedAt
+  // optional params
+  const groupName = req.body.groupName
+  const groupColor = req.body.groupColor
 
-  console.log(`DeploymentInfo request | ${deploymentId} | ${locationName} | ${latitude} | ${longitude} | ${deployedAt}`)
+  console.log(`DeploymentInfo request | ${deploymentId} | ${locationName} | ${latitude} | ${longitude} | ${deployedAt} | ${groupName} | ${groupColor}`)
 
   if (deploymentId === undefined || locationName === undefined || latitude === undefined || longitude === undefined || deployedAt === undefined) {
     res.status(400).send('Required: deploymentId, locationName, latitude, longitude, deployedAt')
@@ -32,8 +35,38 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUse
     return
   }
 
-  db.saveDeploymentInfo({deploymentId, locationName, latitude, longitude, deployedAt}).then((data) =>{
-    res.json( data )
+  db.saveDeploymentInfo({ deploymentId, locationName, latitude, longitude, deployedAt, groupName, groupColor }).then((data) => {
+    res.json(data)
+  })
+})
+
+router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), (req, res) => {
+  // required params
+  const deploymentId = req.body.deploymentId
+  const locationName = req.body.locationName
+  const latitude = req.body.latitude
+  const longitude = req.body.longitude
+  const deployedAt = req.body.deployedAt
+  // optional params
+  const groupName = req.body.groupName
+  const groupColor = req.body.groupColor
+
+  const id = req.params.id
+
+  console.log(`DeploymentInfo request | ${deploymentId} | ${locationName} | ${latitude} | ${longitude} | ${deployedAt} | ${groupName} | ${groupColor}`)
+
+  if (deploymentId === undefined || locationName === undefined || latitude === undefined || longitude === undefined || deployedAt === undefined) {
+    res.status(400).send('Required: deploymentId, locationName, latitude, longitude, deployedAt')
+    return
+  }
+
+  if (!moment(deployedAt, moment.ISO_8601).isValid()) {
+    res.status(400).send('Invalid format: deployedAt')
+    return
+  }
+
+  db.updateDeploymentInfo({ id, deploymentId, locationName, latitude, longitude, deployedAt, groupName, groupColor }).then((data) => {
+    res.json(data)
   })
 })
 
