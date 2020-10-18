@@ -10,5 +10,5 @@ api.listen(port, () => {
   console.log(`App is listening on port ${port}`)
 })
 
-const ingestConsumer = require(`./services/consumer/${platform}`);
-ingestConsumer.start();
+const ingestConsumer = require(`./services/consumer/${platform}`)
+ingestConsumer.start()

@@ -1,8 +1,8 @@
 const { Storage } = require('@google-cloud/storage')
 const storage = new Storage()
 
-const uploadBucket = storage.bucket(process.env.UPLOAD_BUCKET);
-const ingestBucket = storage.bucket(process.env.INGEST_BUCKET);
+const uploadBucket = storage.bucket(process.env.UPLOAD_BUCKET)
+const ingestBucket = storage.bucket(process.env.INGEST_BUCKET)
 
 function getSignedUrl (filePath, contentType) {
   // Get a reference to the destination file in GCS
@@ -13,10 +13,10 @@ function getSignedUrl (filePath, contentType) {
   const config = {
     action: 'write',
     expires: expiresAtMs,
-    contentType: contentType,
+    contentType: contentType
   }
   return file.getSignedUrl(config).then((data) => {
-    const url = data[0];
+    const url = data[0]
     return url
   })
 }
@@ -26,11 +26,11 @@ function download (source, destination) {
 }
 
 function upload (destination, source) {
-  return ingestBucket.upload(source, { destination });
+  return ingestBucket.upload(source, { destination })
 }
 
-function deleteObject(bucket, path) {
-  return storage.bucket(bucket).file(path).delete();
+function deleteObject (bucket, path) {
+  return storage.bucket(bucket).file(path).delete()
 }
 
 module.exports = {

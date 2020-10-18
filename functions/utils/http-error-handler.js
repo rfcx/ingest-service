@@ -5,10 +5,9 @@ function httpErrorHandler (req, res, defaultMessage) {
     let statusCode = 500
     try {
       message = err.response.data.message
-    }
-    catch (e) { }
+    } catch (e) { }
     if (err.response) { // The request was made and the server responded with a status code
-      let apiStatusCode = err.response.status
+      const apiStatusCode = err.response.status
       if ([400, 401, 403, 404].includes(apiStatusCode)) {
         statusCode = apiStatusCode
       }

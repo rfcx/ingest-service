@@ -1,17 +1,16 @@
-const db = require('../../utils/mongo');
-const UploadModel = require('./models/mongoose/upload').Upload;
-const DeploymentInfoModel = require('./models/mongoose/deploymentInfo').DeploymentInfo;
-const moment = require('moment-timezone');
-const hash = require('../../utils/hash');
+const db = require('../../utils/mongo')
+const UploadModel = require('./models/mongoose/upload').Upload
+const DeploymentInfoModel = require('./models/mongoose/deploymentInfo').DeploymentInfo
+const moment = require('moment-timezone')
+const hash = require('../../utils/hash')
 
 const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31, CHECKSUM: 32 }
 const statusNumbers = Object.values(status)
 
 function generateUpload (opts) {
+  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum } = opts
 
-  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum  } = opts;
-
-  let upload = new UploadModel({
+  const upload = new UploadModel({
     streamId,
     userId,
     status: status.WAITING,
@@ -20,25 +19,24 @@ function generateUpload (opts) {
     sampleRate,
     targetBitrate,
     checksum
-  });
+  })
 
   return upload.save()
     .then((data) => {
       if (data && data._id) {
-        const id = data._id;
+        const id = data._id
         return {
           id,
           path: `${streamId}/${id}.${fileExtension}`
         }
+      } else {
+        throw Error('Can not create upload.')
       }
-      else {
-        throw Error('Can not create upload.');
-      }
-    });
+    })
 }
 
 function getUpload (id) {
-  return UploadModel.findById(id);
+  return UploadModel.findById(id)
 }
 
 function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
@@ -50,17 +48,17 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
       if (!upload) {
         return Promise.reject('Upload does not exist')
       }
-      upload.status = statusNumber;
-      upload.updatedAt = moment().tz('UTC').toDate();
+      upload.status = statusNumber
+      upload.updatedAt = moment().tz('UTC').toDate()
       if (failureMessage != null) {
-        upload.failureMessage = failureMessage;
+        upload.failureMessage = failureMessage
       }
-      return upload.save();
+      return upload.save()
     })
 }
 
 function getDeploymentInfo (deploymentId) {
-  return DeploymentInfoModel.find( { deploymentId: deploymentId } ).then((result) => {
+  return DeploymentInfoModel.find({ deploymentId: deploymentId }).then((result) => {
     if (result[0] != undefined) {
       return result[0]
     } else {
@@ -70,9 +68,9 @@ function getDeploymentInfo (deploymentId) {
 }
 
 function saveDeploymentInfo (opts) {
-  const {deploymentId, locationName, latitude, longitude, deployedAt, groupName, groupColor} = opts
+  const { deploymentId, locationName, latitude, longitude, deployedAt, groupName, groupColor } = opts
 
-  let deploymentInfo = new DeploymentInfoModel({
+  const deploymentInfo = new DeploymentInfoModel({
     deploymentId: deploymentId,
     locationName: locationName,
     latitude: latitude,
@@ -85,8 +83,7 @@ function saveDeploymentInfo (opts) {
     .then((data) => {
       if (data && data._id) {
         return data
-      }
-      else {
+      } else {
         throw Error('Can not create DeploymentInfo.')
       }
     })
@@ -105,7 +102,7 @@ function updateDeploymentInfo (opts) {
       deploymentInfo.latitude = latitude
       deploymentInfo.longitude = longitude
       deploymentInfo.deployedAt = deployedAt
-      deploymentInfo.locationGroup = {groupName, groupColor}
+      deploymentInfo.locationGroup = { groupName, groupColor }
 
       return deploymentInfo.save()
     })

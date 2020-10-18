@@ -2,17 +2,16 @@ const moment = require('moment')
 const express = require('express')
 var router = express.Router()
 
-const authentication = require('../middleware/authentication');
-const verifyToken = authentication.verifyToken;
-const hasRole = authentication.hasRole;
+const authentication = require('../middleware/authentication')
+const verifyToken = authentication.verifyToken
+const hasRole = authentication.hasRole
 const verifyCloudFunctionAuth = authentication.verifyCloudFunctionAuth
 
 router.use(require('../middleware/cors'))
 
-const db = require(`../services/db/mongo`);
+const db = require('../services/db/mongo')
 
 router.route('/').post(verifyCloudFunctionAuth(), (req, res) => {
-
   // required params
   const deploymentId = req.body.deploymentId
   const locationName = req.body.locationName
@@ -72,12 +71,12 @@ router.route('/:id').get(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemU
   const id = req.params.id
   db.getDeploymentInfo(id)
     .then(data => {
-      res.json(data);
+      res.json(data)
     })
     .catch(err => {
       console.error(err)
       res.status(500).end()
-    });
+    })
 })
 
 module.exports = router

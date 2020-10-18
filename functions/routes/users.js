@@ -3,8 +3,8 @@ const router = express.Router()
 const userService = require('../services/users')
 const errors = require('../utils/errors')
 
-const authentication = require('../middleware/authentication');
-const verifyToken = authentication.verifyToken;
+const authentication = require('../middleware/authentication')
+const verifyToken = authentication.verifyToken
 
 router.use(require('../middleware/cors'))
 
@@ -13,12 +13,11 @@ router.use(require('../middleware/cors'))
  */
 router.route('/touchapi')
   .get(verifyToken(), (req, res) => {
-
-    const idToken = req.headers['authorization'];
+    const idToken = req.headers.authorization
 
     return userService.touchapi(idToken)
       .then((data) => {
-        res.json( data )
+        res.json(data)
       })
       .catch(err => {
         if (err.message === errors.UNAUTHORIZED) {
@@ -27,17 +26,15 @@ router.route('/touchapi')
           res.status(500).send(err.message)
         }
       })
-
   })
 
 router.route('/sites')
   .get(verifyToken(), (req, res) => {
-
-    const idToken = req.headers['authorization'];
+    const idToken = req.headers.authorization
 
     return userService.getUserSites(idToken)
       .then((data) => {
-        res.json( data )
+        res.json(data)
       })
       .catch(err => {
         if (err.message === errors.UNAUTHORIZED) {
@@ -46,7 +43,6 @@ router.route('/sites')
           res.status(500).send(err.message)
         }
       })
-
   })
 
 /**
@@ -54,14 +50,13 @@ router.route('/sites')
  */
 router.route('/code')
   .post(verifyToken(), (req, res) => {
-
-    const code = req.body.code;
-    const acceptTerms = req.body.accept_terms;
-    const idToken = req.headers['authorization'];
+    const code = req.body.code
+    const acceptTerms = req.body.accept_terms
+    const idToken = req.headers.authorization
 
     return userService.sendCode({ code, acceptTerms }, idToken)
       .then((data) => {
-        res.json( data )
+        res.json(data)
       })
       .catch(err => {
         if (err.message === errors.UNAUTHORIZED) {
@@ -72,17 +67,15 @@ router.route('/code')
           res.status(500).send(err.message)
         }
       })
-
   })
 
 router.route('/accept-terms')
   .post(verifyToken(), (req, res) => {
-
-    const idToken = req.headers['authorization'];
+    const idToken = req.headers.authorization
 
     return userService.acceptTerms(idToken)
       .then((data) => {
-        res.json( data )
+        res.json(data)
       })
       .catch(err => {
         if (err.message === errors.UNAUTHORIZED) {
@@ -91,8 +84,6 @@ router.route('/accept-terms')
           res.status(500).send(err.message)
         }
       })
-
   })
 
 module.exports = router
-

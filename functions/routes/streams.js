@@ -7,13 +7,12 @@ const hasRole = authentication.hasRole
 
 router.use(require('../middleware/cors'))
 
-const streamService = require('../services/rfcx/streams');
-const arbimonService = require('../services/arbimon');
+const streamService = require('../services/rfcx/streams')
+const arbimonService = require('../services/arbimon')
 const httpErrorHandler = require('../utils/http-error-handler')
 
 router.route('/')
   .get(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
-
     const idToken = req.headers.authorization
     const defaultErrorMessage = 'Error while getting streams'
 
@@ -23,8 +22,7 @@ router.route('/')
           res
             .header('Total-Items', response.headers['total-items'])
             .json(response.data)
-        }
-        else {
+        } else {
           res.status(500).send(defaultErrorMessage)
         }
       })
@@ -36,7 +34,6 @@ router.route('/')
  */
 router.route('/')
   .post(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
-
     const name = req.body.name
     const latitude = req.body.latitude
     const longitude = req.body.longitude
@@ -48,13 +45,12 @@ router.route('/')
     if (is_public === undefined) {
       if (visibility === 'private') {
         is_public = false
-      }
-      else {
+      } else {
         is_public = true
       }
     }
 
-    const idToken = req.headers['authorization'];
+    const idToken = req.headers.authorization
 
     if (!name) {
       res.status(400).send('Required: name')
@@ -81,8 +77,7 @@ router.route('/')
             await arbimonService.createSite(arbimonSiteData, idToken)
           }
           res.json(response.data)
-        }
-        else {
+        } else {
           res.status(500).send(defaultErrorMessage)
         }
       })
@@ -92,14 +87,14 @@ router.route('/')
 /**
  * HTTP function that updates a stream
  */
-function updateEndpoint(req, res) {
-  const streamId = req.params.id;
-  const name = req.body.name;
+function updateEndpoint (req, res) {
+  const streamId = req.params.id
+  const name = req.body.name
   const latitude = req.body.latitude
   const longitude = req.body.longitude
   const description = req.body.description
   const is_public = req.body.is_public
-  const idToken = req.headers['authorization'];
+  const idToken = req.headers.authorization
 
   const defaultErrorMessage = 'Error while updating the stream.'
 
@@ -107,8 +102,7 @@ function updateEndpoint(req, res) {
     .then((response) => {
       if (response && response.status === 200) {
         res.json(response.data)
-      }
-      else {
+      } else {
         res.status(500).send(defaultErrorMessage)
       }
     })
@@ -118,9 +112,9 @@ function updateEndpoint(req, res) {
 router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), updateEndpoint)
 router.route('/:id').patch(verifyToken(), hasRole(['appUser', 'rfcxUser']), updateEndpoint)
 
-function deleteEndpoint(req, res) {
+function deleteEndpoint (req, res) {
   const streamId = req.params.id
-  const idToken = req.headers['authorization'];
+  const idToken = req.headers.authorization
   const defaultErrorMessage = 'Error while deleting the stream.'
 
   return streamService

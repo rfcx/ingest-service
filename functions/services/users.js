@@ -4,10 +4,9 @@ const errors = require('../utils/errors')
 const apiHostName = process.env.API_HOST
 
 async function touchapi (idToken) {
-
   const url = `${apiHostName}v1/users/touchapi`
   const headers = {
-    'Authorization': idToken,
+    Authorization: idToken,
     'Content-Type': 'application/x-www-form-urlencoded'
   }
 
@@ -24,10 +23,9 @@ async function touchapi (idToken) {
 }
 
 async function getUserSites (idToken) {
-
   const url = `${apiHostName}v1/sites?filter_by_user=true`
   const headers = {
-    'Authorization': `Bearer ${idToken}`,
+    Authorization: `Bearer ${idToken}`,
     'Content-Type': 'application/x-www-form-urlencoded'
   }
 
@@ -41,18 +39,16 @@ async function getUserSites (idToken) {
       }
       throw err
     })
-
 }
 
 async function sendCode (opts, idToken) {
-
   const url = `${apiHostName}v1/users/code`
   const data = { code: opts.code }
   if (opts.acceptTerms !== undefined) {
     data.accept_terms = !!opts.acceptTerms
   }
   const headers = {
-    'Authorization': idToken,
+    Authorization: idToken,
     'Content-Type': 'application/json'
   }
 
@@ -69,10 +65,9 @@ async function sendCode (opts, idToken) {
 }
 
 async function acceptTerms (idToken) {
-
   const url = `${apiHostName}v1/users/accept-terms`
   const headers = {
-    'Authorization': idToken,
+    Authorization: idToken,
     'Content-Type': 'application/json'
   }
 
@@ -92,5 +87,5 @@ module.exports = {
   touchapi,
   sendCode,
   getUserSites,
-  acceptTerms,
+  acceptTerms
 }

@@ -1,31 +1,29 @@
-const path = require('path');
-const fs = require('fs');
-const rimraf = require('rimraf');
+const path = require('path')
+const fs = require('fs')
+const rimraf = require('rimraf')
 
-function ensureDirExists(dirPath) {
+function ensureDirExists (dirPath) {
   return new Promise((resolve, reject) => {
     try {
       if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath);
+        fs.mkdirSync(dirPath)
       }
-      resolve();
+      resolve()
+    } catch (e) {
+      reject(e)
     }
-    catch (e) {
-      reject(e);
-    }
-  });
+  })
 }
 
-function removeDirRecursively(path) {
+function removeDirRecursively (path) {
   return new Promise((resolve, reject) => {
     rimraf(path, (err) => {
       if (err) {
-        reject(err);
+        reject(err)
+      } else {
+        resolve()
       }
-      else {
-        resolve();
-      }
-    });
+    })
   })
 }
 

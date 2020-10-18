@@ -11,10 +11,10 @@ async function register (guardianGuid, guardianToken, shortname, site, idToken) 
     guid: guardianGuid,
     token: guardianToken,
     site_guid: site,
-    shortname: `${shortname}`,
+    shortname: `${shortname}`
   }
   const headers = {
-    'Authorization': idToken,
+    Authorization: idToken,
     'Content-Type': 'application/x-www-form-urlencoded'
   }
 

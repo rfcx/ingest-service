@@ -1,4 +1,4 @@
-const db = require(`../services/db/mongo`)
+const db = require('../services/db/mongo')
 
 module.exports = async (object) => {
   const filePath = object.name
