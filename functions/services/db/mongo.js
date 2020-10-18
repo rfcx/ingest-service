@@ -73,9 +73,9 @@ function saveDeploymentInfo (opts) {
   const {deploymentId, locationName, latitude, longitude, deployedAt, groupName, groupColor} = opts
 
   let deploymentInfo = new DeploymentInfoModel({
-    deploymentId: deploymentId, 
-    locationName: locationName, 
-    latitude: latitude, 
+    deploymentId: deploymentId,
+    locationName: locationName,
+    latitude: latitude,
     longitude: longitude,
     locationGroup: { groupName, groupColor },
     deployedAt: deployedAt

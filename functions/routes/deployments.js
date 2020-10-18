@@ -5,6 +5,7 @@ var router = express.Router()
 const authentication = require('../middleware/authentication');
 const verifyToken = authentication.verifyToken;
 const hasRole = authentication.hasRole;
+const verifyCloudFunctionAuth = authentication.verifyCloudFunctionAuth
 
 router.use(require('../middleware/cors'))
 

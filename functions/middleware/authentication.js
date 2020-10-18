@@ -73,7 +73,7 @@ const verifyCloudFunctionAuth = function() {
     if (token.startsWith('Bearer ')) { // Remove Bearer from string
       token = token.slice(7, token.length);
     }
-    if (token === process.env.CLOUD_FUNCTION_AUTH) {
+    if (token == process.env.CLOUD_FUNCTION_AUTH) {
       next();
     } else {
       res.sendStatus(403)
