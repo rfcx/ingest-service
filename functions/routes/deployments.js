@@ -11,7 +11,7 @@ router.use(require('../middleware/cors'))
 
 const db = require('../services/db/mongo')
 
-router.route('/').post(verifyCloudFunctionAuth(), (req, res) => {
+router.route('/').post(verifyToken(), hasRole(['systemUser']), (req, res) => {
   // required params
   const deploymentId = req.body.deploymentId
   const locationName = req.body.locationName
@@ -39,7 +39,7 @@ router.route('/').post(verifyCloudFunctionAuth(), (req, res) => {
   })
 })
 
-router.route('/:id').post(verifyCloudFunctionAuth(), (req, res) => {
+router.route('/:id').post(verifyToken(), hasRole(['systemUser']), (req, res) => {
   // required params
   const deploymentId = req.params.id
   const locationName = req.body.locationName
