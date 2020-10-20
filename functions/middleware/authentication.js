@@ -60,25 +60,7 @@ const hasRole = function (expectedRoles) {
   }
 }
 
-const verifyCloudFunctionAuth = function () {
-  return function (req, res, next) {
-    let token = req.headers.authorization
-    if (!token) {
-      return res.sendStatus(403)
-    }
-    if (token.startsWith('Bearer ')) { // Remove Bearer from string
-      token = token.slice(7, token.length)
-    }
-    if (token == process.env.CLOUD_FUNCTION_AUTH) {
-      next()
-    } else {
-      res.sendStatus(403)
-    }
-  }
-}
-
 module.exports = {
   verifyToken,
   hasRole,
-  verifyCloudFunctionAuth
 }
