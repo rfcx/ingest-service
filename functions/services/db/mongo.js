@@ -58,11 +58,11 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
 }
 
 function getDeploymentInfo (deploymentId) {
-  return DeploymentInfoModel.find({ deploymentId: deploymentId }).then((result) => {
-    if (result[0] != undefined) {
-      return result[0]
-    } else {
+  return DeploymentInfoModel.findOne({ deploymentId: deploymentId }).then((result) => {
+    if (!result) {
       return Promise.reject('DeploymentInfo does not exist')
+    } else {
+      return result
     }
   })
 }

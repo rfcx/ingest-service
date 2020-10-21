@@ -1,7 +1,7 @@
 const mongoose = require('mongoose')
 
 const DeploymentInfoSchema = new mongoose.Schema({
-  deploymentId: String,
+  deploymentId: { type: String , unique: true },
   locationName: String,
   latitude: Number,
   longitude: Number,
