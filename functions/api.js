@@ -23,8 +23,7 @@ if (process.env.PLATFORM === 'amazon') {
       new winston.transports.Console()
     ],
     format: winston.format.combine(
-      winston.format.json(),
-      winston.format.prettyPrint()
+      winston.format.json()
     ),
     meta: true,
     requestWhitelist: ['headers', 'body'],
@@ -34,7 +33,7 @@ if (process.env.PLATFORM === 'amazon') {
       'sec-fetch-site', 'referer', 'accept-encoding', 'accept-language', 'user-agent'],
     expressFormat: true,
     ignoreRoute: function (req, res) {
-      if (req.method === 'GET' && (/\/uploads\/.+/).test(req.url)) {
+      if (req.method === 'GET' && (/\/(uploads\/.+|health-check)/).test(req.url)) {
         return true
       }
       return false
@@ -47,5 +46,6 @@ app.use('/uploads', require('./routes/uploads'))
 app.use('/streams', require('./routes/streams'))
 app.use('/users', require('./routes/users'))
 app.use('/deployments', require('./routes/deployments'))
+app.use('/health-check', require('./routes/health-check'))
 
 module.exports = app
