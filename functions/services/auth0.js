@@ -1,20 +1,20 @@
-const axios = require('axios');
+const axios = require('axios')
 
-let token;
+let token
 
 async function getToken (idToken) {
   if (!token || !isTokenValid()) {
-    await createToken();
+    await createToken()
   }
-  return token;
+  return token
 }
 
-function isTokenValid() {
+function isTokenValid () {
   // if token exists and won't expire in next 10 mins
-  return token && token.expires_at - (new Date()).valueOf() > 600000;
+  return token && token.expires_at - (new Date()).valueOf() > 600000
 }
 
-async function createToken() {
+async function createToken () {
   const url = `https://${process.env.AUTHZERO_DOMAIN}/oauth/token`
   const headers = {
     'Content-Type': 'application/json'
@@ -23,17 +23,17 @@ async function createToken() {
     client_id: process.env.AUTHZERO_CLIENT_ID,
     client_secret: process.env.AUTHZERO_CLIENT_SECRET,
     audience: process.env.AUTHZERO_AUDIENCE,
-    grant_type: process.env.AUTHZERO_GRANT_TYPE,
+    grant_type: process.env.AUTHZERO_GRANT_TYPE
   }
 
   return axios.post(url, payload, { headers })
     .then(response => {
-      token = response.data;
-      token.expires_at = new Date().valueOf() + (token.expires_in * 1000);
-      return token;
-    });
+      token = response.data
+      token.expires_at = new Date().valueOf() + (token.expires_in * 1000)
+      return token
+    })
 }
 
 module.exports = {
-  getToken,
+  getToken
 }

@@ -3,23 +3,22 @@ const errors = require('../../utils/error-messages')
 
 const apiHostName = process.env.API_HOST
 
-function combineRequestPayload(opts) {
+function combineRequestPayload (opts) {
   return {
     ...opts.name !== undefined && { name: opts.name },
     ...opts.latitude !== undefined && { latitude: opts.latitude },
     ...opts.longitude !== undefined && { longitude: opts.longitude },
     ...opts.description !== undefined && { description: opts.description },
-    ...opts.is_public !== undefined && { is_public: opts.is_public },
+    ...opts.is_public !== undefined && { is_public: opts.is_public }
   }
 }
 
 async function create (opts) {
-
-  const url = `${apiHostName}streams`;
+  const url = `${apiHostName}streams`
   const data = combineRequestPayload(opts)
 
   const headers = {
-    'Authorization': opts.idToken,
+    Authorization: opts.idToken,
     'Content-Type': 'application/json'
   }
 
@@ -27,12 +26,11 @@ async function create (opts) {
 }
 
 async function update (opts) {
-
-  const url = `${apiHostName}streams/${opts.streamId}`;
+  const url = `${apiHostName}streams/${opts.streamId}`
   const data = combineRequestPayload(opts)
 
   const headers = {
-    'Authorization': opts.idToken,
+    Authorization: opts.idToken,
     'Content-Type': 'application/json'
   }
 
@@ -40,10 +38,9 @@ async function update (opts) {
 }
 
 async function remove (opts) {
-
-  const url = `${apiHostName}streams/${opts.streamId}`;
+  const url = `${apiHostName}streams/${opts.streamId}`
   const headers = {
-    'Authorization': opts.idToken,
+    Authorization: opts.idToken,
     'Content-Type': 'application/json'
   }
 
@@ -51,7 +48,6 @@ async function remove (opts) {
 }
 
 async function query (idToken, opts) {
-
   const url = `${apiHostName}streams`
   const params = {
     ...opts.is_public !== undefined && { is_public: opts.is_public },
@@ -61,10 +57,10 @@ async function query (idToken, opts) {
     ...opts.end !== undefined && { end: opts.end },
     ...opts.keyword !== undefined && { keyword: opts.keyword },
     ...opts.limit !== undefined && { limit: opts.limit },
-    ...opts.offset !== undefined && { offset: opts.offset },
+    ...opts.offset !== undefined && { offset: opts.offset }
   }
   const headers = {
-    'Authorization': `${idToken}`,
+    Authorization: `${idToken}`,
     'Content-Type': 'application/json'
   }
 
@@ -75,5 +71,5 @@ module.exports = {
   create,
   update,
   remove,
-  query,
+  query
 }

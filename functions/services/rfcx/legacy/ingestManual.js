@@ -4,14 +4,13 @@ const qs = require('querystring')
 const moment = require('moment')
 const sha1File = require('sha1-file')
 const { identify } = require('../../audio')
-const mimeUtil = require('../../../utils/mime');
+const mimeUtil = require('../../../utils/mime')
 
 const apiHostName = process.env.API_HOST
 const targetBucketName = process.env.S3_INGEST_MANUAL_BUCKET
 
 const aws = require('../../../utils/aws')
 const s3Client = new aws.S3()
-
 
 async function postAudio (guardianGuid, measuredAt, sha1Checksum, sampleCount, filename, numberOfBytes, idToken, meta) {
   const url = apiHostName + 'v1/guardians/' + guardianGuid + '/audio/withmeta'
@@ -27,10 +26,10 @@ async function postAudio (guardianGuid, measuredAt, sha1Checksum, sampleCount, f
     sample_rate: meta.sampleRate,
     bit_rate: meta.bitRate,
     is_vbr: true,
-    channel_count: meta.channelCount,
+    channel_count: meta.channelCount
   }
   const headers = {
-    'Authorization': `Bearer ${idToken.replace('Bearer ', '')}`,
+    Authorization: `Bearer ${idToken.replace('Bearer ', '')}`,
     'Content-Type': 'application/json'
   }
 
@@ -52,13 +51,12 @@ async function postAudio (guardianGuid, measuredAt, sha1Checksum, sampleCount, f
 
 async function putFile (localPath, remotePath) {
   const fileStream = fs.readFileSync(localPath)
-  const object = { Bucket: targetBucketName, Key: remotePath, Body: fileStream };
+  const object = { Bucket: targetBucketName, Key: remotePath, Body: fileStream }
   await s3Client.putObject(object).promise()
-  console.log("Successfully uploaded data to " + targetBucketName + "/" + remotePath)
+  console.log('Successfully uploaded data to ' + targetBucketName + '/' + remotePath)
 }
 
 async function ingest (filePath, originalFilename, timestampIso, guardianGuid, guardianToken, idToken) {
-
   // TODO: get idToken for server app from Auth0 - don't use client's token
   // Get sha1, sample count, size
   const sha1 = sha1File(filePath)

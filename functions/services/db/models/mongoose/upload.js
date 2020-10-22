@@ -1,6 +1,6 @@
-const mongoose = require('mongoose');
-require('mongoose-long')(mongoose);
-const Long = mongoose.Schema.Types.Long;
+const mongoose = require('mongoose')
+require('mongoose-long')(mongoose)
+const Long = mongoose.Schema.Types.Long
 
 const UploadSchema = new mongoose.Schema({
   streamId: String,
@@ -13,10 +13,10 @@ const UploadSchema = new mongoose.Schema({
   failureMessage: String,
   sampleRate: Number,
   targetBitrate: Number,
-  checksum: String,
-});
+  checksum: String
+})
 
-const Upload = mongoose.model('StreamUpload', UploadSchema);
+const Upload = mongoose.model('StreamUpload', UploadSchema)
 
 module.exports = {
   UploadSchema,

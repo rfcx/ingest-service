@@ -15,18 +15,18 @@ function identify (sourceFile) {
           reject(err)
         } else {
           const stream = result.streams[0]
-          const format = result.format && result.format.format_name? result.format.format_name : undefined
+          const format = result.format && result.format.format_name ? result.format.format_name : undefined
           const duration = parseFloat(stream.duration)
-          const sampleRate = (stream.sample_rate && stream.sample_rate !== 'N/A')? parseInt(stream.sample_rate) : 0
+          const sampleRate = (stream.sample_rate && stream.sample_rate !== 'N/A') ? parseInt(stream.sample_rate) : 0
           const sampleCount = Math.round(stream.duration * sampleRate)
           const channelCount = stream.channels
           const channelLayout = stream.channel_layout
-          const bitRate = (stream.bit_rate && stream.bit_rate !== 'N/A') ?
-            parseInt(stream.bit_rate) :
-            (result.format && result.format.bit_rate && result.format.bit_rate !== 'N/A'? parseInt(result.format.bit_rate) : 0);
+          const bitRate = (stream.bit_rate && stream.bit_rate !== 'N/A')
+            ? parseInt(stream.bit_rate)
+            : (result.format && result.format.bit_rate && result.format.bit_rate !== 'N/A' ? parseInt(result.format.bit_rate) : 0)
           const codec = stream.codec_name
-          const tags = result.format && result.format.tags? result.format.tags : {}
-          const size = result.format && result.format.size? result.format.size : 0
+          const tags = result.format && result.format.tags ? result.format.tags : {}
+          const size = result.format && result.format.size ? result.format.size : 0
           resolve({ format, duration, sampleCount, channelLayout, channelCount, bitRate, sampleRate, codec, tags, size })
         }
       })
@@ -82,8 +82,7 @@ function split (sourceFile, destinationPath, maxDuration) {
               path: filePath,
               meta: meta
             }
-          }
-          catch (e) { reject(e) }
+          } catch (e) { reject(e) }
         })
         resolve(Promise.all(outputFiles))
       })
@@ -120,8 +119,7 @@ function convert (sourceFile, destinationPath) {
             path: destinationPath,
             meta: meta
           })
-        }
-        catch (e) { reject(e) }
+        } catch (e) { reject(e) }
       })
       .run()
   })
@@ -130,5 +128,5 @@ function convert (sourceFile, destinationPath) {
 module.exports = {
   identify,
   split,
-  convert,
+  convert
 }
