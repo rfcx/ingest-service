@@ -103,7 +103,17 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         .catch((err) => {
           if (err.response && err.response.data && err.response.data.message) {
             const message = err.response.data.message
-            const status = message === 'Duplicate file. Matching sha1 signature already ingested.' ? db.status.DUPLICATE : db.status.FAILED
+            let status
+            switch (message) {
+              case 'Duplicate file. Matching sha1 signature already ingested.':
+                status = db.status.DUPLICATE
+                break
+              case 'This file was already ingested.':
+                status = db.status.INGESTED
+                break
+              default:
+                status = db.status.FAILED
+            }
             throw new IngestionError(message, status)
           } else {
             throw err
@@ -203,9 +213,6 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       console.error(`Error thrown for upload ${uploadId}`, err.message || '')
       const message = err instanceof IngestionError ? err.message : 'Server failed with processing your file. Please try again later.'
       let status = err instanceof IngestionError ? err.status : db.status.FAILED
-      if (status === db.status.DUPLICATE) {
-        status = db.status.INGESTED
-      }
       db.updateUploadStatus(uploadId, status, message)
       for (const filePath of transactionData.segmentsFileUrls) {
         await storage.deleteObject(ingestBucket, filePath)
