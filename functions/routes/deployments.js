@@ -21,42 +21,16 @@ const httpErrorHandler = require('../utils/http-error-handler')
  *        description: Save Edge/AudioMoth deployment info
  *        tags:
  *          - deployments
- *        parameters:
- *          - name: deploymentId
- *            description: A id of deployment
- *            in: query
- *            required: true
- *            type: string
- *          - name: locationName
- *            description: A name of deployment location
- *            in: query
- *            required: true
- *            type: string
- *          - name: latitude
- *            description: A value of latitude location of deployment
- *            in: query
- *            required: true
- *            type: Number
- *          - name: longitude
- *            description: A value of longitude location of deployment
- *            in: query
- *            required: true
- *            type: Number
- *          - name: deployedAt
- *            description: A date when deployment deployed (iso8601)
- *            in: query
- *            required: true
- *            type: string
- *          - name: groupName
- *            description: A name of location group
- *            in: query
- *            required: false
- *            type: string
- *          - name: groupColor
- *            description: A color of location group
- *            in: query
- *            required: false
- *            type: string
+ *        requestBody:
+ *          description: Stream object
+ *          required: true
+ *          content:
+ *            application/x-www-form-urlencoded:
+ *              schema:
+ *                $ref: '#/components/requestBodies/DeploymentInfo'
+ *            application/json:
+ *              schema:
+ *                $ref: '#/components/requestBodies/DeploymentInfo'
  *        responses:
  *          200:
  *            description: An deploymentInfo object
@@ -110,40 +84,20 @@ router.route('/').post(verifyToken(), hasRole(['systemUser']), (req, res) => {
  *          - deployments
  *        parameters:
  *          - name: id
- *            description: A id of deployment
+ *            description: A deployment id
  *            in: path
  *            required: true
  *            type: string
- *          - name: locationName
- *            description: A name of deployment location
- *            in: query
- *            required: true
- *            type: string
- *          - name: latitude
- *            description: A value of latitude location of deployment
- *            in: query
- *            required: true
- *            type: Number
- *          - name: longitude
- *            description: A value of longitude location of deployment
- *            in: query
- *            required: true
- *            type: Number
- *          - name: deployedAt
- *            description: A date when deployment deployed (iso8601)
- *            in: query
- *            required: true
- *            type: string
- *          - name: groupName
- *            description: A name of location group
- *            in: query
- *            required: false
- *            type: string
- *          - name: groupColor
- *            description: A color of location group
- *            in: query
- *            required: false
- *            type: string
+ *        requestBody:
+ *          description: Stream object
+ *          required: true
+ *          content:
+ *            application/x-www-form-urlencoded:
+ *              schema:
+ *                $ref: '#/components/requestBodies/DeploymentInfoUpdate'
+ *            application/json:
+ *              schema:
+ *                $ref: '#/components/requestBodies/DeploymentInfoUpdate'
  *        responses:
  *          200:
  *            description: An deploymentInfo object

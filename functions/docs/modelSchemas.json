@@ -3,13 +3,6 @@
     "allOf":[
       {
         "$ref": "#/components/requestBodies/DeploymentInfo"
-      },
-      {
-        "properties": {
-          "locationGroup": {
-            "$ref": "#/components/requestBodies/DeploymentLocationGroup"
-          }
-        }
       }
     ]
   }
