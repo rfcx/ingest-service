@@ -8,14 +8,14 @@
         "example": "Math"
       },
       "latitude": {
-        "type": "number",
+        "type": "float",
         "description": "A deployment coordinate",
-        "example": "16.742233863512645"
+        "example": 16.742233863512645
       },
       "longitude": {
-        "type": "number",
+        "type": "float",
         "description": "A deployment coordinate",
-        "example": "100.19330181247703"
+        "example": 100.19330181247703
       },
       "deployedAt": {
         "type": "date",
@@ -156,5 +156,45 @@
       }
     },
     "required": []
+  },
+  "Uploads": {
+    "type": "object",
+    "properties": {
+      "filename": {
+        "type": "string",
+        "description": "A stream name",
+        "example": "My Stream 1"
+      },
+      "timestamp": {
+        "type": "date",
+        "description": "A update date (iso 8601)",
+        "example": "2020-11-16T09:03:24.928Z"
+      },
+      "stream": {
+        "type": "string",
+        "description": "A stream id",
+        "example": "xu82jDgX49"
+      },
+      "sampleRate": {
+        "type": "number",
+        "description": "A stream sample rate",
+        "example": 24000
+      },
+      "targetBitrate": {
+        "type": "number",
+        "description": "A stream",
+        "example": 24000
+      },
+      "checksum": {
+        "type": "string",
+        "description": "Checksum",
+        "example": "xxxxxxx"
+      }
+    },
+    "required": [
+      "filename",
+      "timestamp",
+      "stream"
+    ]
   }
 }

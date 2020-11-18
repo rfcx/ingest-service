@@ -127,5 +127,41 @@
         "example": "https://upload.wikimedia.org/wikipedia/commons/1/11/Contact-new.svg"
       }
     }
+  },
+  "Upload": {
+    "properties": {
+      "uploadId": {
+        "type": "string",
+        "example": "upload-id"
+      },
+      "url": {
+        "type": "string",
+        "example": "url-for-upload.com"
+      },
+      "path": {
+        "type": "string",
+        "example": "path/to/file"
+      },
+      "bucket": {
+        "type": "string",
+        "example": "bucket"
+      }
+    }
+  },
+  "UploadStatus": {
+    "properties": {
+      "status": {
+        "type": "number",
+        "example": 1
+      },
+      "updatedAt": {
+        "type": "date",
+        "example": "2020-05-12T07:30:21.500Z"
+      },
+      "failureMessage": {
+        "type": "string",
+        "example": "Error"
+      }
+    }
   }
 }

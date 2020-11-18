@@ -13,6 +13,37 @@ const db = require('../services/db/mongo')
 const storage = require(`../services/storage/${platform}`)
 
 /**
+ * @swagger
+ * 
+ * /uploads:
+ *   post:
+ *        summary: Generates a signed URL
+ *        tags:
+ *          - uploads
+ *        requestBody:
+ *          description: Stream object
+ *          required: true
+ *          content:
+ *            application/x-www-form-urlencoded:
+ *              schema:
+ *                $ref: '#/components/requestBodies/Uploads'
+ *            application/json:
+ *              schema:
+ *                $ref: '#/components/requestBodies/Uploads'
+ *        responses:
+ *          200:
+ *            description: An upload object
+ *            content:
+ *              application/json:
+ *                schema:
+ *                   $ref: '#/components/schemas/Upload'
+ *          400:
+ *            description: Error while generating upload url
+ *          500:
+ *            description: Error while generating upload url
+ */
+
+/**
  * HTTP function that generates a signed URL
  * The signed URL can be used to upload files to Google Cloud Storage (GCS)
  *
@@ -69,6 +100,31 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUse
       res.status(500).end()
     })
 })
+
+/**
+ * @swagger
+ * 
+ * /uploads:
+ *   get:
+ *        summary: Checks the status of an upload
+ *        tags:
+ *          - uploads
+ *        parameters:
+ *          - name: id
+ *            description: An upload id
+ *            in: path
+ *            required: true
+ *            type: string
+ *        responses:
+ *          200:
+ *            description: Success
+ *            content:
+ *              application/json:
+ *                schema:
+ *                   $ref: '#/components/schemas/UploadStatus'
+ *          500:
+ *            description: Error while getting upload status
+ */
 
 /**
  * HTTP function that checks the status of an upload
