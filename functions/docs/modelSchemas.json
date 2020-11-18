@@ -21,5 +21,111 @@
         "$ref": "#/components/requestBodies/DeploymentInfoLite"
       }
     ]
+  },
+  "StreamLite": {
+    "properties": {
+      "id": {
+        "type": "string",
+        "example": "xu82jDgX49"
+      },
+      "name": {
+        "type": "string",
+        "example": "My Stream 1"
+      },
+      "start": {
+        "type": "date",
+        "example": "2020-05-12T07:30:21.500Z"
+      },
+      "end": {
+        "type": "date",
+        "example": "2020-05-12T07:30:22.500Z"
+      },
+      "is_public": {
+        "type": "boolean",
+        "example": false
+      }
+    },
+    "required": [
+      "name"
+    ]
+  },
+  "Stream": {
+    "allOf": [
+      {
+        "$ref": "#/components/schemas/StreamLite"
+      },
+      {
+        "properties": {
+          "description": {
+            "type": "string",
+            "example": "Stream 1 description"
+          },
+          "created_at": {
+            "type": "date",
+            "example": "2020-05-13T07:30:22.500Z"
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/UserLite"
+          },
+          "updated_at": {
+            "type": "date",
+            "example": "2020-05-13T07:30:22.500Z"
+          },
+          "max_sample_rate": {
+            "type": "integer",
+            "example": 32000
+          },
+          "latitude": {
+            "type": "float",
+            "example": 90.123
+          },
+          "longitude": {
+            "type": "float",
+            "example": 125.912
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    ]
+  },
+  "StreamWithPermissions": {
+    "allOf": [
+      {
+        "$ref": "#/components/schemas/Stream"
+      },
+      {
+        "properties": {
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": ["O", "W", "R"]
+          }
+        }
+      }
+    ]
+  },
+  "UserLite": {
+    "properties": {
+      "firstname": {
+        "type": "string",
+        "example": "John"
+      },
+      "lastname": {
+        "type": "string",
+        "example": "Doe"
+      },
+      "email": {
+        "type": "string",
+        "example": "john@doe.com"
+      },
+      "picture": {
+        "type": "string",
+        "example": "https://upload.wikimedia.org/wikipedia/commons/1/11/Contact-new.svg"
+      }
+    }
   }
 }

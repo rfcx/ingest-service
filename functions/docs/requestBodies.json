@@ -77,5 +77,84 @@
         "example": "#ffcd00"
       }
     }
+  },
+  "Stream": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "A stream id",
+        "example": "xu82jDgX49"
+      },
+      "name": {
+        "type": "string",
+        "description": "A stream name",
+        "example": "My Stream 1"
+      },
+      "latitude": {
+        "type": "float",
+        "description": "A stream coordinate",
+        "example": 90.123
+      },
+      "longitude": {
+        "type": "float",
+        "description": "A stream coordinate",
+        "example": 125.912
+      },
+      "altitude": {
+        "type": "float",
+        "description": "A stream coordinate",
+        "example": 30.40
+      },
+      "description": {
+        "type": "string",
+        "description": "A stream description",
+        "example": "Stream 1 description"
+      },
+      "visibility": {
+        "type": "string",
+        "description": "A stream visibility",
+        "example": "private"
+      },
+      "is_public": {
+        "type": "boolean",
+        "description": "Whether stream is public (default false)",
+        "default": "false"
+      }
+    },
+    "required": [
+      "name"
+    ]
+  },
+  "StreamPatch": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "A stream name",
+        "example": "My Stream 1"
+      },
+      "latitude": {
+        "type": "float",
+        "description": "A stream coordinate",
+        "example": 90.123
+      },
+      "longitude": {
+        "type": "float",
+        "description": "A stream coordinate",
+        "example": 125.912
+      },
+      "description": {
+        "type": "string",
+        "description": "A stream description",
+        "example": "Stream 1 description"
+      },
+      "is_public": {
+        "type": "boolean",
+        "description": "Whether stream is public",
+        "example": false
+      }
+    },
+    "required": []
   }
 }
