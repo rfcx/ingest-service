@@ -12,6 +12,61 @@ const db = require('../services/db/mongo')
 
 const httpErrorHandler = require('../utils/http-error-handler')
 
+/**
+ * @swagger
+ * 
+ * /deployments:
+ *   post:
+ *        summary: Add deployment info
+ *        description: Save Edge/AudioMoth deployment info
+ *        tags:
+ *          - deployments
+ *        parameters:
+ *          - name: deploymentId
+ *            description: A id of deployment
+ *            in: query
+ *            required: true
+ *            type: string
+ *          - name: locationName
+ *            description: A name of deployment location
+ *            in: query
+ *            required: true
+ *            type: string
+ *          - name: latitude
+ *            description: A value of latitude location of deployment
+ *            in: query
+ *            required: true
+ *            type: Number
+ *          - name: longitude
+ *            description: A value of longitude location of deployment
+ *            in: query
+ *            required: true
+ *            type: Number
+ *          - name: deployedAt
+ *            description: A date when deployment deployed (iso8601)
+ *            in: query
+ *            required: true
+ *            type: string
+ *          - name: groupName
+ *            description: A name of location group
+ *            in: query
+ *            required: false
+ *            type: string
+ *          - name: groupColor
+ *            description: A color of location group
+ *            in: query
+ *            required: false
+ *            type: string
+ *        responses:
+ *          200:
+ *            description: An deploymentInfo object
+ *            content:
+ *              application/json:
+ *                schema:
+ *                   $ref: '#/components/schemas/DeploymentInfo'
+ *          400:
+ *            description: Invalid query parameters
+ */
 router.route('/').post(verifyToken(), hasRole(['systemUser']), (req, res) => {
   // required params
   const deploymentId = req.body.deploymentId
@@ -44,6 +99,61 @@ router.route('/').post(verifyToken(), hasRole(['systemUser']), (req, res) => {
     .catch(httpErrorHandler(req, res, defaultErrorMessage))
 })
 
+/**
+ * @swagger
+ * 
+ * /deployments/{id}:
+ *   post:
+ *        summary: Update deployment info by id
+ *        description: Update Edge/AudioMoth deployment info by id
+ *        tags:
+ *          - deployments
+ *        parameters:
+ *          - name: id
+ *            description: A id of deployment
+ *            in: path
+ *            required: true
+ *            type: string
+ *          - name: locationName
+ *            description: A name of deployment location
+ *            in: query
+ *            required: true
+ *            type: string
+ *          - name: latitude
+ *            description: A value of latitude location of deployment
+ *            in: query
+ *            required: true
+ *            type: Number
+ *          - name: longitude
+ *            description: A value of longitude location of deployment
+ *            in: query
+ *            required: true
+ *            type: Number
+ *          - name: deployedAt
+ *            description: A date when deployment deployed (iso8601)
+ *            in: query
+ *            required: true
+ *            type: string
+ *          - name: groupName
+ *            description: A name of location group
+ *            in: query
+ *            required: false
+ *            type: string
+ *          - name: groupColor
+ *            description: A color of location group
+ *            in: query
+ *            required: false
+ *            type: string
+ *        responses:
+ *          200:
+ *            description: An deploymentInfo object
+ *            content:
+ *              application/json:
+ *                schema:
+ *                   $ref: '#/components/schemas/DeploymentInfo'
+ *          400:
+ *            description: Invalid query parameters
+ */
 router.route('/:id').post(verifyToken(), hasRole(['systemUser']), (req, res) => {
   // required params
   const deploymentId = req.params.id
@@ -76,6 +186,31 @@ router.route('/:id').post(verifyToken(), hasRole(['systemUser']), (req, res) => 
     .catch(httpErrorHandler(req, res, defaultErrorMessage))
 })
 
+/**
+ * @swagger
+ * 
+ * /deployments/{id}:
+ *   get:
+ *        summary: Get deployment info by id
+ *        description: Search Edge/AudioMoth deployment info by id
+ *        tags:
+ *          - deployments
+ *        parameters:
+ *          - name: id
+ *            description: A id of deployment
+ *            in: path
+ *            required: true
+ *            type: string
+ *        responses:
+ *          200:
+ *            description: An deploymentInfo object
+ *            content:
+ *              application/json:
+ *                schema:
+ *                   $ref: '#/components/schemas/DeploymentInfo'
+ *          400:
+ *            description: DeploymentInfo does not exist
+ */
 router.route('/:id').get(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), (req, res) => {
   const id = req.params.id
   const defaultErrorMessage = 'Error while getting the deployment info.'

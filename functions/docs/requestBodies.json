@@ -1,0 +1,49 @@
+{
+  "DeploymentInfo": {
+    "type": "object",
+    "properties": {
+      "deploymentId": {
+        "type": "id",
+        "example": "C91D0B640B7C6488"
+      },
+      "locationName": {
+        "type": "string",
+        "example": "Math"
+      },
+      "latitude": {
+        "type": "number",
+        "example": "16.742233863512645"
+      },
+      "longitude": {
+        "type": "number",
+        "example": "100.19330181247703"
+      },
+      "deployedAt": {
+        "type": "date",
+        "example": "2020-11-16T09:03:24.928Z"
+      },
+      "locationGroup": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "deploymentId",
+      "locationName",
+      "latitude",
+      "longitude",
+      "deployedAt"
+    ]
+  },
+  "DeploymentLocationGroup": {
+    "properties": {
+      "groupName": {
+        "type": "string",
+        "example": "Science"
+      },
+      "groupColor": {
+        "type": "string",
+        "example": "#ffcd00"
+      }
+    }
+  }
+}
