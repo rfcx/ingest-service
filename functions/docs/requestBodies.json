@@ -1,12 +1,7 @@
 {
-  "DeploymentInfo": {
+  "DeploymentInfoLite": {
     "type": "object",
     "properties": {
-      "deploymentId": {
-        "type": "id",
-        "description": "A deployment id",
-        "example": "C91D0B640B7C6488"
-      },
       "locationName": {
         "type": "string",
         "description": "A deployment location name",
@@ -26,77 +21,47 @@
         "type": "date",
         "description": "A deployment deployed date (iso 8601)",
         "example": "2020-11-16T09:03:24.928Z"
-      },
-      "locationGroup": {
-        "type": "object",
-        "description": "A deployment location group",
-        "properties": {
-          "groupName": {
-            "type": "string",
-            "description": "A location group name",
-            "example": "Science"
-          },
-          "groupColor": {
-            "type": "string",
-            "description": "A location group color",
-            "example": "#ffcd00"
-          }
-        }
       }
     },
     "required": [
-      "deploymentId",
       "locationName",
       "latitude",
       "longitude",
       "deployedAt"
     ]
   },
+  "DeploymentInfo": {
+    "type": "object",
+    "allOf":[
+      {
+        "properties": {
+          "deploymentId": {
+            "type": "id",
+            "description": "A deployment id",
+            "example": "C91D0B640B7C6488"
+          }
+        },
+        "required": [
+          "deploymentId"
+        ]
+      },
+      {
+        "$ref": "#/components/requestBodies/DeploymentInfoLite"
+      },
+      {
+        "$ref": "#/components/requestBodies/DeploymentLocationGroup"
+      }
+    ]
+  },
   "DeploymentInfoUpdate": {
     "type": "object",
-    "properties": {
-      "locationName": {
-        "type": "string",
-        "description": "A deployment location name",
-        "example": "Math"
+    "allOf":[
+      {
+        "$ref": "#/components/requestBodies/DeploymentInfoLite"
       },
-      "latitude": {
-        "type": "number",
-        "description": "A deployment coordinate",
-        "example": "16.742233863512645"
-      },
-      "longitude": {
-        "type": "number",
-        "description": "A deployment coordinate",
-        "example": "100.19330181247703"
-      },
-      "deployedAt": {
-        "type": "date",
-        "description": "A deployment deployed date (iso 8601)",
-        "example": "2020-11-16T09:03:24.928Z"
-      },
-      "locationGroup": {
-        "type": "object",
-        "description": "A deployment location group",
-        "properties": {
-          "groupName": {
-            "type": "string",
-            "description": "A location group name",
-            "example": "Science"
-          },
-          "groupColor": {
-            "type": "string",
-            "description": "A location group color",
-            "example": "#ffcd00"
-          }
-        }
+      {
+        "$ref": "#/components/requestBodies/DeploymentLocationGroup"
       }
-    },
-    "required": [
-      "locationName",
-      "latitude",
-      "longitude",
-      "deployedAt"
     ]
   },
   "DeploymentLocationGroup": {

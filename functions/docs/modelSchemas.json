@@ -2,7 +2,23 @@
   "DeploymentInfo": {
     "allOf":[
       {
-        "$ref": "#/components/requestBodies/DeploymentInfo"
+        "properties": {
+          "deploymentId": {
+            "type": "id",
+            "description": "A deployment id",
+            "example": "C91D0B640B7C6488"
+          },
+          "locationGroup": {
+            "type": "object",
+            "$ref": "#/components/requestBodies/DeploymentLocationGroup"
+          }
+        },
+        "required":[
+          "deploymentId"
+        ]
+      },
+      {
+        "$ref": "#/components/requestBodies/DeploymentInfoLite"
       }
     ]
   }
