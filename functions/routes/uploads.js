@@ -104,7 +104,7 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUse
 /**
  * @swagger
  * 
- * /uploads:
+ * /uploads/{id}:
  *   get:
  *        summary: Checks the status of an upload
  *        tags:

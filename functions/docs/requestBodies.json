@@ -182,7 +182,7 @@
       },
       "targetBitrate": {
         "type": "number",
-        "description": "A stream",
+        "description": "A stream target bitrate",
         "example": 24000
       },
       "checksum": {
