@@ -167,42 +167,6 @@ function updateEndpoint (req, res) {
     .catch(httpErrorHandler(req, res, defaultErrorMessage))
 }
 
-/**
- * @swagger
- * 
- * /streams/{id}:
- *   post:
- *        summary: Update stream by id
- *        tags:
- *          - streams
- *        parameters:
- *          - name: id
- *            description: A stream id
- *            in: path
- *            required: true
- *            type: string
- *        requestBody:
- *          description: Stream object
- *          required: true
- *          content:
- *            application/x-www-form-urlencoded:
- *              schema:
- *                $ref: '#/components/requestBodies/StreamPatch'
- *            application/json:
- *              schema:
- *                $ref: '#/components/requestBodies/StreamPatch'
- *        responses:
- *          200:
- *            description: Success
- *            content:
- *              application/json:
- *                schema:
- *                  $ref: '#/components/schemas/Stream'
- *          400:
- *            description: Error while updating the stream.
- *          500:
- *            description: Error while updating the stream.
- */
 router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), updateEndpoint)
 
 /**

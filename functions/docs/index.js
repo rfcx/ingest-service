@@ -11,10 +11,6 @@ const options = {
     },
     servers: [
       {
-        url: 'https://dev-ingest.rfcx.org',
-        description: 'Development server'
-      },
-      {
         url: 'https://staging-ingest.rfcx.org',
         description: 'Staging server'
       },
@@ -23,7 +19,7 @@ const options = {
         description: 'Production server (live data - use with care)'
       },
       {
-        url: 'http://localhost:8080',
+        url: 'http://localhost:3030',
         description: 'Local development'
       }
     ],

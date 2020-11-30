@@ -111,11 +111,6 @@
         "description": "A stream description",
         "example": "Stream 1 description"
       },
-      "visibility": {
-        "type": "string",
-        "description": "A stream visibility",
-        "example": "private"
-      },
       "is_public": {
         "type": "boolean",
         "description": "Whether stream is public (default false)",
