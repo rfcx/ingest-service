@@ -1,0 +1,195 @@
+{
+  "DeploymentInfoLite": {
+    "type": "object",
+    "properties": {
+      "locationName": {
+        "type": "string",
+        "description": "A deployment location name",
+        "example": "Math"
+      },
+      "latitude": {
+        "type": "float",
+        "description": "A deployment coordinate",
+        "example": 16.742233863512645
+      },
+      "longitude": {
+        "type": "float",
+        "description": "A deployment coordinate",
+        "example": 100.19330181247703
+      },
+      "deployedAt": {
+        "type": "date",
+        "description": "A deployment deployed date (iso 8601)",
+        "example": "2020-11-16T09:03:24.928Z"
+      }
+    },
+    "required": [
+      "locationName",
+      "latitude",
+      "longitude",
+      "deployedAt"
+    ]
+  },
+  "DeploymentInfo": {
+    "type": "object",
+    "allOf":[
+      {
+        "properties": {
+          "deploymentId": {
+            "type": "id",
+            "description": "A deployment id",
+            "example": "C91D0B640B7C6488"
+          }
+        },
+        "required": [
+          "deploymentId"
+        ]
+      },
+      {
+        "$ref": "#/components/requestBodies/DeploymentInfoLite"
+      },
+      {
+        "$ref": "#/components/requestBodies/DeploymentLocationGroup"
+      }
+    ]
+  },
+  "DeploymentInfoUpdate": {
+    "type": "object",
+    "allOf":[
+      {
+        "$ref": "#/components/requestBodies/DeploymentInfoLite"
+      },
+      {
+        "$ref": "#/components/requestBodies/DeploymentLocationGroup"
+      }
+    ]
+  },
+  "DeploymentLocationGroup": {
+    "properties": {
+      "groupName": {
+        "type": "string",
+        "description": "A location group name",
+        "example": "Science"
+      },
+      "groupColor": {
+        "type": "string",
+        "description": "A location group color",
+        "example": "#ffcd00"
+      }
+    }
+  },
+  "Stream": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "A stream id",
+        "example": "xu82jDgX49"
+      },
+      "name": {
+        "type": "string",
+        "description": "A stream name",
+        "example": "My Stream 1"
+      },
+      "latitude": {
+        "type": "float",
+        "description": "A stream coordinate",
+        "example": 90.123
+      },
+      "longitude": {
+        "type": "float",
+        "description": "A stream coordinate",
+        "example": 125.912
+      },
+      "altitude": {
+        "type": "float",
+        "description": "A stream coordinate",
+        "example": 30.40
+      },
+      "description": {
+        "type": "string",
+        "description": "A stream description",
+        "example": "Stream 1 description"
+      },
+      "is_public": {
+        "type": "boolean",
+        "description": "Whether stream is public (default false)",
+        "default": "false"
+      }
+    },
+    "required": [
+      "name"
+    ]
+  },
+  "StreamPatch": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "A stream name",
+        "example": "My Stream 1"
+      },
+      "latitude": {
+        "type": "float",
+        "description": "A stream coordinate",
+        "example": 90.123
+      },
+      "longitude": {
+        "type": "float",
+        "description": "A stream coordinate",
+        "example": 125.912
+      },
+      "description": {
+        "type": "string",
+        "description": "A stream description",
+        "example": "Stream 1 description"
+      },
+      "is_public": {
+        "type": "boolean",
+        "description": "Whether stream is public",
+        "example": false
+      }
+    },
+    "required": []
+  },
+  "Uploads": {
+    "type": "object",
+    "properties": {
+      "filename": {
+        "type": "string",
+        "description": "A stream name",
+        "example": "My Stream 1"
+      },
+      "timestamp": {
+        "type": "date",
+        "description": "A update date (iso 8601)",
+        "example": "2020-11-16T09:03:24.928Z"
+      },
+      "stream": {
+        "type": "string",
+        "description": "A stream id",
+        "example": "xu82jDgX49"
+      },
+      "sampleRate": {
+        "type": "number",
+        "description": "A stream sample rate",
+        "example": 24000
+      },
+      "targetBitrate": {
+        "type": "number",
+        "description": "A stream target bitrate",
+        "example": 24000
+      },
+      "checksum": {
+        "type": "string",
+        "description": "Checksum",
+        "example": "xxxxxxx"
+      }
+    },
+    "required": [
+      "filename",
+      "timestamp",
+      "stream"
+    ]
+  }
+}

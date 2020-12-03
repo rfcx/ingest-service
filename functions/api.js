@@ -41,6 +41,9 @@ if (process.env.PLATFORM === 'amazon') {
   }))
 }
 
+// Enable documentation
+app.use('/docs', require('./docs'))
+
 app.use(nuts.router)
 app.use('/uploads', require('./routes/uploads'))
 app.use('/streams', require('./routes/streams'))

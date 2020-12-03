@@ -11,6 +11,33 @@ const streamService = require('../services/rfcx/streams')
 const arbimonService = require('../services/arbimon')
 const httpErrorHandler = require('../utils/http-error-handler')
 
+/**
+ * @swagger
+ * 
+ * /streams:
+ *   get:
+ *        summary: Get all of streams 
+ *        tags:
+ *          - streams
+ *        responses:
+ *          200:
+ *            description: List of streams objects
+ *            headers:
+ *              Total-Items:
+ *                schema:
+ *                  type: integer
+ *                description: Total number of items without limit and offset.
+ *            content:
+ *              application/json:
+ *                schema:
+ *                  type: array
+ *                  items:
+ *                    $ref: '#/components/schemas/StreamWithPermissions'
+ *          400:
+ *            description: Error while getting streams
+ *          500:
+ *            description: Error while getting streams
+ */
 router.route('/')
   .get(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
     const idToken = req.headers.authorization
@@ -28,6 +55,37 @@ router.route('/')
       })
       .catch(httpErrorHandler(req, res, defaultErrorMessage))
   })
+
+/**
+ * @swagger
+ * 
+ * /streams:
+ *   post:
+ *        summary: Add new stream
+ *        tags:
+ *          - streams
+ *        requestBody:
+ *          description: Stream object
+ *          required: true
+ *          content:
+ *            application/x-www-form-urlencoded:
+ *              schema:
+ *                $ref: '#/components/requestBodies/Stream'
+ *            application/json:
+ *              schema:
+ *                $ref: '#/components/requestBodies/Stream'
+ *        responses:
+ *          200:
+ *            description: Created
+ *            content:
+ *              application/json:
+ *                schema:
+ *                  $ref: '#/components/schemas/Stream'
+ *          400:
+ *            description: Error while creating a stream.
+ *          500:
+ *            description: Error while creating a stream.
+ */
 
 /**
  * HTTP function that creates a stream
@@ -110,8 +168,65 @@ function updateEndpoint (req, res) {
 }
 
 router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), updateEndpoint)
+
+/**
+ * @swagger
+ * 
+ * /streams/{id}:
+ *   patch:
+ *        summary: Update stream by id
+ *        tags:
+ *          - streams
+ *        parameters:
+ *          - name: id
+ *            description: A stream id
+ *            in: path
+ *            required: true
+ *            type: string
+ *        requestBody:
+ *          description: Stream object
+ *          required: true
+ *          content:
+ *            application/x-www-form-urlencoded:
+ *              schema:
+ *                $ref: '#/components/requestBodies/StreamPatch'
+ *            application/json:
+ *              schema:
+ *                $ref: '#/components/requestBodies/StreamPatch'
+ *        responses:
+ *          200:
+ *            description: Success
+ *            content:
+ *              application/json:
+ *                schema:
+ *                  $ref: '#/components/schemas/Stream'
+ *          400:
+ *            description: Error while updating the stream.
+ *          500:
+ *            description: Error while updating the stream.
+ */
 router.route('/:id').patch(verifyToken(), hasRole(['appUser', 'rfcxUser']), updateEndpoint)
 
+/**
+ * @swagger
+ * 
+ * /streams/{id}:
+ *   delete:
+ *        summary: Delete a stream (soft-delete)
+ *        tags:
+ *          - streams
+ *        parameters:
+ *          - name: id
+ *            description: A stream id
+ *            in: path
+ *            required: true
+ *            type: string
+ *        responses:
+ *          204:
+ *            description: Success
+ *          400:
+ *            description: Error while deleting the stream.
+ */
 function deleteEndpoint (req, res) {
   const streamId = req.params.id
   const idToken = req.headers.authorization
