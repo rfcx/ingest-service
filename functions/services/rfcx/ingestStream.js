@@ -7,6 +7,7 @@ const dirUtil = require('../../utils/dir')
 const segmentService = require('../rfcx/segments')
 const auth0Service = require('../../services/auth0')
 const arbimonService = require('../../services/arbimon')
+const { PROMETHEUS_ENABLED, registerHistogram, pushHistogramMetric } = require('../../services/prometheus')
 const path = require('path')
 const moment = require('moment-timezone')
 const uuid = require('uuid/v4')
@@ -20,10 +21,20 @@ const extensionsRequiringAdditionalData = ['.opus']
 
 const { IngestionError } = require('../../utils/errors')
 
+if (PROMETHEUS_ENABLED) {
+  // create historgram for each available file format
+  supportedExtensions.forEach((ext) => {
+    const name = ext.substr(1)
+    registerHistogram(name, `Processing metric for ${name} format.`)
+  })
+}
+
+
 // Parameters set is different compared to legacy ingest methods
 
 async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
   let upload
+  const startTimestamp = Date.now()
   const fileDurationMs = 120000
   const streamLocalPath = path.join(process.env.CACHE_DIRECTORY, path.dirname(storageFilePath))
 
@@ -37,6 +48,8 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
     segmentsGuids: [],
     segmentsFileUrls: []
   }
+  let fileSampleCount
+  let fileFormat = fileExtension.substr(1)
 
   return dirUtil.ensureDirExists(process.env.CACHE_DIRECTORY)
     .then(() => {
@@ -62,6 +75,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       console.log('Upload meta from client', JSON.stringify(upload))
       const opts = fileData
       console.log('Ffprobe result', JSON.stringify(fileData))
+      fileSampleCount = opts.sampleCount || undefined
       const token = await auth0Service.getToken()
       opts.stream = upload.streamId
       opts.idToken = `${token.access_token}`
@@ -179,7 +193,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       return outputFiles
     })
     .then(async (outputFiles) => {
-      if (process.env.ARBIMON_ENABLED) {
+      if (`${process.env.ARBIMON_ENABLED}` === 'true') {
         let totalDurationMs = 0
         for (const file of outputFiles) {
           const duration = file.meta.duration
@@ -206,6 +220,10 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
     .then(async () => {
       console.log('Cleaning up files')
       uploadId = null
+      if (PROMETHEUS_ENABLED && fileSampleCount) {
+        const processingValue = (Date.now() - startTimestamp) / fileSampleCount * 10000 // we use multiplier because values are far less than 1 in other case
+        pushHistogramMetric(fileFormat, processingValue)
+      }
       await storage.deleteObject(uploadBucket, storageFilePath)
       return dirUtil.removeDirRecursively(streamLocalPath)
     })

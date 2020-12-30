@@ -13,10 +13,10 @@ const httpErrorHandler = require('../utils/http-error-handler')
 
 /**
  * @swagger
- * 
+ *
  * /streams:
  *   get:
- *        summary: Get all of streams 
+ *        summary: Get all of streams
  *        tags:
  *          - streams
  *        responses:
@@ -58,7 +58,7 @@ router.route('/')
 
 /**
  * @swagger
- * 
+ *
  * /streams:
  *   post:
  *        summary: Add new stream
@@ -121,7 +121,7 @@ router.route('/')
       .create({ name, latitude, longitude, description, is_public, idToken })
       .then(async (response) => {
         if (response && response.status === 201) {
-          if (process.env.ARBIMON_ENABLED) {
+          if (`${process.env.ARBIMON_ENABLED}` === 'true') {
             const streamData = response.data
             const userProject = await arbimonService.userProject(idToken)
             const arbimonSiteData = {
@@ -171,7 +171,7 @@ router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), updat
 
 /**
  * @swagger
- * 
+ *
  * /streams/{id}:
  *   patch:
  *        summary: Update stream by id
@@ -209,7 +209,7 @@ router.route('/:id').patch(verifyToken(), hasRole(['appUser', 'rfcxUser']), upda
 
 /**
  * @swagger
- * 
+ *
  * /streams/{id}:
  *   delete:
  *        summary: Delete a stream (soft-delete)
