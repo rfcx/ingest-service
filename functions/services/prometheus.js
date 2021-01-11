@@ -1,9 +1,14 @@
-const { PROMETHEUS_ENABLED, Histogram } = require('../utils/prometheus')
+const { PROMETHEUS_ENABLED, Histogram, UploadsGauge } = require('../utils/prometheus')
 let exp = {
   PROMETHEUS_ENABLED
 }
 
 if (PROMETHEUS_ENABLED) {
+  const db = require('../services/db/mongo')
+
+  new UploadsGauge('uploads_failed', 'Number or failed uploads', db.getUploadFailedCount)
+  new UploadsGauge('uploads_duplicated', 'Number or duplicated uploads', db.getUploadDuplicateCount)
+
   let histograms = {}
 
   function registerHistogram (name, help) {
