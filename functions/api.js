@@ -1,8 +1,9 @@
 const express = require('express')
 const bodyParser = require('body-parser')
 const Nuts = require('nuts-serve').Nuts
+const { PROMETHEUS_ENABLED } = require('./services/prometheus')
 let app
-if (process.env.NODE_ENV === 'development') {
+if (process.env.NODE_ENV === 'development' && process.env.PLATFORM === 'google') {
   app = require('https-localhost')()
 } else {
   app = express()
@@ -33,7 +34,7 @@ if (process.env.PLATFORM === 'amazon') {
       'sec-fetch-site', 'referer', 'accept-encoding', 'accept-language', 'user-agent'],
     expressFormat: true,
     ignoreRoute: function (req, res) {
-      if (req.method === 'GET' && (/\/(uploads\/.+|health-check)/).test(req.url)) {
+      if (req.method === 'GET' && (/\/(uploads\/.+|health-check|metrics)/).test(req.url)) {
         return true
       }
       return false
@@ -50,5 +51,8 @@ app.use('/streams', require('./routes/streams'))
 app.use('/users', require('./routes/users'))
 app.use('/deployments', require('./routes/deployments'))
 app.use('/health-check', require('./routes/health-check'))
+if (PROMETHEUS_ENABLED) {
+  app.use('/metrics', require('./routes/metrics'))
+}
 
 module.exports = app

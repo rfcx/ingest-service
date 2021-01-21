@@ -57,6 +57,18 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
     })
 }
 
+function getUploadDuplicateCount() {
+  return UploadModel.count({
+    status: status.DUPLICATE
+  })
+}
+
+function getUploadFailedCount() {
+  return UploadModel.count({
+    status: status.FAILED
+  })
+}
+
 function getDeploymentInfo (deploymentId) {
   return DeploymentInfoModel.findOne({ deploymentId: deploymentId }).then((result) => {
     if (!result) {
@@ -111,6 +123,8 @@ function updateDeploymentInfo (opts) {
 module.exports = {
   generateUpload,
   getUpload,
+  getUploadDuplicateCount,
+  getUploadFailedCount,
   getDeploymentInfo,
   updateUploadStatus,
   saveDeploymentInfo,
