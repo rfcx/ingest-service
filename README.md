@@ -1,6 +1,6 @@
 # Ingest Service
 
-A mockup service for ingesting files via GCS
+API for ingesting files from RFCx Uploader and other clients
 
 
 ## Requirements
