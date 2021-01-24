@@ -132,3 +132,10 @@ Set the `INGEST_METHOD` to `manual` and `ingestManualBucketName` to `rfcx-guardi
 3. Streams endpoint - not yet implemented
 
 Set the `INGEST_METHOD` to `streams` in the environment variables (.env).
+
+
+## Auto-update endpoints
+
+_TODO - needs further explanation: what needs to be setup on Github? why are we using a fork of Nuts?_
+
+The ingest service can expose endpoints for auto-updating the client application (RFCx Uploader). It uses [Nuts](https://nuts.gitbook.com).
