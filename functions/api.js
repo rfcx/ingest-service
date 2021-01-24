@@ -1,14 +1,10 @@
 const express = require('express')
 const bodyParser = require('body-parser')
+
 const { PROMETHEUS_ENABLED } = require('./services/prometheus')
 const { AUTOUPDATE_ENABLED } = require('./services/autoupdate')
-let app
-if (process.env.NODE_ENV === 'development' && process.env.PLATFORM === 'google') {
-  app = require('https-localhost')()
-} else {
-  app = express()
-}
 
+const app = express()
 app.use(bodyParser.urlencoded({ extended: true }))
 app.use(bodyParser.json({ limit: '1mb' }))
 
