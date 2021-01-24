@@ -121,6 +121,8 @@ To test the trigger from storage, use the `npm run shellfb` described above (fro
 
 ## Ingestion methods
 
+_TODO - probably not relevant now (always use `stream`)_
+
 1. Checkin endpoint
 
 Set the `INGEST_METHOD` to `checkin` in the environment variables (.env). No extra configuration required.
@@ -131,7 +133,7 @@ Set the `INGEST_METHOD` to `manual` and `ingestManualBucketName` to `rfcx-guardi
 
 3. Streams endpoint - not yet implemented
 
-Set the `INGEST_METHOD` to `streams` in the environment variables (.env).
+Set the `INGEST_METHOD` to `stream` in the environment variables (.env).
 
 
 ## Auto-update endpoints
