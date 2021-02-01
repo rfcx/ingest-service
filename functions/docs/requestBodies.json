@@ -118,7 +118,9 @@
       }
     },
     "required": [
-      "name"
+      "name",
+      "latitude",
+      "longitude"
     ]
   },
   "StreamPatch": {
