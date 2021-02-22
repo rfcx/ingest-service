@@ -3,6 +3,21 @@ const auth0Service = require('../auth0')
 
 const apiHostName = process.env.API_HOST
 
+function getExistingSourceFiles (opts) {
+  const url = `${apiHostName}streams/${opts.streamId}/stream-source-files`
+  const params = {
+    'sha1_checksum[]': opts.checksum
+  }
+
+  const headers = {
+    Authorization: opts.idToken,
+    'Content-Type': 'application/json'
+  }
+
+  return axios.get(url, { headers, params })
+    .then((response) => response.data)
+}
+
 async function createStreamSourceFile (opts) {
   const url = `${apiHostName}streams/${opts.stream}/stream-source-files`
   const data = {
@@ -69,6 +84,7 @@ async function deleteSegment (opts) {
 }
 
 module.exports = {
+  getExistingSourceFiles,
   createStreamSourceFile,
   deleteStreamSourceFile,
   createSegment,

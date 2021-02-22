@@ -11,10 +11,11 @@ router.use(require('../middleware/cors'))
 const platform = process.env.PLATFORM || 'google'
 const db = require('../services/db/mongo')
 const storage = require(`../services/storage/${platform}`)
+const segmentService = require('../services/rfcx/segments')
 
 /**
  * @swagger
- * 
+ *
  * /uploads:
  *   post:
  *        summary: Generates a signed URL
@@ -50,21 +51,21 @@ const storage = require(`../services/storage/${platform}`)
  * @param {Object} req Cloud Function request context.
  * @param {Object} res Cloud Function response context.
  */
-router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), (req, res) => {
+router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), async (req, res) => {
+  const idToken = req.headers.authorization
   // required params
   const originalFilename = req.body.filename
   const timestamp = req.body.timestamp
   const streamId = req.body.stream
+  const checksum = req.body.checksum
   // optional params
   const sampleRate = req.body.sampleRate
   const targetBitrate = req.body.targetBitrate
-  // TODO: make checksum required param when Ingest App will send it
-  const checksum = req.body.checksum
 
   console.log(`Upload request | ${streamId} | ${originalFilename} | ${timestamp} | ${checksum}`)
 
-  if (originalFilename === undefined || streamId === undefined || timestamp === undefined) {
-    res.status(400).send('Required: filename, stream, timestamp')
+  if (originalFilename === undefined || streamId === undefined || timestamp === undefined || checksum === undefined) {
+    res.status(400).send('Required: filename, stream, timestamp, checksum')
     return
   }
 
@@ -73,11 +74,22 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUse
     return
   }
 
-  // TODO check that the user is authorized to upload (to the given streamId)
   const userId = req.user.guid || req.user.sub || 'unknown'
-
   const fileExtension = originalFilename.split('.').pop().toLowerCase()
 
+  try {
+    var existingStreamSourceFiles = await segmentService.getExistingSourceFiles({ streamId, checksum, idToken })
+  } catch (e) {
+    if (e && e.response && e.response.status) {
+      return res.sendStatus(e.response.status)
+    }
+    return res.sendStatus(500)
+  }
+  if (existingStreamSourceFiles && existingStreamSourceFiles.length) {
+    const sameFile = existingStreamSourceFiles.find(x => x.filename === originalFilename)
+    const message = sameFile ? 'This file was already ingested.' : 'Duplicate file. Matching sha1 signature already ingested.'
+    return res.status(400).send(message)
+  }
   db.generateUpload({ streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum })
     .then(data => {
       const uploadId = data.id
@@ -97,13 +109,13 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUse
     })
     .catch(err => {
       console.error(err)
-      res.status(500).end()
+      res.sendStatus(500)
     })
 })
 
 /**
  * @swagger
- * 
+ *
  * /uploads/{id}:
  *   get:
  *        summary: Checks the status of an upload
