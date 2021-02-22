@@ -191,7 +191,8 @@
     "required": [
       "filename",
       "timestamp",
-      "stream"
+      "stream",
+      "checksum"
     ]
   }
 }
