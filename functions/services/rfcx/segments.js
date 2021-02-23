@@ -1,12 +1,16 @@
 const axios = require('axios')
 const auth0Service = require('../auth0')
+const { matchAxiosErrorToRfcx } = require('../../utils/errors')
 
 const apiHostName = process.env.API_HOST
 
 function getExistingSourceFiles (opts) {
-  const url = `${apiHostName}streams/${opts.streamId}/stream-source-files`
+  const url = `${apiHostName}streams/${opts.stream}/stream-source-files`
   const params = {
     'sha1_checksum[]': opts.checksum
+  }
+  if (opts.limit) {
+    params.limit = opts.limit
   }
 
   const headers = {
@@ -16,6 +20,7 @@ function getExistingSourceFiles (opts) {
 
   return axios.get(url, { headers, params })
     .then((response) => response.data)
+    .catch(e => { throw matchAxiosErrorToRfcx(e) })
 }
 
 async function createStreamSourceFile (opts) {

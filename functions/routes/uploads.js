@@ -1,5 +1,6 @@
 const moment = require('moment')
 const express = require('express')
+const { Converter, ValidationError, httpErrorHandler } = require('@rfcx/http-utils');
 var router = express.Router()
 
 const authentication = require('../middleware/authentication')
@@ -39,7 +40,13 @@ const segmentService = require('../services/rfcx/segments')
  *                schema:
  *                   $ref: '#/components/schemas/Upload'
  *          400:
- *            description: Error while generating upload url
+ *            description: Invalid parameters
+ *          401:
+ *            description: Unauthorized
+ *          403:
+ *            description: Access denied for selected stream
+ *          404:
+ *            description: Stream not found
  *          500:
  *            description: Error while generating upload url
  */
@@ -53,64 +60,48 @@ const segmentService = require('../services/rfcx/segments')
  */
 router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), async (req, res) => {
   const idToken = req.headers.authorization
-  // required params
-  const originalFilename = req.body.filename
-  const timestamp = req.body.timestamp
-  const streamId = req.body.stream
-  const checksum = req.body.checksum
-  // optional params
-  const sampleRate = req.body.sampleRate
-  const targetBitrate = req.body.targetBitrate
-
-  console.log(`Upload request | ${streamId} | ${originalFilename} | ${timestamp} | ${checksum}`)
-
-  if (originalFilename === undefined || streamId === undefined || timestamp === undefined || checksum === undefined) {
-    res.status(400).send('Required: filename, stream, timestamp, checksum')
-    return
-  }
-
-  if (!moment(timestamp, moment.ISO_8601).isValid()) {
-    res.status(400).send('Invalid format: timestamp')
-    return
-  }
-
-  const userId = req.user.guid || req.user.sub || 'unknown'
-  const fileExtension = originalFilename.split('.').pop().toLowerCase()
+  const converter = new Converter(req.body, {});
+  converter.convert('filename').toString();
+  converter.convert('timestamp').toMomentUtc();
+  converter.convert('stream').toString();
+  converter.convert('sampleRate').optional().toInt();
+  converter.convert('targetBitrate').optional().toInt();
+  converter.convert('checksum').optional().toString();
 
   try {
-    var existingStreamSourceFiles = await segmentService.getExistingSourceFiles({ streamId, checksum, idToken })
-  } catch (e) {
-    if (e && e.response && e.response.status) {
-      return res.sendStatus(e.response.status)
+    const params = await converter.validate()
+    const userId = req.user.guid || req.user.sub || 'unknown'
+    const fileExtension = params.filename.split('.').pop().toLowerCase()
+    const { filename, timestamp, stream, sampleRate, targetBitrate, checksum } = params
+    if (params.checksum) {
+      const existingStreamSourceFiles = await segmentService.getExistingSourceFiles({ stream, checksum, idToken })
+      if (existingStreamSourceFiles && existingStreamSourceFiles.length) {
+        const sameFile = existingStreamSourceFiles.find(x => x.filename === filename)
+        const message = sameFile ? 'Duplicate' : 'Invalid.'
+        throw new ValidationError(message)
+      }
     }
-    return res.sendStatus(500)
-  }
-  if (existingStreamSourceFiles && existingStreamSourceFiles.length) {
-    const sameFile = existingStreamSourceFiles.find(x => x.filename === originalFilename)
-    const message = sameFile ? 'This file was already ingested.' : 'Duplicate file. Matching sha1 signature already ingested.'
-    return res.status(400).send(message)
-  }
-  db.generateUpload({ streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum })
-    .then(data => {
-      const uploadId = data.id
-      return storage.getSignedUrl(data.path, 'audio/' + fileExtension)
-        .then((url) => {
-          if (!url) {
-            res.status(500).end()
-          } else {
-            res.json({
-              uploadId,
-              url,
-              path: data.path,
-              bucket: process.env.UPLOAD_BUCKET
-            })
-          }
-        })
+    const upload = await db.generateUpload({
+      streamId: stream,
+      userId,
+      timestamp: timestamp.toISOString(),
+      originalFilename: filename,
+      fileExtension,
+      sampleRate,
+      targetBitrate,
+      checksum
     })
-    .catch(err => {
-      console.error(err)
-      res.sendStatus(500)
+    const uploadId = upload.id
+    const url = await storage.getSignedUrl(upload.path, 'audio/' + fileExtension)
+    res.json({
+      uploadId,
+      url,
+      path: upload.path,
+      bucket: process.env.UPLOAD_BUCKET
     })
+  } catch (e) {
+    httpErrorHandler(req, res, 'Failed creating an upload')(e);
+  }
 })
 
 /**
