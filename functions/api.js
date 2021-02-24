@@ -15,7 +15,6 @@ if (process.env.PLATFORM === 'amazon') {
 app.use('/docs', require('./docs'))
 app.use('/uploads', require('./routes/uploads'))
 app.use('/streams', require('./routes/streams'))
-app.use('/users', require('./routes/users'))
 app.use('/deployments', require('./routes/deployments'))
 app.use('/health-check', require('./routes/health-check'))
 

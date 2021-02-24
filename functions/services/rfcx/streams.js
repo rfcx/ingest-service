@@ -1,5 +1,6 @@
 const axios = require('axios')
 const errors = require('../../utils/error-messages')
+const { matchAxiosErrorToRfcx } = require('../../utils/errors')
 
 const apiHostName = process.env.API_HOST
 
@@ -8,6 +9,7 @@ function combineRequestPayload (opts) {
     ...opts.name !== undefined && { name: opts.name },
     ...opts.latitude !== undefined && { latitude: opts.latitude },
     ...opts.longitude !== undefined && { longitude: opts.longitude },
+    ...opts.altitude !== undefined && { altitude: opts.altitude },
     ...opts.description !== undefined && { description: opts.description },
     ...opts.is_public !== undefined && { is_public: opts.is_public }
   }
@@ -23,6 +25,7 @@ async function create (opts) {
   }
 
   return axios.post(url, data, { headers })
+    .catch(e => { throw matchAxiosErrorToRfcx(e) })
 }
 
 async function update (opts) {
@@ -35,6 +38,7 @@ async function update (opts) {
   }
 
   return axios.patch(url, data, { headers })
+    .catch(e => { throw matchAxiosErrorToRfcx(e) })
 }
 
 async function remove (opts) {
@@ -45,6 +49,7 @@ async function remove (opts) {
   }
 
   return axios.delete(url, { headers })
+    .catch(e => { throw matchAxiosErrorToRfcx(e) })
 }
 
 async function query (idToken, opts) {
@@ -65,6 +70,7 @@ async function query (idToken, opts) {
   }
 
   return axios.get(url, { headers, params })
+    .catch(e => { throw matchAxiosErrorToRfcx(e) })
 }
 
 module.exports = {

@@ -9,7 +9,9 @@ router.use(require('../middleware/cors'))
 
 const streamService = require('../services/rfcx/streams')
 const arbimonService = require('../services/arbimon')
-const httpErrorHandler = require('../utils/http-error-handler')
+const ARBIMON_ENABLED = `${process.env.ARBIMON_ENABLED}` === 'true'
+
+const { Converter, httpErrorHandler } = require('@rfcx/http-utils')
 
 /**
  * @swagger
@@ -38,23 +40,17 @@ const httpErrorHandler = require('../utils/http-error-handler')
  *          500:
  *            description: Error while getting streams
  */
-router.route('/')
-  .get(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
-    const idToken = req.headers.authorization
-    const defaultErrorMessage = 'Error while getting streams'
-
-    return streamService.query(idToken, { created_by: 'me' })
-      .then((response) => {
-        if (response && response.status === 200) {
-          res
-            .header('Total-Items', response.headers['total-items'])
-            .json(response.data)
-        } else {
-          res.status(500).send(defaultErrorMessage)
-        }
-      })
-      .catch(httpErrorHandler(req, res, defaultErrorMessage))
-  })
+router.route('/').get(verifyToken(), hasRole(['appUser', 'rfcxUser']), async (req, res) => {
+  const idToken = req.headers.authorization
+  try {
+    const response = await streamService.query(idToken, { created_by: 'me' })
+    return res
+      .header('Total-Items', response.headers['total-items'])
+      .json(response.data)
+  } catch (e) {
+    httpErrorHandler(req, res, 'Error while getting streams')(e);
+  }
+})
 
 /**
  * @swagger
@@ -86,87 +82,63 @@ router.route('/')
  *          500:
  *            description: Error while creating a stream.
  */
-
-/**
- * HTTP function that creates a stream
- */
-router.route('/')
-  .post(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
-    const name = req.body.name
-    const latitude = req.body.latitude
-    const longitude = req.body.longitude
-    const altitude = req.body.altitude
-    const description = req.body.description
-    const visibility = req.body.visibility // TODO: remove with the next release of Ingest App
-    let is_public = req.body.is_public
-
-    if (is_public === undefined) {
-      if (visibility === 'private') {
-        is_public = false
-      } else {
-        is_public = true
-      }
+router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), async (req, res) => {
+  const idToken = req.headers.authorization
+  const converter = new Converter(req.body, {});
+  converter.convert('name').toString()
+  converter.convert('latitude').toFloat().minimum(-90).maximum(90)
+  converter.convert('longitude').toFloat().minimum(-180).maximum(180)
+  converter.convert('altitude').optional().toFloat()
+  converter.convert('description').optional().toString()
+  converter.convert('is_public').optional().toBoolean().default(false)
+  try {
+    const params = await converter.validate()
+    const response = await streamService.create({ ...params, idToken })
+    const streamData = response.data
+    if (ARBIMON_ENABLED) {
+      await arbimonService.syncSite({
+        ...params,
+        external_id: streamData.id
+      }, idToken)
     }
-
-    const idToken = req.headers.authorization
-
-    if (!name) {
-      res.status(400).send('Required: name')
-      return
-    }
-
-    const defaultErrorMessage = 'Error while creating a stream.'
-
-    return streamService
-      .create({ name, latitude, longitude, description, is_public, idToken })
-      .then(async (response) => {
-        if (response && response.status === 201) {
-          if (`${process.env.ARBIMON_ENABLED}` === 'true') {
-            const streamData = response.data
-            const userProject = await arbimonService.userProject(idToken)
-            const arbimonSiteData = {
-              project_id: userProject.project_id,
-              name,
-              external_id: streamData.id,
-              lat: latitude,
-              lon: longitude,
-              alt: altitude || 0
-            }
-            await arbimonService.createSite(arbimonSiteData, idToken)
-          }
-          res.json(response.data)
-        } else {
-          res.status(500).send(defaultErrorMessage)
-        }
-      })
-      .catch(httpErrorHandler(req, res, defaultErrorMessage))
-  })
+    res.json(streamData)
+  } catch (e) {
+    httpErrorHandler(req, res, 'Error while creating a stream.')(e);
+  }
+})
 
 /**
  * HTTP function that updates a stream
  */
-function updateEndpoint (req, res) {
-  const streamId = req.params.id
-  const name = req.body.name
-  const latitude = req.body.latitude
-  const longitude = req.body.longitude
-  const description = req.body.description
-  const is_public = req.body.is_public
+async function updateEndpoint (req, res) {
   const idToken = req.headers.authorization
+  const streamId = req.params.id
+  const converter = new Converter(req.body, {});
+  converter.convert('name').optional().toString()
+  converter.convert('latitude').optional().toFloat().minimum(-90).maximum(90)
+  converter.convert('longitude').optional().toFloat().minimum(-180).maximum(180)
+  converter.convert('altitude').optional().toFloat()
+  converter.convert('description').optional().toString()
+  converter.convert('is_public').optional().toBoolean()
 
-  const defaultErrorMessage = 'Error while updating the stream.'
-
-  return streamService.update({ streamId, name, latitude, longitude, description, is_public, idToken })
-    .then((response) => {
-      if (response && response.status === 200) {
-        res.json(response.data)
-      } else {
-        res.status(500).send(defaultErrorMessage)
-      }
-    })
-    .catch(httpErrorHandler(req, res, defaultErrorMessage))
+  try {
+    const params = await converter.validate()
+    const response = await streamService.update({ ...params, streamId, idToken })
+    res.json(response.data)
+  } catch (e) {
+    httpErrorHandler(req, res, 'Error while updating the stream.')(e);
+  }
 }
 
+/**
+ * @swagger
+ *
+ * /streams/{id}:
+ *   post:
+ *        summary: DEPRECATED
+ *        tags:
+ *          - streams
+ */
 router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), updateEndpoint)
 
 /**
@@ -208,11 +180,36 @@ router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), updat
 router.route('/:id').patch(verifyToken(), hasRole(['appUser', 'rfcxUser']), updateEndpoint)
 
 /**
+ * HTTP function that deletes a stream
+ */
+async function deleteEndpoint (req, res) {
+  const streamId = req.params.id
+  const idToken = req.headers.authorization
+  try {
+    await streamService.remove({ streamId, idToken })
+    res.sendStatus(204)
+  } catch (e) {
+    httpErrorHandler(req, res, 'Error while deleting the stream.')(e);
+  }
+}
+
+/**
+ * @swagger
+ *
+ * /streams/{id}/move-to-trash:
+ *   delete:
+ *        summary: DEPRECATED
+ *        tags:
+ *          - streams
+ */
+router.route('/:id/move-to-trash').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), deleteEndpoint)
+
+/**
  * @swagger
  *
  * /streams/{id}:
  *   delete:
- *        summary: Delete a stream (soft-delete)
+ *        summary: Delete a stream
  *        tags:
  *          - streams
  *        parameters:
@@ -227,20 +224,6 @@ router.route('/:id').patch(verifyToken(), hasRole(['appUser', 'rfcxUser']), upda
  *          400:
  *            description: Error while deleting the stream.
  */
-function deleteEndpoint (req, res) {
-  const streamId = req.params.id
-  const idToken = req.headers.authorization
-  const defaultErrorMessage = 'Error while deleting the stream.'
-
-  return streamService
-    .remove({ streamId, idToken })
-    .then(() => {
-      res.sendStatus(204)
-    })
-    .catch(httpErrorHandler(req, res, defaultErrorMessage))
-}
-
-router.route('/:id/move-to-trash').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), deleteEndpoint) // deprecated. TODO: update Ingest App to use DELETE /streams/{id} endpoint
 router.route('/:id').delete(verifyToken(), hasRole(['appUser', 'rfcxUser']), deleteEndpoint)
 
 module.exports = router
