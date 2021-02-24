@@ -1,4 +1,3 @@
-const moment = require('moment')
 const express = require('express')
 var router = express.Router()
 
@@ -8,9 +7,8 @@ const hasRole = authentication.hasRole
 
 router.use(require('../middleware/cors'))
 
-const db = require('../services/db/mongo')
-
-const httpErrorHandler = require('../utils/http-error-handler')
+const { httpErrorHandler } = require('@rfcx/http-utils')
+const deploymentService = require('../services/deployments')
 
 /**
  * @swagger
@@ -29,22 +27,23 @@ const httpErrorHandler = require('../utils/http-error-handler')
  *            type: string
  *        responses:
  *          200:
- *            description: An deploymentInfo object
+ *            description: A deploymentInfo object
  *            content:
  *              application/json:
  *                schema:
  *                   $ref: '#/components/schemas/DeploymentInfo'
- *          400:
+ *          404:
  *            description: DeploymentInfo does not exist
  */
-router.route('/:id').get(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), (req, res) => {
+router.route('/:id').get(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), async (req, res) => {
+  const idToken = req.headers.authorization
   const id = req.params.id
-  const defaultErrorMessage = 'Error while getting the deployment info.'
-  db.getDeploymentInfo(id)
-    .then(data => {
-      res.json(data)
-    })
-    .catch(httpErrorHandler(req, res, defaultErrorMessage))
+  try {
+    const data = await deploymentService.get(id, idToken)
+    res.json(data)
+  } catch (e) {
+    httpErrorHandler(req, res, 'Failed getting deployment info with given id.')(e);
+  }
 })
 
 module.exports = router

@@ -1,6 +1,7 @@
 {
   "name": "ingest-service",
   "description": "RFCx Ingest Service",
+  "version": "1.0.0",
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",

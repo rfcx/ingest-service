@@ -1,26 +1,45 @@
 {
   "DeploymentInfo": {
-    "allOf":[
-      {
-        "properties": {
-          "deploymentId": {
-            "type": "id",
-            "description": "A deployment id",
-            "example": "C91D0B640B7C6488"
-          },
-          "locationGroup": {
-            "type": "object",
-            "$ref": "#/components/requestBodies/DeploymentLocationGroup"
-          }
-        },
-        "required":[
-          "deploymentId"
-        ]
+    "properties": {
+      "deploymentType": {
+        "type": "string",
+        "description": "A deployment type",
+        "example": "edge"
       },
-      {
-        "$ref": "#/components/requestBodies/DeploymentInfoLite"
+      "deployedAt": {
+        "type": "date",
+        "example": "2021-01-19T01:02:03.000Z"
+      },
+      "stream": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "xu82jDgX49"
+          },
+          "name": {
+            "type": "string",
+            "example": "My Stream 1"
+          },
+          "latitude": {
+            "type": "float",
+            "example": 90.123
+          },
+          "longitude": {
+            "type": "float",
+            "example": 125.912
+          },
+          "altitude": {
+            "type": "float",
+            "example": 100.1
+          },
+          "project": {
+            "type": "string",
+            "example": "goQioqL49"
+          }
+        }
       }
-    ]
+    }
   },
   "StreamLite": {
     "properties": {

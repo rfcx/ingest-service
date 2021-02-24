@@ -130,7 +130,6 @@ router.route('/:id').get(verifyToken(), hasRole(['appUser', 'rfcxUser']), async 
   try {
     const id = req.params.id
     const userId = req.user.guid || req.user.sub || 'unknown'
-    console.log('\n\nuser id', userId, '\n\n')
     const data = await db.getUpload(id)
     if (!data) {
       throw new EmptyResultError('Upload with given id not found.')
