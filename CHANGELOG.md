@@ -6,6 +6,10 @@
 * Refactor all streams and uploads endpoints to use async and rfcx/http-utils module ([CE-31](https://jira.rfcx.org/browse/CE-31))
 * Update GET deployment info endpoint to call Device API ([CE-35](https://jira.rfcx.org/browse/CE-35))
 
+### Features
+* Delete unused user-related endpoints
+* Delete unused deployments-related endpoints
+
 
 <a name="1.0.0"></a>
 ## 1.0.0 (2021-02-25)
