@@ -1,5 +1,5 @@
 <a name="1.0.1"></a>
-## 1.0.1 (2021-02-XX)
+## 1.0.1 (2021-02-25)
 
 ### Features
 * Check for duplicate source file before creating the upload ([CE-31](https://jira.rfcx.org/browse/CE-31))
