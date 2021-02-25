@@ -15,7 +15,6 @@ if (process.env.PLATFORM === 'amazon') {
 app.use('/docs', require('./docs'))
 app.use('/uploads', require('./routes/uploads'))
 app.use('/streams', require('./routes/streams'))
-app.use('/users', require('./routes/users'))
 app.use('/deployments', require('./routes/deployments'))
 app.use('/health-check', require('./routes/health-check'))
 
@@ -25,5 +24,10 @@ if (AUTOUPDATE_ENABLED) {
 if (PROMETHEUS_ENABLED) {
   app.use('/metrics', require('./routes/metrics'))
 }
+
+// Catch errors
+const { notFound, exceptionOccurred } = require('./middleware/error')
+app.use(notFound) // Last route, catches all
+app.use(exceptionOccurred) // Catches all errors (including 404)
 
 module.exports = app

@@ -1,83 +1,4 @@
 {
-  "DeploymentInfoLite": {
-    "type": "object",
-    "properties": {
-      "locationName": {
-        "type": "string",
-        "description": "A deployment location name",
-        "example": "Math"
-      },
-      "latitude": {
-        "type": "float",
-        "description": "A deployment coordinate",
-        "example": 16.742233863512645
-      },
-      "longitude": {
-        "type": "float",
-        "description": "A deployment coordinate",
-        "example": 100.19330181247703
-      },
-      "deployedAt": {
-        "type": "date",
-        "description": "A deployment deployed date (iso 8601)",
-        "example": "2020-11-16T09:03:24.928Z"
-      }
-    },
-    "required": [
-      "locationName",
-      "latitude",
-      "longitude",
-      "deployedAt"
-    ]
-  },
-  "DeploymentInfo": {
-    "type": "object",
-    "allOf":[
-      {
-        "properties": {
-          "deploymentId": {
-            "type": "id",
-            "description": "A deployment id",
-            "example": "C91D0B640B7C6488"
-          }
-        },
-        "required": [
-          "deploymentId"
-        ]
-      },
-      {
-        "$ref": "#/components/requestBodies/DeploymentInfoLite"
-      },
-      {
-        "$ref": "#/components/requestBodies/DeploymentLocationGroup"
-      }
-    ]
-  },
-  "DeploymentInfoUpdate": {
-    "type": "object",
-    "allOf":[
-      {
-        "$ref": "#/components/requestBodies/DeploymentInfoLite"
-      },
-      {
-        "$ref": "#/components/requestBodies/DeploymentLocationGroup"
-      }
-    ]
-  },
-  "DeploymentLocationGroup": {
-    "properties": {
-      "groupName": {
-        "type": "string",
-        "description": "A location group name",
-        "example": "Science"
-      },
-      "groupColor": {
-        "type": "string",
-        "description": "A location group color",
-        "example": "#ffcd00"
-      }
-    }
-  },
   "Stream": {
     "type": "object",
     "properties": {
@@ -191,7 +112,8 @@
     "required": [
       "filename",
       "timestamp",
-      "stream"
+      "stream",
+      "checksum"
     ]
   }
 }

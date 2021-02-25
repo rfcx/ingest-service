@@ -1,6 +1,7 @@
 {
   "name": "ingest-service",
   "description": "RFCx Ingest Service",
+  "version": "1.0.0",
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
@@ -17,6 +18,7 @@
     "@google-cloud/pubsub": "^2.3.0",
     "@google-cloud/storage": "^3.3.1",
     "@mongoosejs/double": "^0.2.0",
+    "@rfcx/http-utils": "^1.0.2",
     "aws-sdk": "^2.574.0",
     "axios": "^0.19.0",
     "bluebird": "3.7.1",
