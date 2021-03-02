@@ -8,8 +8,6 @@ const hasRole = authentication.hasRole
 router.use(require('../middleware/cors'))
 
 const streamService = require('../services/rfcx/streams')
-const arbimonService = require('../services/arbimon')
-const ARBIMON_ENABLED = `${process.env.ARBIMON_ENABLED}` === 'true'
 
 const { Converter, httpErrorHandler } = require('@rfcx/http-utils')
 
@@ -95,12 +93,6 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), async (r
     const params = await converter.validate()
     const response = await streamService.create({ ...params, idToken })
     const streamData = response.data
-    if (ARBIMON_ENABLED) {
-      await arbimonService.syncSite({
-        ...params,
-        external_id: streamData.id
-      }, idToken)
-    }
     res.json(streamData)
   } catch (e) {
     httpErrorHandler(req, res, 'Error while creating a stream.')(e);
