@@ -6,6 +6,7 @@ const audioService = require('../audio')
 const dirUtil = require('../../utils/dir')
 const segmentService = require('../rfcx/segments')
 const auth0Service = require('../../services/auth0')
+const ARBIMON_ENABLED = `${process.env.ARBIMON_ENABLED}` === 'true'
 const arbimonService = require('../../services/arbimon')
 const { PROMETHEUS_ENABLED, registerHistogram, pushHistogramMetric } = require('../../services/prometheus')
 const path = require('path')
@@ -211,9 +212,11 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
           }
           totalDurationMs += duration
           console.log(`Creating recording ${recording.uri} in the Arbimon`, recording)
-          const token = await auth0Service.getToken()
-          const idToken = `Bearer ${token.access_token}`
-          await arbimonService.createRecording(recording, idToken)
+          if (ARBIMON_ENABLED) {
+            const token = await auth0Service.getToken()
+            const idToken = `Bearer ${token.access_token}`
+            await arbimonService.createRecording(recording, idToken)
+          }
         }
       }
     })

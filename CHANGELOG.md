@@ -1,3 +1,10 @@
+<a name="1.0.2"></a>
+## 1.0.2 (2021-03-XX)
+
+### Features
+* Delete arbimon site creation from stream creation endpoint ([CE-174](https://jira.rfcx.org/browse/CE-174))
+
+
 <a name="1.0.1"></a>
 ## 1.0.1 (2021-02-25)
 
