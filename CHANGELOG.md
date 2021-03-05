@@ -1,3 +1,10 @@
+<a name="1.0.3"></a>
+## 1.0.3 (2021-03-XX)
+
+### Features
+* Add GET /deployments endpoint ([CE-236](https://jira.rfcx.org/browse/CE-236))
+
+
 <a name="1.0.2"></a>
 ## 1.0.2 (2021-03-02)
 
