@@ -6,7 +6,7 @@ Jenkinsfile contains four main stages
 
 * Building and pushing the Docker image to ECR
 * Applying k8s manifest files
-* Deploying the newely built image to the proper namespace in Kubernetes
+* Deploying the newly built image to the proper namespace in Kubernetes
 * Verifying the deployment
 
 Each directory inside k8s directory refers to an existing enviornment already, if you want to modify an existing environment like adjusting resources' reqestes or limits, all you have to do is to push a change in `deployment.yaml` to the repo and Jenkins will apply those changes
