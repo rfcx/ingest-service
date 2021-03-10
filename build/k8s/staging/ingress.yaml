@@ -13,7 +13,7 @@ metadata:
       app: "ingest-service"
 spec:
   rules:
-  - host: DOMAIN
+  - host: staging-ingest.rfcx.org
     http:
       paths:
       - backend:
