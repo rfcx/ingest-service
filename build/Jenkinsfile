@@ -59,7 +59,7 @@ spec:
                 label 'slave'
             }
             when {
-                 expression { BRANCH_NAME ==~ /(master|stagin)/ }
+                 expression { BRANCH_NAME ==~ /(master|staging)/ }
             }
             steps {
                 sh "kubectl apply -k ./build/k8s/${PHASE} --namespace ${PHASE}"
@@ -75,7 +75,7 @@ spec:
                 skipDefaultCheckout true
             }
             when {
-                expression { BRANCH_NAME ==~ /(master|stagin)/ }
+                expression { BRANCH_NAME ==~ /(master|staging)/ }
             }
             steps {
                 sh "kubectl rollout status deployment ${APP} --namespace ${PHASE}"
