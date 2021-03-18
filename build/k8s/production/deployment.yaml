@@ -16,9 +16,9 @@ spec:
         image: 887044485231.dkr.ecr.eu-west-1.amazonaws.com/ingest-service_production:latest
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "1000m"
+            memory: "128Mi"
+            cpu: "100m"
           limits:
-            memory: "2G"
-            cpu: "2"
+            memory: "512Mi"
+            cpu: "300"
       terminationGracePeriodSeconds: 600
