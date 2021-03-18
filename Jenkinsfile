@@ -62,13 +62,11 @@ spec:
             agent {
                 label 'slave'
             }
-            options {
-                skipDefaultCheckout true
-            }
             when {
                  expression { BRANCH_NAME ==~ /(master|staging)/ }
             }
             steps {
+                sh "kubectl -n ${PHASE} apply -f build/k8s/${PHASE}"
                 sh "kubectl set image deployment ${APP} ${APP}=${ECR}/${APP}/${PHASE}:v$BUILD_NUMBER --namespace ${PHASE}"
             }
 

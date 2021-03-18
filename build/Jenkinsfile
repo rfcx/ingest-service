@@ -38,7 +38,7 @@ spec:
                 slackSend (channel: "#${slackChannel}", color: '#FF9800', message: "*Ingest Service*: Build started <${env.BUILD_URL}|#${env.BUILD_NUMBER}> commit ${env.GIT_COMMIT[0..6]} branch ${env.BRANCH_NAME}")
                 container(name: 'kaniko') {
                 sh '''
-                /kaniko/executor --cache=true --build-arg PHASE=${PHASE} --build-arg --cache-repo=${ECR}/cache/${APP}/${PHASE} --dockerfile `pwd`/Dockerfile --context `pwd` --destination=${ECR}/${APP}/${PHASE}:latest --destination=${ECR}/${APP}/${PHASE}:${GIT_COMMIT} --destination=${ECR}/${APP}/${PHASE}:v$BUILD_NUMBER
+                /kaniko/executor --cache=true --cache-repo=${ECR}/cache/${APP}/${PHASE} --dockerfile `pwd`/Dockerfile --context `pwd` --destination=${ECR}/${APP}/${PHASE}:latest --destination=${ECR}/${APP}/${PHASE}:${GIT_COMMIT} --destination=${ECR}/${APP}/${PHASE}:v$BUILD_NUMBER
                 '''
                 }
             }
