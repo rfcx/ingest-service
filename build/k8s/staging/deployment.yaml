@@ -13,9 +13,12 @@ spec:
     spec:
       containers:
       - name: ingest-service
-        image: IMAGE_URL
+        image: 887044485231.dkr.ecr.eu-west-1.amazonaws.com/ingest-service/staging:v65
         resources:
           requests:
             memory: "512Mi"
-            cpu: "1000m"
+            cpu: "100m"
+          limits:
+            memory: "1G"
+            cpu: "1"
       terminationGracePeriodSeconds: 600

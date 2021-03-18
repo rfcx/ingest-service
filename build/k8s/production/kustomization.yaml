@@ -4,5 +4,5 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
-  - rbac_sqs-scaler.yaml
-  - auto-scaler.yaml
+  - externalmetrics.yaml
+  - hpa.yaml

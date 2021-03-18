@@ -1,0 +1,19 @@
+apiVersion: metrics.aws/v1alpha1
+kind: ExternalMetric
+metadata:
+  name: sqs-ingest-service-upload-production-length
+spec:
+  name: sqs-ingest-service-upload-production-length
+  queries:
+    - id: sqs_ingest_service_upload_production_length
+      metricStat:
+        metric:
+          namespace: "AWS/SQS"
+          metricName: "ApproximateNumberOfMessagesVisible"
+          dimensions:
+            - name: QueueName
+              value: "ingest-service-upload-production"
+        period: 60
+        stat: Average
+        unit: Count
+      returnData: true
