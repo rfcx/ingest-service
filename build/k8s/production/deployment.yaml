@@ -20,5 +20,5 @@ spec:
             cpu: "100m"
           limits:
             memory: "512Mi"
-            cpu: "300"
+            cpu: "300m"
       terminationGracePeriodSeconds: 600
