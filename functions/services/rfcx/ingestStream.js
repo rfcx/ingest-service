@@ -244,6 +244,13 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       if (transactionData.streamSourceFileId) {
         await segmentService.deleteStreamSourceFile({ guid: transactionData.streamSourceFileId })
       }
+
+      // upload file to ingest error folder
+      const errorDate = moment.tz(new Date().toISOString(), 'UTC')
+      const errorRemotePath = `error_files/${errorDate.format('YYYY')}/${errorDate.format('MM')}/${errorDate.format('DD')}/${streamId}/${uploadId}${path.extname(fileLocalPath)}`
+      console.log('log file to error folder at', errorRemotePath)
+      await storage.upload(errorRemotePath, fileLocalPath)
+
       await storage.deleteObject(uploadBucket, storageFilePath)
       dirUtil.removeDirRecursively(streamLocalPath)
     })
