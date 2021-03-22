@@ -20,7 +20,7 @@ const supportedExtensions = ['.wav', '.flac', '.opus']
 const losslessExtensions = ['.wav', '.flac']
 const extensionsRequiringAdditionalData = ['.opus']
 
-const { IngestionError } = require('../../utils/errors')
+const { IngestionError, createErrorTextFile } = require('../../utils/errors')
 
 if (PROMETHEUS_ENABLED) {
   // create historgram for each available file format
@@ -246,10 +246,20 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       }
 
       // upload file to ingest error folder
-      const errorDate = moment.tz(new Date().toISOString(), 'UTC')
-      const errorRemotePath = `error_files/${errorDate.format('YYYY')}/${errorDate.format('MM')}/${errorDate.format('DD')}/${streamId}/${uploadId}${path.extname(fileLocalPath)}`
+      const errorDateString = new Date().toISOString()
+      const errorDate = moment.tz(errorDateString, 'UTC')
+      const errorRemotePath = `error_files/${errorDate.format('YYYY')}/${errorDate.format('MM')}/${errorDate.format('DD')}/${streamId}/${uploadId}`
       console.log('log file to error folder at', errorRemotePath)
-      await storage.upload(errorRemotePath, fileLocalPath)
+
+      // upload error file to remote path
+      await storage.upload(`${errorRemotePath}${path.extname(fileLocalPath)}`, fileLocalPath)
+
+      // create error log text file and upload, then remove it from tmp folder
+      // TODO: ignore this if errors
+      const errorFileLocalPath = path.join(process.env.CACHE_DIRECTORY, `error_log/${streamId}/${errorDateString}.txt`)
+      await createErrorTextFile(err, errorFileLocalPath)
+      await storage.upload(`${errorRemotePath}.txt`, errorFileLocalPath)
+      await dirUtil.removeDirRecursively(errorFileLocalPath)
 
       await storage.deleteObject(uploadBucket, storageFilePath)
       dirUtil.removeDirRecursively(streamLocalPath)
