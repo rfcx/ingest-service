@@ -2,7 +2,6 @@ const AWS = require('../../utils/aws')
 const fs = require('fs')
 
 const uploadBucket = process.env.UPLOAD_BUCKET
-const ingestBucket = process.env.INGEST_BUCKET
 
 const s3Client = new AWS.S3({
   signatureVersion: 'v4'
@@ -58,14 +57,26 @@ function download (remotePath, localPath) {
   })
 }
 
-function upload (remotePath, localPath) {
+function upload (Bucket, remotePath, localPath) {
   const fileStream = fs.readFileSync(localPath)
   const opts = {
-    Bucket: ingestBucket,
+    Bucket,
     Key: remotePath,
     Body: fileStream
   }
   return s3Client.putObject(opts).promise()
+}
+
+function copyObject (desination, source) {
+  // { Bucket: Bucket, prefix: prefix }
+  const Bucket = desination.Bucket
+  const opts = {
+    Bucket,
+    CopySource: '/' + source.Bucket + '/' + source.prefix,
+    Key: desination.prefix
+  }
+  console.log('copy object', source, desination, opts)
+  return s3Client.copyObject(opts).promise()
 }
 
 function deleteObject (Bucket, Key) {
@@ -77,5 +88,6 @@ module.exports = {
   getSignedUrl,
   download,
   upload,
+  copyObject,
   deleteObject
 }

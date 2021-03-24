@@ -30,7 +30,6 @@ if (PROMETHEUS_ENABLED) {
   })
 }
 
-
 // Parameters set is different compared to legacy ingest methods
 
 async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
@@ -159,7 +158,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         totalDurationMs += duration
         transactionData.segmentsFileUrls.push(file.remotePath)
         console.log(`Uploading segment ${file.path} to ${file.remotePath}`)
-        await storage.upload(file.remotePath, file.path)
+        await storage.upload(ingestBucket, file.remotePath, file.path)
       }
       return outputFiles
     })
@@ -248,17 +247,20 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       // upload file to ingest error folder
       const errorDateString = new Date().toISOString()
       const errorDate = moment.tz(errorDateString, 'UTC')
-      const errorRemotePath = `error_files/${errorDate.format('YYYY')}/${errorDate.format('MM')}/${errorDate.format('DD')}/${streamId}/${uploadId}`
+      const errorRemotePath = `_failed/${errorDate.format('YYYY')}/${errorDate.format('MM')}/${errorDate.format('DD')}/${streamId}/${uploadId}`
       console.log('log file to error folder at', errorRemotePath)
 
-      // upload error file to remote path
-      await storage.upload(`${errorRemotePath}${path.extname(fileLocalPath)}`, fileLocalPath)
+      // copy error file to remote path
+      await storage.copyObject(
+        { Bucket: ingestBucket, prefix: `${errorRemotePath}${path.extname(fileLocalPath)}` }, // destination
+        { Bucket: uploadBucket, prefix: storageFilePath } // source
+      )
 
       // create error log text file and upload, then remove it from tmp folder
       // TODO: ignore this if errors
-      const errorFileLocalPath = path.join(process.env.CACHE_DIRECTORY, `error_log/${streamId}/${errorDateString}.txt`)
+      const errorFileLocalPath = path.join(process.env.CACHE_DIRECTORY, `${streamId}/error_${errorDateString}.txt`)
       await createErrorTextFile(err, errorFileLocalPath)
-      await storage.upload(`${errorRemotePath}.txt`, errorFileLocalPath)
+      await storage.upload(ingestBucket, `${errorRemotePath}.txt`, errorFileLocalPath)
       await dirUtil.removeDirRecursively(errorFileLocalPath)
 
       await storage.deleteObject(uploadBucket, storageFilePath)
