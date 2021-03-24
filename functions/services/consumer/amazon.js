@@ -10,6 +10,7 @@ const consumer = Consumer.create({
     const files = parseIngestSQSMessage(message)
     for (const file of files) {
       const { fileLocalPath, streamId, uploadId } = parseUploadFromFileName(file.key)
+      if (streamId.includes('_fail')) return true // ignore the failed file that got automatically uploaded to upload bucket
       try {
         await ingest(file.key, fileLocalPath, streamId, uploadId)
       } catch (e) {

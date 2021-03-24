@@ -252,7 +252,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
 
       // copy error file to remote path
       await storage.copyObject(
-        { Bucket: ingestBucket, prefix: `${errorRemotePath}${path.extname(fileLocalPath)}` }, // destination
+        { Bucket: uploadBucket, prefix: `${errorRemotePath}${path.extname(fileLocalPath)}` }, // destination
         { Bucket: uploadBucket, prefix: storageFilePath } // source
       )
 
@@ -260,7 +260,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       // TODO: ignore this if errors
       const errorFileLocalPath = path.join(process.env.CACHE_DIRECTORY, `${streamId}/error_${errorDateString}.txt`)
       await createErrorTextFile(err, errorFileLocalPath)
-      await storage.upload(ingestBucket, `${errorRemotePath}.txt`, errorFileLocalPath)
+      await storage.upload(uploadBucket, `${errorRemotePath}.txt`, errorFileLocalPath)
       await dirUtil.removeDirRecursively(errorFileLocalPath)
 
       await storage.deleteObject(uploadBucket, storageFilePath)

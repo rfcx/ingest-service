@@ -75,7 +75,6 @@ function copyObject (desination, source) {
     CopySource: '/' + source.Bucket + '/' + source.prefix,
     Key: desination.prefix
   }
-  console.log('copy object', source, desination, opts)
   return s3Client.copyObject(opts).promise()
 }
 
