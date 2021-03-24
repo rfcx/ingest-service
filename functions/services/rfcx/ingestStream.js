@@ -245,8 +245,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       }
 
       // upload file to ingest error folder
-      const errorDateString = new Date().toISOString()
-      const errorDate = moment.tz(errorDateString, 'UTC')
+      const errorDate = moment.utc()
       const errorRemotePath = `_failed/${errorDate.format('YYYY')}/${errorDate.format('MM')}/${errorDate.format('DD')}/${streamId}/${uploadId}`
       console.log('log file to error folder at', errorRemotePath)
 
@@ -258,7 +257,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
 
       // create error log text file and upload, then remove it from tmp folder
       // TODO: ignore this if errors
-      const errorFileLocalPath = path.join(process.env.CACHE_DIRECTORY, `${streamId}/error_${errorDateString}.txt`)
+      const errorFileLocalPath = path.join(process.env.CACHE_DIRECTORY, `${streamId}/error_${errorDate.toISOString()}.txt`)
       await createErrorTextFile(err, errorFileLocalPath)
       await storage.upload(uploadBucket, `${errorRemotePath}.txt`, errorFileLocalPath)
       await dirUtil.removeDirRecursively(errorFileLocalPath)

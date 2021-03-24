@@ -1,6 +1,8 @@
 const db = require('../services/db/mongo')
 const path = require('path')
 const fs = require('fs')
+const util = require('util')
+const writeFileAsync = util.promisify(fs.writeFile)
 const dirUtil = require('../utils/dir')
 const { ValidationError, EmptyResultError, ForbiddenError, UnauthorizedError } = require('@rfcx/http-utils')
 
@@ -41,17 +43,7 @@ function matchAxiosErrorToRfcx (err) {
 async function createErrorTextFile (error, localPath) {
   const dir = path.dirname(localPath)
   await dirUtil.ensureDirExists(dir)
-  return new Promise((resolve, reject) => {
-    fs.writeFile(localPath, `message: ${error.message} stack: ${error.stack}`, (err) => {
-      if (err) {
-        console.log('write error stack file failed')
-        reject(err)
-      } else {
-        console.log('write error stack file success')
-        resolve()
-      }
-    })
-  })
+  return writeFileAsync(localPath, `message: ${error.message} stack: ${error.stack}`)
 }
 
 module.exports = {
