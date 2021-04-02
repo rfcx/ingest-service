@@ -15,12 +15,19 @@ const uuid = require('uuid/v4')
 const sha1File = require('sha1-file')
 const uploadBucket = process.env.UPLOAD_BUCKET
 const ingestBucket = process.env.INGEST_BUCKET
+const errorBucket = process.env.ERROR_BUCKET
 
 const supportedExtensions = ['.wav', '.flac', '.opus']
 const losslessExtensions = ['.wav', '.flac']
 const extensionsRequiringAdditionalData = ['.opus']
 
-const { IngestionError, createErrorTextFile } = require('../../utils/errors')
+const { IngestionError } = require('../../utils/errors')
+const loggerIgnoredErrors = [
+  'Duplicate file. Matching sha1 signature already ingested.',
+  'This file was already ingested.',
+  'File extension is not supported',
+  'Stream source file was not created'
+]
 
 if (PROMETHEUS_ENABLED) {
   // create historgram for each available file format
@@ -244,23 +251,12 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         await segmentService.deleteStreamSourceFile({ guid: transactionData.streamSourceFileId })
       }
 
-      // upload file to ingest error folder
-      const errorDate = moment.utc()
-      const errorRemotePath = `_failed/${errorDate.format('YYYY')}/${errorDate.format('MM')}/${errorDate.format('DD')}/${streamId}/${uploadId}`
-      console.log('log file to error folder at', errorRemotePath)
-
-      // copy error file to remote path
-      await storage.copyObject(
-        { Bucket: uploadBucket, prefix: `${errorRemotePath}${path.extname(fileLocalPath)}` }, // destination
-        { Bucket: uploadBucket, prefix: storageFilePath } // source
-      )
-
-      // create error log text file and upload, then remove it from tmp folder
-      // TODO: ignore this if errors
-      const errorFileLocalPath = path.join(process.env.CACHE_DIRECTORY, `${streamId}/error_${errorDate.toISOString()}.txt`)
-      await createErrorTextFile(err, errorFileLocalPath)
-      await storage.upload(uploadBucket, `${errorRemotePath}.txt`, errorFileLocalPath)
-      await dirUtil.removeDirRecursively(errorFileLocalPath)
+      if (!loggerIgnoredErrors.includes(message)) {
+        await storage.copy(`${uploadBucket}/${storageFilePath}`, errorBucket, storageFilePath)
+        // create error log text file in the same bucket
+        const storageErrorFilePath = storageFilePath.replace(path.extname(storageFilePath), '.txt')
+        await storage.createFromData(errorBucket, storageErrorFilePath, `message: ${err.message}\n\nstack: ${err.stack}`)
+      }
 
       await storage.deleteObject(uploadBucket, storageFilePath)
       dirUtil.removeDirRecursively(streamLocalPath)

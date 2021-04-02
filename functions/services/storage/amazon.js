@@ -67,14 +67,25 @@ function upload (Bucket, remotePath, localPath) {
   return s3Client.putObject(opts).promise()
 }
 
-function copyObject (desination, source) {
-  // { Bucket: Bucket, prefix: prefix }
-  const Bucket = desination.Bucket
+function createFromData (Bucket, remotePath, data) {
   const opts = {
     Bucket,
-    CopySource: '/' + source.Bucket + '/' + source.prefix,
-    Key: desination.prefix
+    Key: remotePath,
+    Body: data
   }
+  return s3Client.putObject(opts).promise()
+}
+
+/**
+ * Copies one a file on S3
+ * @param {*} CopySource Source path (including bucket)
+ * @param {*} Bucket Destination bucket
+ * @param {*} Key Destination path (excluding bucket)
+ * @param {*} ContentType A standard MIME type describing the format of the object data.
+ * @returns
+ */
+function copy (CopySource, Bucket, Key, ContentType) {
+  const opts = { Bucket, CopySource, Key, ContentType }
   return s3Client.copyObject(opts).promise()
 }
 
@@ -87,6 +98,7 @@ module.exports = {
   getSignedUrl,
   download,
   upload,
-  copyObject,
+  createFromData,
+  copy,
   deleteObject
 }

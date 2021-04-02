@@ -1,9 +1,4 @@
 const db = require('../services/db/mongo')
-const path = require('path')
-const fs = require('fs')
-const util = require('util')
-const writeFileAsync = util.promisify(fs.writeFile)
-const dirUtil = require('../utils/dir')
 const { ValidationError, EmptyResultError, ForbiddenError, UnauthorizedError } = require('@rfcx/http-utils')
 
 class IngestionError extends Error {
@@ -40,14 +35,7 @@ function matchAxiosErrorToRfcx (err) {
   }
 }
 
-async function createErrorTextFile (error, localPath) {
-  const dir = path.dirname(localPath)
-  await dirUtil.ensureDirExists(dir)
-  return writeFileAsync(localPath, `message: ${error.message} stack: ${error.stack}`)
-}
-
 module.exports = {
   IngestionError,
-  matchAxiosErrorToRfcx,
-  createErrorTextFile
+  matchAxiosErrorToRfcx
 }

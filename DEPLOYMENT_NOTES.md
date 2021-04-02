@@ -1,5 +1,9 @@
 # Deployment Notes
 
+## v1.0.3
+
+- Add `ERROR_BUCKET` env var with `rfcx-streams-errors-staging` and `rfcx-streams-errors-production` values (Buckets are already created by Stas)
+
 ## v1.0.2
 
 - Check that `ARBIMON_ENABLED` env var exists and set to `true`
