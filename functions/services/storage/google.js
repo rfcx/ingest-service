@@ -29,6 +29,10 @@ function upload (bucket, destination, source) {
   return storage.bucket(bucket).upload(source, { destination })
 }
 
+function createFromData (Bucket, remotePath, data) {
+  // TODO: implement this
+}
+
 function copyObject (desination, source) {
   return storage
     .bucket(source.Bucket)
@@ -44,6 +48,7 @@ module.exports = {
   getSignedUrl,
   download,
   upload,
+  createFromData,
   copyObject,
   deleteObject
 }
