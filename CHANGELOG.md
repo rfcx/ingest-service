@@ -1,3 +1,9 @@
+ <a name="1.0.4"></a>
+## 1.0.4 (2021-03-XX)
+
+### Features
+* Save ingested error files to error directory ([PI-670](https://jira.rfcx.org/browse/PI-670))
+
 <a name="1.0.3"></a>
 ## 1.0.3 (2021-03-15)
 

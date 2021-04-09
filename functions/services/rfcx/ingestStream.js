@@ -15,12 +15,19 @@ const uuid = require('uuid/v4')
 const sha1File = require('sha1-file')
 const uploadBucket = process.env.UPLOAD_BUCKET
 const ingestBucket = process.env.INGEST_BUCKET
+const errorBucket = process.env.ERROR_BUCKET
 
 const supportedExtensions = ['.wav', '.flac', '.opus']
 const losslessExtensions = ['.wav', '.flac']
 const extensionsRequiringAdditionalData = ['.opus']
 
 const { IngestionError } = require('../../utils/errors')
+const loggerIgnoredErrors = [
+  'Duplicate file. Matching sha1 signature already ingested.',
+  'This file was already ingested.',
+  'File extension is not supported',
+  'Stream source file was not created'
+]
 
 if (PROMETHEUS_ENABLED) {
   // create historgram for each available file format
@@ -29,7 +36,6 @@ if (PROMETHEUS_ENABLED) {
     registerHistogram(name, `Processing metric for ${name} format.`)
   })
 }
-
 
 // Parameters set is different compared to legacy ingest methods
 
@@ -159,7 +165,7 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
         totalDurationMs += duration
         transactionData.segmentsFileUrls.push(file.remotePath)
         console.log(`Uploading segment ${file.path} to ${file.remotePath}`)
-        await storage.upload(file.remotePath, file.path)
+        await storage.upload(ingestBucket, file.remotePath, file.path)
       }
       return outputFiles
     })
@@ -244,6 +250,14 @@ async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
       if (transactionData.streamSourceFileId) {
         await segmentService.deleteStreamSourceFile({ guid: transactionData.streamSourceFileId })
       }
+
+      if (!loggerIgnoredErrors.includes(message)) {
+        await storage.copy(`${uploadBucket}/${storageFilePath}`, errorBucket, storageFilePath)
+        // create error log text file in the same bucket
+        const storageErrorFilePath = storageFilePath.replace(path.extname(storageFilePath), '.txt')
+        await storage.createFromData(errorBucket, storageErrorFilePath, `message: ${err.message}\n\nstack: ${err.stack}`)
+      }
+
       await storage.deleteObject(uploadBucket, storageFilePath)
       dirUtil.removeDirRecursively(streamLocalPath)
     })

@@ -25,8 +25,19 @@ function download (source, destination) {
   return uploadBucket.file(source).download({ destination })
 }
 
-function upload (destination, source) {
-  return ingestBucket.upload(source, { destination })
+function upload (bucket, destination, source) {
+  return storage.bucket(bucket).upload(source, { destination })
+}
+
+function createFromData (Bucket, remotePath, data) {
+  // TODO: implement this
+}
+
+function copyObject (desination, source) {
+  return storage
+    .bucket(source.Bucket)
+    .file(source.prefix)
+    .copy(storage.bucket(desination.Bucket).file(desination.prefix))
 }
 
 function deleteObject (bucket, path) {
@@ -37,5 +48,7 @@ module.exports = {
   getSignedUrl,
   download,
   upload,
+  createFromData,
+  copyObject,
   deleteObject
 }
