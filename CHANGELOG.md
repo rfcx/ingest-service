@@ -4,6 +4,12 @@
 ### Features
 * Save ingested error files to error directory ([PI-670](https://jira.rfcx.org/browse/PI-670))
 
+### Performance Improvements
+* Refactor ingestion code to be shorter and simpler ([CE-469](https://jira.rfcx.org/browse/CE-469))
+
+### Bug Fixes
+* Use one endpoint for stream_source_file and stream_segment creation ([CE-469](https://jira.rfcx.org/browse/CE-469))
+
 <a name="1.0.3"></a>
 ## 1.0.3 (2021-03-15)
 

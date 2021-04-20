@@ -1,4 +1,5 @@
 const ffmpeg = require('fluent-ffmpeg')
+const sha1File = require('sha1-file')
 const path = require('path')
 
 /**
@@ -27,7 +28,8 @@ function identify (sourceFile) {
           const codec = stream.codec_name
           const tags = result.format && result.format.tags ? result.format.tags : {}
           const size = result.format && result.format.size ? result.format.size : 0
-          resolve({ format, duration, sampleCount, channelLayout, channelCount, bitRate, sampleRate, codec, tags, size })
+          const checksum = sha1File(sourceFile)
+          resolve({ format, duration, sampleCount, channelLayout, channelCount, bitRate, sampleRate, codec, tags, size, checksum })
         }
       })
   })
