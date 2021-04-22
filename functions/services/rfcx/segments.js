@@ -1,6 +1,8 @@
 const axios = require('axios')
 const auth0Service = require('../auth0')
-const { matchAxiosErrorToRfcx } = require('../../utils/errors')
+const { matchAxiosErrorToRfcx, IngestionError } = require('../../utils/errors')
+const { status } = require('../db/mongo')
+const { DUPLICATE, INGESTED, FAILED } = status
 
 const apiHostName = process.env.API_HOST
 
@@ -23,31 +25,39 @@ function getExistingSourceFiles (opts) {
     .catch(e => { throw matchAxiosErrorToRfcx(e) })
 }
 
-async function createStreamSourceFile (opts) {
-  const url = `${apiHostName}streams/${opts.stream}/stream-source-files`
-  const data = {
-    filename: opts.filename,
-    audio_file_format: opts.format,
-    duration: Math.abs(opts.duration * 1000),
-    sample_count: opts.sampleCount,
-    channels_count: opts.channelCount,
-    bit_rate: opts.bitRate,
-    sample_rate: opts.sampleRate,
-    audio_codec: opts.codec,
-    sha1_checksum: opts.sha1_checksum,
-    meta: opts.tags
+function transformStreamSourceFilePayload (data) {
+  return {
+    filename: data.filename,
+    audio_file_format: data.format,
+    duration: Math.abs(data.duration * 1000),
+    sample_count: data.sampleCount,
+    channels_count: data.channelCount,
+    bit_rate: data.bitRate,
+    sample_rate: data.sampleRate,
+    audio_codec: data.codec,
+    sha1_checksum: data.checksum,
+    meta: data.tags
   }
-
-  const headers = {
-    Authorization: `Bearer ${opts.idToken}`,
-    'Content-Type': 'application/json'
-  }
-
-  return axios.post(url, data, { headers })
 }
 
-async function deleteStreamSourceFile (opts) {
-  const url = `${apiHostName}stream-source-files/${opts.guid}`
+function transformStreamSegmentsPayload (data) {
+  return data.map(item => {
+    return {
+      id: item.id,
+      start: item.start,
+      end: item.end,
+      sample_count: item.sampleCount,
+      file_extension: item.fileExtension
+    }
+  })
+}
+
+async function createStreamFileData (stream, payload) {
+  const url = `${apiHostName}internal/ingest/streams/${stream}/stream-source-files-and-segments`
+  const data = {
+    stream_source_file: transformStreamSourceFilePayload(payload.streamSourceFile),
+    stream_segments: transformStreamSegmentsPayload(payload.streamSegments)
+  }
 
   const token = await auth0Service.getToken()
   const headers = {
@@ -55,30 +65,37 @@ async function deleteStreamSourceFile (opts) {
     'Content-Type': 'application/json'
   }
 
-  return axios.delete(url, { headers })
-}
-
-async function createSegment (opts) {
-  const url = `${apiHostName}streams/${opts.stream}/stream-segments`
-  const data = {
-    id: opts.id,
-    stream_source_file_id: opts.streamSourceFileId,
-    start: opts.start,
-    end: opts.end,
-    sample_count: opts.sample_count,
-    file_extension: opts.file_extension
-  }
-
-  const headers = {
-    Authorization: `Bearer ${opts.idToken}`,
-    'Content-Type': 'application/json'
-  }
-
   return axios.post(url, data, { headers })
+    .then((response) => {
+      if (!response || response.status !== 201) {
+        throw new Error('Stream source file was not created')
+      }
+      return response.headers.location.replace('/stream-source-files/', '')
+    })
+    .catch((err) => {
+      if (err.response && err.response.data && err.response.data.message) {
+        const message = err.response.data.message
+        let status
+        switch (message) {
+          case 'Duplicate file. Matching sha1 signature already ingested.':
+            status = DUPLICATE
+            break
+          case 'This file was already ingested.':
+            status = INGESTED
+            break
+          default:
+            status = FAILED
+        }
+        throw new IngestionError(message, status)
+      } else {
+        throw err
+      }
+    })
 }
 
-async function deleteSegment (opts) {
-  const url = `${apiHostName}stream-segments/${opts.guid}`
+async function deleteStreamSourceFile (id) {
+  const url = `${apiHostName}stream-source-files/${id}`
+
   const token = await auth0Service.getToken()
   const headers = {
     Authorization: `Bearer ${token.access_token}`,
@@ -90,8 +107,6 @@ async function deleteSegment (opts) {
 
 module.exports = {
   getExistingSourceFiles,
-  createStreamSourceFile,
-  deleteStreamSourceFile,
-  createSegment,
-  deleteSegment
+  createStreamFileData,
+  deleteStreamSourceFile
 }

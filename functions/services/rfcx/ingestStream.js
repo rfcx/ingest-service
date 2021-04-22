@@ -12,14 +12,15 @@ const { PROMETHEUS_ENABLED, registerHistogram, pushHistogramMetric } = require('
 const path = require('path')
 const moment = require('moment-timezone')
 const uuid = require('uuid/v4')
-const sha1File = require('sha1-file')
 const uploadBucket = process.env.UPLOAD_BUCKET
 const ingestBucket = process.env.INGEST_BUCKET
 const errorBucket = process.env.ERROR_BUCKET
 
 const supportedExtensions = ['.wav', '.flac', '.opus']
 const losslessExtensions = ['.wav', '.flac']
+const extensionsRequiringConvToWav = ['.flac']
 const extensionsRequiringAdditionalData = ['.opus']
+const segmentDurationMs = 120000
 
 const { IngestionError } = require('../../utils/errors')
 const loggerIgnoredErrors = [
@@ -37,230 +38,239 @@ if (PROMETHEUS_ENABLED) {
   })
 }
 
-// Parameters set is different compared to legacy ingest methods
+/**
+ * Returns directory path for stream on a disk
+ * @param {*} fileStoragePath
+ */
+function getStreamLocalPath (fileStoragePath) {
+  return path.join(process.env.CACHE_DIRECTORY, path.dirname(fileStoragePath))
+}
 
-async function ingest (storageFilePath, fileLocalPath, streamId, uploadId) {
-  let upload
-  const startTimestamp = Date.now()
-  const fileDurationMs = 120000
-  const streamLocalPath = path.join(process.env.CACHE_DIRECTORY, path.dirname(storageFilePath))
+/**
+ * Returns path for a file on a disk
+ * @param {*} fileStoragePath
+ */
+function getFileLocalPath (fileStoragePath) {
+  return path.join(process.env.CACHE_DIRECTORY, fileStoragePath)
+}
 
-  const fileExtension = path.extname(storageFilePath).toLowerCase()
-  const requiresConvToWav = fileExtension === '.flac'
-  const isLosslessFile = losslessExtensions.includes(fileExtension)
-  const fileLocalPathWav = requiresConvToWav ? fileLocalPath.replace(path.extname(fileLocalPath), '.wav') : null
+/**
+ * Creates a directory for stream
+ * @param {*} streamLocalPath
+ * @returns
+ */
+function createStreamLocalPath (streamLocalPath) {
+  return dirUtil.ensureDirExists(streamLocalPath)
+}
 
-  const transactionData = {
-    streamSourceFileId: null,
-    segmentsGuids: [],
-    segmentsFileUrls: []
+/**
+ * Checks if file extension is supported by the Ingest Service. Throws IngestionError if not.
+ * @param {string} extension
+ */
+function validateFileFormat (extension) {
+  if (!supportedExtensions.includes(extension)) {
+    throw new IngestionError('File extension is not supported', db.status.FAILED)
   }
-  let fileSampleCount
-  let fileFormat = fileExtension.substr(1)
+}
 
-  return dirUtil.ensureDirExists(process.env.CACHE_DIRECTORY)
-    .then(() => {
-      if (!supportedExtensions.includes(fileExtension)) {
-        throw new IngestionError('File extension is not supported', db.status.FAILED)
-      }
-      return dirUtil.ensureDirExists(streamLocalPath)
-    })
-    .then(() => {
-      return storage.download(storageFilePath, `${process.env.CACHE_DIRECTORY}${storageFilePath}`)
-    })
-    .then(() => {
-      return db.updateUploadStatus(uploadId, db.status.UPLOADED)
-    })
-    .then(async () => {
-      let filedataWav
-      if (requiresConvToWav) {
-        const convRes = await audioService.convert(fileLocalPath, fileLocalPathWav)
-        filedataWav = convRes.meta
-      }
-      const fileData = await audioService.identify(fileLocalPath)
-      upload = await db.getUpload(uploadId)
-      console.log('Upload meta from client', JSON.stringify(upload))
-      const opts = fileData
-      console.log('Ffprobe result', JSON.stringify(fileData))
-      fileSampleCount = opts.sampleCount || undefined
-      const token = await auth0Service.getToken()
-      opts.stream = upload.streamId
-      opts.idToken = `${token.access_token}`
-      opts.filename = upload.originalFilename
-      opts.sha1_checksum = sha1File(fileLocalPath)
-      if (isNaN(opts.duration) || opts.duration === 0) {
-        throw new IngestionError('Audio duration is zero')
-      }
-      if (isNaN(opts.sampleCount) || opts.sampleCount === 0) {
-        throw new IngestionError('Audio sampleCount is zero')
-      }
-      if (extensionsRequiringAdditionalData.includes(fileExtension)) {
-        if (!upload.sampleRate) {
-          throw new IngestionError(`"sampleRate" must be provided for "${fileExtension}" file ingestion.`)
-        }
-        if (!upload.targetBitrate) {
-          throw new IngestionError(`"targetBitrate" must be provided for ${fileExtension} file ingestion.`)
-        }
-      }
-      if (upload.checksum && upload.checksum !== opts.sha1_checksum) {
-        throw new IngestionError('Checksum mismatch.', db.status.CHECKSUM)
-      }
-      if (requiresConvToWav) {
-        opts.bitRate = filedataWav.bitRate
-        opts.duration = filedataWav.duration
-      }
-      // if sampleRate and bitRate were specified on upload request, then set them implicitly
-      if (upload.sampleRate) opts.sampleRate = upload.sampleRate
-      if (upload.targetBitrate) opts.bitRate = upload.targetBitrate
+/**
+ * Checks file metadata. Throws IngestionError if data is invalid.
+ * @param {*} upload - upload object received from database
+ * @param {*} meta -
+ * @param {*} extension
+ */
+function validateAudioMeta (upload, meta, extension) {
+  if (isNaN(meta.duration) || meta.duration === 0) {
+    throw new IngestionError('Audio duration is zero')
+  }
+  if (isNaN(meta.sampleCount) || meta.sampleCount === 0) {
+    throw new IngestionError('Audio sampleCount is zero')
+  }
+  if (extensionsRequiringAdditionalData.includes(extension)) {
+    if (!upload.sampleRate) {
+      throw new IngestionError(`"sampleRate" must be provided for "${extension}" file ingestion.`)
+    }
+    if (!upload.targetBitrate) {
+      throw new IngestionError(`"targetBitrate" must be provided for ${extension} file ingestion.`)
+    }
+  }
+  if (upload.checksum && upload.checksum !== meta.checksum) {
+    throw new IngestionError('Checksum mismatch.', db.status.CHECKSUM)
+  }
+}
 
-      console.log(`Creating original file in the API (stream ${opts.stream} sha1_checksum ${opts.sha1_checksum}`)
-      return segmentService.createStreamSourceFile(opts)
-        .then((response) => {
-          if (!response || response.status !== 201) {
-            throw new Error('Stream source file was not created')
-          }
-          transactionData.streamSourceFileId = response.data.id
-        })
-        .catch((err) => {
-          if (err.response && err.response.data && err.response.data.message) {
-            const message = err.response.data.message
-            let status
-            switch (message) {
-              case 'Duplicate file. Matching sha1 signature already ingested.':
-                status = db.status.DUPLICATE
-                break
-              case 'This file was already ingested.':
-                status = db.status.INGESTED
-                break
-              default:
-                status = db.status.FAILED
-            }
-            throw new IngestionError(message, status)
-          } else {
-            throw err
-          }
-        })
-    })
-    .then(() => {
-      console.log('Splitting original file into segments')
-      return audioService.split(requiresConvToWav ? fileLocalPathWav : fileLocalPath, path.dirname(fileLocalPath), fileDurationMs / 1000)
-    })
-    .then(async (outputFiles) => {
-      console.log(`File was split into ${outputFiles.length} segments`)
-      // convert lossless files to flac format
-      if (isLosslessFile) {
-        for (const file of outputFiles) {
-          const finalPath = file.path.replace(path.extname(file.path), '.flac')
-          await audioService.convert(file.path, finalPath)
-          file.path = finalPath
-        }
-      }
+/**
+ * Splits source file into segments and converts them to flac if file is lossless
+ * @param {*} filePath
+ * @returns
+ */
+async function transcode (filePath) {
+  const fileExtension = path.extname(filePath).toLowerCase()
+  const isLosslessFile = losslessExtensions.includes(fileExtension)
+  let destinationFilePath = filePath
+  if (extensionsRequiringConvToWav.includes(fileExtension)) {
+    destinationFilePath = filePath.replace(path.extname(filePath), '.wav')
+    var { meta } = await audioService.convert(filePath, destinationFilePath)
+  }
+  console.log('Splitting original file into segments')
+  const outputFiles = await audioService.split(destinationFilePath, path.dirname(filePath), segmentDurationMs / 1000)
+  console.log(`File was split into ${outputFiles.length} segments`)
 
-      let totalDurationMs = 0
-      for (const file of outputFiles) {
-        const duration = Math.floor(file.meta.duration * 1000)
-        const ts = moment.tz(upload.timestamp, 'UTC').add(totalDurationMs, 'milliseconds')
-        file.guid = uuid()
-        file.remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${upload.streamId}/${file.guid}${path.extname(file.path)}`
-        totalDurationMs += duration
-        transactionData.segmentsFileUrls.push(file.remotePath)
-        console.log(`Uploading segment ${file.path} to ${file.remotePath}`)
-        await storage.upload(ingestBucket, file.remotePath, file.path)
-      }
-      return outputFiles
-    })
-    .then(async (outputFiles) => {
-      const timestamp = moment.tz(upload.timestamp, 'UTC').valueOf()
-      let totalDurationMs = 0
-      const token = await auth0Service.getToken()
-      for (const file of outputFiles) {
-        const duration = Math.floor(file.meta.duration * 1000)
-        file.start = moment.tz(timestamp + totalDurationMs, 'UTC').toISOString()
-        file.end = moment.tz(timestamp + totalDurationMs + duration, 'UTC').toISOString()
-        const segmentOpts = {
-          id: file.guid,
-          stream: upload.streamId,
-          idToken: `${token.access_token}`,
-          streamSourceFileId: transactionData.streamSourceFileId,
-          start: file.start,
-          end: file.end,
-          sample_count: file.meta.sampleCount,
-          file_extension: path.extname(file.path)
-        }
-        totalDurationMs += duration
-        console.log(`Creating segment ${segmentOpts.id} in the API`)
-        await segmentService.createSegment(segmentOpts)
-        transactionData.segmentsGuids.push(segmentOpts.id)
-      }
-      return outputFiles
-    })
-    .then(async (outputFiles) => {
-      console.log(`Modifying status to INGESTED (${db.status.INGESTED})`)
-      await db.updateUploadStatus(uploadId, db.status.INGESTED)
-      return outputFiles
-    })
-    .then(async (outputFiles) => {
-      if (`${process.env.ARBIMON_ENABLED}` === 'true') {
-        let totalDurationMs = 0
-        for (const file of outputFiles) {
-          const duration = file.meta.duration
-          const recording = {
-            site_external_id: upload.streamId,
-            uri: file.remotePath,
-            datetime: file.start,
-            sample_rate: upload.sampleRate || file.meta.sampleRate,
-            precision: 0,
-            duration,
-            samples: file.meta.sampleCount,
-            file_size: file.meta.size,
-            bit_rate: upload.targetBitrate || file.meta.bitRate,
-            sample_encoding: file.meta.codec
-          }
-          totalDurationMs += duration
-          console.log(`Creating recording ${recording.uri} in the Arbimon`, recording)
-          if (ARBIMON_ENABLED) {
-            const token = await auth0Service.getToken()
-            const idToken = `Bearer ${token.access_token}`
-            await arbimonService.createRecording(recording, idToken)
-          }
-        }
-      }
-    })
-    .then(async () => {
-      console.log('Cleaning up files')
-      uploadId = null
-      if (PROMETHEUS_ENABLED && fileSampleCount) {
-        const processingValue = (Date.now() - startTimestamp) / fileSampleCount * 10000 // we use multiplier because values are far less than 1 in other case
-        pushHistogramMetric(fileFormat, processingValue)
-      }
-      await storage.deleteObject(uploadBucket, storageFilePath)
-      return dirUtil.removeDirRecursively(streamLocalPath)
-    })
-    .catch(async (err) => {
-      console.error(`Error thrown for upload ${uploadId}`, err.message || '')
-      const message = err instanceof IngestionError ? err.message : 'Server failed with processing your file. Please try again later.'
-      let status = err instanceof IngestionError ? err.status : db.status.FAILED
-      db.updateUploadStatus(uploadId, status, message)
-      for (const filePath of transactionData.segmentsFileUrls) {
-        await storage.deleteObject(ingestBucket, filePath)
-      }
-      for (const guid of transactionData.segmentsGuids) {
-        await segmentService.deleteSegment({ guid })
-      }
-      if (transactionData.streamSourceFileId) {
-        await segmentService.deleteStreamSourceFile({ guid: transactionData.streamSourceFileId })
-      }
+  if (isLosslessFile) { // convert lossless files to flac format
+    for (const file of outputFiles) {
+      const finalPath = file.path.replace(path.extname(file.path), '.flac')
+      await audioService.convert(file.path, finalPath)
+      file.path = finalPath
+    }
+  }
+  return {
+    wavMeta: meta,
+    outputFiles,
+  }
+}
 
-      if (!loggerIgnoredErrors.includes(message)) {
-        await storage.copy(`${uploadBucket}/${storageFilePath}`, errorBucket, storageFilePath)
-        // create error log text file in the same bucket
-        const storageErrorFilePath = storageFilePath.replace(path.extname(storageFilePath), '.txt')
-        await storage.createFromData(errorBucket, storageErrorFilePath, `message: ${err.message}\n\nstack: ${err.stack}`)
-      }
+function setAdditionalFileAttrs (outputFiles, upload) {
+  const timestamp = moment.tz(upload.timestamp, 'UTC').valueOf()
+  let totalDurationMs = 0
+  for (const file of outputFiles) {
+    const duration = Math.floor(file.meta.duration * 1000)
+    const ts = moment.tz(timestamp, 'UTC').add(totalDurationMs, 'milliseconds')
+    file.start = ts.toISOString()
+    file.end = ts.clone().add(duration, 'milliseconds').toISOString()
+    file.guid = uuid()
+    file.remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${upload.streamId}/${file.guid}${path.extname(file.path)}`
+    totalDurationMs += duration
+  }
+}
 
-      await storage.deleteObject(uploadBucket, storageFilePath)
-      dirUtil.removeDirRecursively(streamLocalPath)
-    })
+/**
+ * Prepares source file data based on multiple sources
+ * @param {*} fileLocalPath
+ * @param {*} fileData
+ * @param {*} fileDataWav
+ * @param {*} upload
+ */
+ function combineSourceFileData (fileData, wavMeta, upload) {
+  let data = { ...fileData }
+  data.stream = upload.streamId
+  data.filename = upload.originalFilename
+  if (wavMeta) {
+    data.bitRate = wavMeta.bitRate
+    data.duration = wavMeta.duration
+  }
+  // if sampleRate and bitRate were specified on upload request, then set them implicitly
+  if (upload.sampleRate) data.sampleRate = upload.sampleRate
+  if (upload.targetBitrate) data.bitRate = upload.targetBitrate
+  return data
+}
+
+/**
+ * Prepares segments data based on output files
+ * @param {*} outputFiles
+ * @param {*} upload
+ */
+function combineSegmentsData (outputFiles, upload) {
+  return outputFiles.map((file) => {
+    return {
+      id: file.guid,
+      stream: upload.streamId,
+      start: file.start,
+      end: file.end,
+      sampleCount: file.meta.sampleCount,
+      fileExtension: path.extname(file.path)
+    }
+  })
+}
+
+/**
+ * Prepares payload data needed for source files and segments creation in Core API
+ * @param {*} fileLocalPath
+ * @param {*} fileData
+ * @param {*} fileDataWav
+ * @param {*} outputFiles
+ * @param {*} upload
+ */
+function combineCorePayloadData (fileData, wavMeta, outputFiles, upload) {
+  return {
+    streamSourceFile: combineSourceFileData(fileData, wavMeta, upload),
+    streamSegments: combineSegmentsData(outputFiles, upload)
+  }
+}
+
+async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
+  let outputFiles
+  let streamSourceFileId
+  const streamLocalPath = getStreamLocalPath(fileStoragePath)
+  try {
+    const startTimestamp = Date.now() // is used for processing time calculation
+    const fileExtension = path.extname(fileStoragePath).toLowerCase()
+
+    validateFileFormat(fileExtension)
+    await createStreamLocalPath(streamLocalPath)
+    console.log('Downloading file from storage')
+    await storage.download(fileStoragePath, getFileLocalPath(fileStoragePath))
+    console.log('Updating upload status to UPLOADED')
+    await db.updateUploadStatus(uploadId, db.status.UPLOADED)
+
+    const fileData = await audioService.identify(fileLocalPath)
+    console.log('Audio metadata', JSON.stringify(fileData))
+    const upload = await db.getUpload(uploadId)
+    console.log('Upload metadata from database ', JSON.stringify(upload))
+    validateAudioMeta(upload, fileData, fileExtension)
+
+    console.log('Transcoding file')
+    const transcodeData = await transcode(fileLocalPath)
+    outputFiles = transcodeData.outputFiles
+    setAdditionalFileAttrs(outputFiles, upload)
+
+    console.log('Saving data in the Core API')
+    const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
+    streamSourceFileId = await segmentService.createStreamFileData(upload.streamId, corePayload)
+
+    console.log(`Uploading segments`)
+    await Promise.all(
+      outputFiles.map(f => storage.upload(ingestBucket, f.remotePath, f.path))
+    )
+
+    if (ARBIMON_ENABLED) {
+      console.log('Creating recordings in Arbimon')
+      await arbimonService.createRecordingsFromFiles(outputFiles, upload)
+    }
+
+    console.log(`Modifying status to INGESTED (${db.status.INGESTED})`)
+    await db.updateUploadStatus(uploadId, db.status.INGESTED)
+
+    uploadId = null
+    if (PROMETHEUS_ENABLED && fileData.sampleCount) {
+      console.log('Updating processing metrics')
+      const processingValue = (Date.now() - startTimestamp) / fileData.sampleCount * 10000 // we use multiplier because values are far less than 1 in other case
+      pushHistogramMetric(fileExtension.substr(1), processingValue)
+    }
+    console.log('Cleaning up files')
+    await storage.deleteObject(uploadBucket, fileStoragePath)
+    await dirUtil.removeDirRecursively(streamLocalPath)
+  } catch (err) {
+    console.error(`Error thrown for upload ${uploadId}`, err.message || '')
+    const message = err instanceof IngestionError ? err.message : 'Server failed with processing your file. Please try again later.'
+    let status = err instanceof IngestionError ? err.status : db.status.FAILED
+    db.updateUploadStatus(uploadId, status, message)
+    for (const file of outputFiles) {
+      storage.deleteObject(ingestBucket, file.remotePath)
+    }
+    if (streamSourceFileId) {
+      segmentService.deleteStreamSourceFile(streamSourceFileId)
+    }
+
+    if (!loggerIgnoredErrors.includes(message)) {
+      await storage.copy(`${uploadBucket}/${fileStoragePath}`, errorBucket, fileStoragePath)
+      // create error log text file in the same bucket
+      const storageErrorFilePath = fileStoragePath.replace(path.extname(fileStoragePath), '.txt')
+      await storage.createFromData(errorBucket, storageErrorFilePath, `message: ${err.message}\n\nstack: ${err.stack}`)
+    }
+
+    await storage.deleteObject(uploadBucket, fileStoragePath)
+    dirUtil.removeDirRecursively(streamLocalPath)
+  }
 }
 
 module.exports = { ingest }
