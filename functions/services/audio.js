@@ -97,6 +97,9 @@ function convert (sourceFile, destinationPath) {
     const command = ffmpeg(sourceFile)
       .noVideo()
       .output(destinationPath)
+      .outputOptions([
+        '-ac 1'
+      ])
       .on('start', function (commandLine) {
         // console.log('Spawned Ffmpeg with command: ' + commandLine)
       }).on('progress', function (progress) {
