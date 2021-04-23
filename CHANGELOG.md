@@ -9,6 +9,7 @@
 
 ### Bug Fixes
 * Use one endpoint for stream_source_file and stream_segment creation ([CE-469](https://jira.rfcx.org/browse/CE-469))
+* Request stream info after creation
 
 <a name="1.0.3"></a>
 ## 1.0.3 (2021-03-15)

@@ -73,9 +73,29 @@ async function query (idToken, opts) {
     .catch(e => { throw matchAxiosErrorToRfcx(e) })
 }
 
+async function get (opts) {
+  const url = `${apiHostName}streams/${opts.id}`
+  const headers = {
+    Authorization: `${opts.idToken}`,
+    'Content-Type': 'application/json'
+  }
+  return axios.get(url, { headers })
+    .catch(e => { throw matchAxiosErrorToRfcx(e) })
+}
+
+function parseIdFromHeaders (headers) {
+  const regexResult = /\/streams\/(?<id>\w+)$/.exec(headers.location)
+  if (regexResult) {
+      return regexResult.groups.id
+  }
+  throw new Error(`Unable to parse location header: ${response.headers.location}`)
+}
+
 module.exports = {
   create,
   update,
   remove,
-  query
+  query,
+  get,
+  parseIdFromHeaders
 }

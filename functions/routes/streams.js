@@ -92,8 +92,9 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), async (r
   try {
     const params = await converter.validate()
     const response = await streamService.create({ ...params, idToken })
-    const streamData = response.data
-    res.json(streamData)
+    const id = streamService.parseIdFromHeaders(response.headers)
+    const streamData = await streamService.get({ id, idToken })
+    res.json(streamData.data)
   } catch (e) {
     httpErrorHandler(req, res, 'Error while creating a stream.')(e);
   }
