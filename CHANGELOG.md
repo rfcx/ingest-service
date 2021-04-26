@@ -11,6 +11,9 @@
 * Use one endpoint for stream_source_file and stream_segment creation ([CE-469](https://jira.rfcx.org/browse/CE-469))
 * Request stream info after creation
 
+### Other
+* Move recordings creation to Core API side
+
 <a name="1.0.3"></a>
 ## 1.0.3 (2021-03-15)
 
