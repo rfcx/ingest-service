@@ -5,9 +5,6 @@ const db = require('../db/mongo')
 const audioService = require('../audio')
 const dirUtil = require('../../utils/dir')
 const segmentService = require('../rfcx/segments')
-const auth0Service = require('../../services/auth0')
-const ARBIMON_ENABLED = `${process.env.ARBIMON_ENABLED}` === 'true'
-const arbimonService = require('../../services/arbimon')
 const { PROMETHEUS_ENABLED, registerHistogram, pushHistogramMetric } = require('../../services/prometheus')
 const path = require('path')
 const moment = require('moment-timezone')
@@ -177,7 +174,8 @@ function combineSegmentsData (outputFiles, upload) {
       start: file.start,
       end: file.end,
       sampleCount: file.meta.sampleCount,
-      fileExtension: path.extname(file.path)
+      fileExtension: path.extname(file.path),
+      fileSize: file.meta.size
     }
   })
 }
@@ -231,11 +229,6 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     await Promise.all(
       outputFiles.map(f => storage.upload(ingestBucket, f.remotePath, f.path))
     )
-
-    if (ARBIMON_ENABLED) {
-      console.log('Creating recordings in Arbimon')
-      await arbimonService.createRecordingsFromFiles(outputFiles, upload)
-    }
 
     console.log(`Modifying status to INGESTED (${db.status.INGESTED})`)
     await db.updateUploadStatus(uploadId, db.status.INGESTED)

@@ -47,7 +47,8 @@ function transformStreamSegmentsPayload (data) {
       start: item.start,
       end: item.end,
       sample_count: item.sampleCount,
-      file_extension: item.fileExtension
+      file_extension: item.fileExtension,
+      file_size: item.fileSize
     }
   })
 }
