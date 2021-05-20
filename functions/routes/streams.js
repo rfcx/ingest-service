@@ -1,15 +1,10 @@
 const express = require('express')
-var router = express.Router()
-
-const authentication = require('../middleware/authentication')
-const verifyToken = authentication.verifyToken
-const hasRole = authentication.hasRole
-
-router.use(require('../middleware/cors'))
-
-const streamService = require('../services/rfcx/streams')
-
 const { Converter, httpErrorHandler } = require('@rfcx/http-utils')
+const streamService = require('../services/rfcx/streams')
+const { hasRole, verifyToken } = require('../middleware/authentication')
+
+const router = express.Router()
+router.use(require('../middleware/cors'))
 
 /**
  * @swagger
@@ -19,6 +14,21 @@ const { Converter, httpErrorHandler } = require('@rfcx/http-utils')
  *        summary: Get all of streams
  *        tags:
  *          - streams
+ *        parameters:
+ *          - name: keyword
+ *            description: Filter streams by name
+ *            in: query
+ *            type: string
+ *          - name: limit
+ *            description: Maximum number of results to return
+ *            in: query
+ *            type: int
+ *            default: 100
+ *          - name: offset
+ *            description: Number of results to skip
+ *            in: query
+ *            type: int
+ *            default: 0
  *        responses:
  *          200:
  *            description: List of streams objects
@@ -38,16 +48,20 @@ const { Converter, httpErrorHandler } = require('@rfcx/http-utils')
  *          500:
  *            description: Error while getting streams
  */
-router.route('/').get(verifyToken(), hasRole(['appUser', 'rfcxUser']), async (req, res) => {
+router.route('/').get(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => { // TODO: Need rfcxUser?
   const idToken = req.headers.authorization
-  try {
-    const response = await streamService.query(idToken, { created_by: 'me' })
+  const converter = new Converter(req.query, {})
+  converter.convert('keyword').optional()
+  converter.convert('limit').optional().toInt()
+  converter.convert('offset').optional().toInt()
+  converter.convert('projects').optional().toArray()
+
+  converter.validate().then(async (params) => {
+    const response = await streamService.query(idToken, params)
     return res
       .header('Total-Items', response.headers['total-items'])
       .json(response.data)
-  } catch (e) {
-    httpErrorHandler(req, res, 'Error while getting streams')(e);
-  }
+  }).catch(httpErrorHandler(req, res, 'Error while getting streams'))
 })
 
 /**
