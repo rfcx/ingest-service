@@ -1,3 +1,9 @@
+ <a name="1.0.5"></a>
+## 1.0.5 (2021-05-xx)
+
+### Features
+* Add project endpoints ([CE-764](https://jira.rfcx.org/browse/CE-764))
+
  <a name="1.0.4"></a>
 ## 1.0.4 (2021-04-27)
 
