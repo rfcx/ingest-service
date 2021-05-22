@@ -11,7 +11,8 @@ function combineRequestPayload (opts) {
     ...opts.longitude !== undefined && { longitude: opts.longitude },
     ...opts.altitude !== undefined && { altitude: opts.altitude },
     ...opts.description !== undefined && { description: opts.description },
-    ...opts.is_public !== undefined && { is_public: opts.is_public }
+    ...opts.is_public !== undefined && { is_public: opts.is_public },
+    ...opts.project_id !== undefined && { project_id: opts.project_id }
   }
 }
 

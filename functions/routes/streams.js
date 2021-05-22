@@ -94,24 +94,23 @@ router.route('/').get(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res
  *          500:
  *            description: Error while creating a stream.
  */
-router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), async (req, res) => {
+router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
   const idToken = req.headers.authorization
-  const converter = new Converter(req.body, {});
+  const converter = new Converter(req.body, {})
   converter.convert('name').toString()
   converter.convert('latitude').toFloat().minimum(-90).maximum(90)
   converter.convert('longitude').toFloat().minimum(-180).maximum(180)
   converter.convert('altitude').optional().toFloat()
   converter.convert('description').optional().toString()
   converter.convert('is_public').optional().toBoolean().default(false)
-  try {
-    const params = await converter.validate()
+  converter.convert('project_id').optional().toString()
+
+  converter.validate().then(async (params) => {
     const response = await streamService.create({ ...params, idToken })
     const id = streamService.parseIdFromHeaders(response.headers)
     const streamData = await streamService.get({ id, idToken })
     res.json(streamData.data)
-  } catch (e) {
-    httpErrorHandler(req, res, 'Error while creating a stream.')(e);
-  }
+  }).catch(httpErrorHandler(req, res, 'Error while creating a stream.'))
 })
 
 /**
@@ -120,7 +119,7 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), async (r
 async function updateEndpoint (req, res) {
   const idToken = req.headers.authorization
   const streamId = req.params.id
-  const converter = new Converter(req.body, {});
+  const converter = new Converter(req.body, {})
   converter.convert('name').optional().toString()
   converter.convert('latitude').optional().toFloat().minimum(-90).maximum(90)
   converter.convert('longitude').optional().toFloat().minimum(-180).maximum(180)
@@ -133,7 +132,7 @@ async function updateEndpoint (req, res) {
     const response = await streamService.update({ ...params, streamId, idToken })
     res.json(response.data)
   } catch (e) {
-    httpErrorHandler(req, res, 'Error while updating the stream.')(e);
+    httpErrorHandler(req, res, 'Error while updating the stream.')(e)
   }
 }
 
@@ -196,7 +195,7 @@ async function deleteEndpoint (req, res) {
     await streamService.remove({ streamId, idToken })
     res.sendStatus(204)
   } catch (e) {
-    httpErrorHandler(req, res, 'Error while deleting the stream.')(e);
+    httpErrorHandler(req, res, 'Error while deleting the stream.')(e)
   }
 }
 
