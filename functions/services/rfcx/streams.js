@@ -1,5 +1,4 @@
 const axios = require('axios')
-const errors = require('../../utils/error-messages')
 const { matchAxiosErrorToRfcx } = require('../../utils/errors')
 
 const apiHostName = process.env.API_HOST
@@ -80,7 +79,7 @@ function parseIdFromHeaders (headers) {
   if (regexResult) {
     return regexResult.groups.id
   }
-  throw new Error(`Unable to parse location header: ${response.headers.location}`)
+  throw new Error(`Unable to parse location header: ${headers.location}`)
 }
 
 module.exports = {
