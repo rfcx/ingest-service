@@ -19,6 +19,10 @@ router.use(require('../middleware/cors'))
  *            description: Filter streams by name
  *            in: query
  *            type: string
+ *          - name: projects
+ *            description: Filter streams by projects
+ *            in: query
+ *            type: array
  *          - name: limit
  *            description: Maximum number of results to return
  *            in: query

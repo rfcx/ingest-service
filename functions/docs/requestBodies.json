@@ -36,6 +36,11 @@
         "type": "boolean",
         "description": "Whether stream is public (default false)",
         "default": "false"
+      },
+      "project_id": {
+        "type": "string",
+        "description": "A project id",
+        "example": "svqdalo150hv"
       }
     },
     "required": [

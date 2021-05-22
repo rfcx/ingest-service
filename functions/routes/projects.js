@@ -14,6 +14,19 @@ router.use(require('../middleware/cors'))
  *        summary: Get readable projects
  *        tags:
  *          - projects
+  *        parameters:
+ *          - name: keyword
+ *            description: Filter projects by name
+ *            in: query
+ *            type: string
+ *          - name: limit
+ *            description: Maximum number of results to return
+ *            in: query
+ *            type: int
+ *          - name: offset
+ *            description: Number of results to skip
+ *            in: query
+ *            type: int
  *        responses:
  *          200:
  *            description: List of project objects
@@ -42,9 +55,6 @@ router.route('/').get(verifyToken(), (req, res) => {
       .header('Total-Items', response.headers['total-items'])
       .json(response.data)
   }).catch(httpErrorHandler(req, res, 'Error while getting projects'))
-  // projectsService.query(idToken, req.opts).then((response) => {
-  //   res.header('Total-Items', response.headers['total-items']).json(response.data)
-  // }).catch(httpErrorHandler(req, res, 'Error getting projects'))
 })
 
 module.exports = router
