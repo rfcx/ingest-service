@@ -17,7 +17,6 @@ const supportedExtensions = ['.wav', '.flac', '.opus']
 const losslessExtensions = ['.wav', '.flac']
 const extensionsRequiringConvToWav = ['.flac']
 const extensionsRequiringAdditionalData = ['.opus']
-const segmentDurationMs = 120000
 
 const { IngestionError } = require('../../utils/errors')
 const loggerIgnoredErrors = [
@@ -99,9 +98,10 @@ function validateAudioMeta (upload, meta, extension) {
 /**
  * Splits source file into segments and converts them to flac if file is lossless
  * @param {*} filePath
+ * @param {*} fileData
  * @returns
  */
-async function transcode (filePath) {
+async function transcode (filePath, fileData) {
   const fileExtension = path.extname(filePath).toLowerCase()
   const isLosslessFile = losslessExtensions.includes(fileExtension)
   let destinationFilePath = filePath
@@ -110,7 +110,8 @@ async function transcode (filePath) {
     var { meta } = await audioService.convert(filePath, destinationFilePath)
   }
   console.log('Splitting original file into segments')
-  const outputFiles = await audioService.split(destinationFilePath, path.dirname(filePath), segmentDurationMs / 1000)
+  const segmentDuration = fileData.duration >= 120 ? 60 : 120
+  const outputFiles = await audioService.split(destinationFilePath, path.dirname(filePath), segmentDuration)
   console.log(`File was split into ${outputFiles.length} segments`)
 
   if (isLosslessFile) { // convert lossless files to flac format
@@ -217,7 +218,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     validateAudioMeta(upload, fileData, fileExtension)
 
     console.log('Transcoding file')
-    const transcodeData = await transcode(fileLocalPath)
+    const transcodeData = await transcode(fileLocalPath, fileData)
     outputFiles = transcodeData.outputFiles
     setAdditionalFileAttrs(outputFiles, upload)
 

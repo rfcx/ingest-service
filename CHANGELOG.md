@@ -1,3 +1,10 @@
+ <a name="1.0.5"></a>
+## 1.0.5 (2021-05-19)
+
+### Features
+* Update split logic: break into 60 secs if file >= 120 secs; if less 120 secs, do nothing ([CE-244](https://jira.rfcx.org/browse/CE-244))
+
+
  <a name="1.0.4"></a>
 ## 1.0.4 (2021-04-27)
 
