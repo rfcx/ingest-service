@@ -52,7 +52,7 @@ router.use(require('../middleware/cors'))
  *          500:
  *            description: Error while getting streams
  */
-router.route('/').get(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => { // TODO: Need rfcxUser?
+router.route('/').get(verifyToken(), (req, res) => {
   const idToken = req.headers.authorization
   const converter = new Converter(req.query, {})
   converter.convert('keyword').optional()
@@ -98,7 +98,7 @@ router.route('/').get(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res
  *          500:
  *            description: Error while creating a stream.
  */
-router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), (req, res) => {
+router.route('/').post(verifyToken(), (req, res) => {
   const idToken = req.headers.authorization
   const converter = new Converter(req.body, {})
   converter.convert('name').toString()
