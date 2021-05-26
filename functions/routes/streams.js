@@ -1,15 +1,10 @@
 const express = require('express')
-var router = express.Router()
-
-const authentication = require('../middleware/authentication')
-const verifyToken = authentication.verifyToken
-const hasRole = authentication.hasRole
-
-router.use(require('../middleware/cors'))
-
-const streamService = require('../services/rfcx/streams')
-
 const { Converter, httpErrorHandler } = require('@rfcx/http-utils')
+const streamService = require('../services/rfcx/streams')
+const { hasRole, verifyToken } = require('../middleware/authentication')
+
+const router = express.Router()
+router.use(require('../middleware/cors'))
 
 /**
  * @swagger
@@ -19,6 +14,25 @@ const { Converter, httpErrorHandler } = require('@rfcx/http-utils')
  *        summary: Get all of streams
  *        tags:
  *          - streams
+ *        parameters:
+ *          - name: keyword
+ *            description: Filter streams by name
+ *            in: query
+ *            type: string
+ *          - name: projects
+ *            description: Filter streams by projects
+ *            in: query
+ *            type: array
+ *          - name: limit
+ *            description: Maximum number of results to return
+ *            in: query
+ *            type: int
+ *            default: 100
+ *          - name: offset
+ *            description: Number of results to skip
+ *            in: query
+ *            type: int
+ *            default: 0
  *        responses:
  *          200:
  *            description: List of streams objects
@@ -38,16 +52,20 @@ const { Converter, httpErrorHandler } = require('@rfcx/http-utils')
  *          500:
  *            description: Error while getting streams
  */
-router.route('/').get(verifyToken(), hasRole(['appUser', 'rfcxUser']), async (req, res) => {
+router.route('/').get(verifyToken(), (req, res) => {
   const idToken = req.headers.authorization
-  try {
-    const response = await streamService.query(idToken, { created_by: 'me' })
+  const converter = new Converter(req.query, {})
+  converter.convert('keyword').optional()
+  converter.convert('limit').optional().toInt()
+  converter.convert('offset').optional().toInt()
+  converter.convert('projects').optional().toArray()
+
+  converter.validate().then(async (params) => {
+    const response = await streamService.query(idToken, params)
     return res
       .header('Total-Items', response.headers['total-items'])
       .json(response.data)
-  } catch (e) {
-    httpErrorHandler(req, res, 'Error while getting streams')(e);
-  }
+  }).catch(httpErrorHandler(req, res, 'Error while getting streams'))
 })
 
 /**
@@ -80,24 +98,23 @@ router.route('/').get(verifyToken(), hasRole(['appUser', 'rfcxUser']), async (re
  *          500:
  *            description: Error while creating a stream.
  */
-router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), async (req, res) => {
+router.route('/').post(verifyToken(), (req, res) => {
   const idToken = req.headers.authorization
-  const converter = new Converter(req.body, {});
+  const converter = new Converter(req.body, {})
   converter.convert('name').toString()
   converter.convert('latitude').toFloat().minimum(-90).maximum(90)
   converter.convert('longitude').toFloat().minimum(-180).maximum(180)
   converter.convert('altitude').optional().toFloat()
   converter.convert('description').optional().toString()
   converter.convert('is_public').optional().toBoolean().default(false)
-  try {
-    const params = await converter.validate()
+  converter.convert('project_id').optional().toString()
+
+  converter.validate().then(async (params) => {
     const response = await streamService.create({ ...params, idToken })
     const id = streamService.parseIdFromHeaders(response.headers)
     const streamData = await streamService.get({ id, idToken })
     res.json(streamData.data)
-  } catch (e) {
-    httpErrorHandler(req, res, 'Error while creating a stream.')(e);
-  }
+  }).catch(httpErrorHandler(req, res, 'Error while creating a stream.'))
 })
 
 /**
@@ -106,7 +123,7 @@ router.route('/').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), async (r
 async function updateEndpoint (req, res) {
   const idToken = req.headers.authorization
   const streamId = req.params.id
-  const converter = new Converter(req.body, {});
+  const converter = new Converter(req.body, {})
   converter.convert('name').optional().toString()
   converter.convert('latitude').optional().toFloat().minimum(-90).maximum(90)
   converter.convert('longitude').optional().toFloat().minimum(-180).maximum(180)
@@ -119,7 +136,7 @@ async function updateEndpoint (req, res) {
     const response = await streamService.update({ ...params, streamId, idToken })
     res.json(response.data)
   } catch (e) {
-    httpErrorHandler(req, res, 'Error while updating the stream.')(e);
+    httpErrorHandler(req, res, 'Error while updating the stream.')(e)
   }
 }
 
@@ -182,7 +199,7 @@ async function deleteEndpoint (req, res) {
     await streamService.remove({ streamId, idToken })
     res.sendStatus(204)
   } catch (e) {
-    httpErrorHandler(req, res, 'Error while deleting the stream.')(e);
+    httpErrorHandler(req, res, 'Error while deleting the stream.')(e)
   }
 }
 

@@ -1,5 +1,4 @@
 const axios = require('axios')
-const errors = require('../../utils/error-messages')
 const { matchAxiosErrorToRfcx } = require('../../utils/errors')
 
 const apiHostName = process.env.API_HOST
@@ -11,7 +10,8 @@ function combineRequestPayload (opts) {
     ...opts.longitude !== undefined && { longitude: opts.longitude },
     ...opts.altitude !== undefined && { altitude: opts.altitude },
     ...opts.description !== undefined && { description: opts.description },
-    ...opts.is_public !== undefined && { is_public: opts.is_public }
+    ...opts.is_public !== undefined && { is_public: opts.is_public },
+    ...opts.project_id !== undefined && { project_id: opts.project_id }
   }
 }
 
@@ -52,18 +52,9 @@ async function remove (opts) {
     .catch(e => { throw matchAxiosErrorToRfcx(e) })
 }
 
-async function query (idToken, opts) {
+async function query (idToken, params) {
   const url = `${apiHostName}streams`
-  const params = {
-    ...opts.is_public !== undefined && { is_public: opts.is_public },
-    ...opts.is_deleted !== undefined && { is_deleted: opts.is_deleted },
-    ...opts.created_by !== undefined && { created_by: opts.created_by },
-    ...opts.start !== undefined && { start: opts.start },
-    ...opts.end !== undefined && { end: opts.end },
-    ...opts.keyword !== undefined && { keyword: opts.keyword },
-    ...opts.limit !== undefined && { limit: opts.limit },
-    ...opts.offset !== undefined && { offset: opts.offset }
-  }
+
   const headers = {
     Authorization: `${idToken}`,
     'Content-Type': 'application/json'
@@ -86,9 +77,9 @@ async function get (opts) {
 function parseIdFromHeaders (headers) {
   const regexResult = /\/streams\/(?<id>\w+)$/.exec(headers.location)
   if (regexResult) {
-      return regexResult.groups.id
+    return regexResult.groups.id
   }
-  throw new Error(`Unable to parse location header: ${response.headers.location}`)
+  throw new Error(`Unable to parse location header: ${headers.location}`)
 }
 
 module.exports = {

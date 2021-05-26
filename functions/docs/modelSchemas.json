@@ -182,5 +182,17 @@
         "example": ""
       }
     }
+  },
+  "Project": {
+    "properties": {
+      "id": {
+        "type": "string",
+        "example": "xu82jDgX49"
+      },
+      "name": {
+        "type": "string",
+        "example": "My Projects"
+      }
+    }
   }
 }
