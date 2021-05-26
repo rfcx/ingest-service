@@ -1,16 +1,9 @@
-<a name="1.0.6"></a>
-
-## 1.0.6 (2021-05-xx)
-
-### Features
-* Add project endpoints ([CE-764](https://jira.rfcx.org/browse/CE-764))
-
 <a name="1.0.5"></a>
-
-## 1.0.5 (2021-05-19)
+## 1.0.5 (2021-05-26)
 
 ### Features
 * Update split logic: break into 60 secs if file >= 120 secs; if less 120 secs, do nothing ([CE-244](https://jira.rfcx.org/browse/CE-244))
+* Add project endpoints ([CE-764](https://jira.rfcx.org/browse/CE-764))
 
  <a name="1.0.4"></a>
 ## 1.0.4 (2021-04-27)
