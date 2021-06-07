@@ -1,3 +1,12 @@
+<a name="1.0.6"></a>
+## 1.0.6 (2021-06-XX)
+
+### Bug Fixes
+* Check user permissions for stream before creating an upload ([CE-831](https://jira.rfcx.org/browse/CE-831))
+
+### Other
+* Refactor routes code: call middleware from root; delete Auth0 roles checks
+
 <a name="1.0.5"></a>
 ## 1.0.5 (2021-05-26)
 

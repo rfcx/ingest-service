@@ -1,10 +1,6 @@
-const express = require('express')
+const router = require('express').Router()
 const { Converter, httpErrorHandler } = require('@rfcx/http-utils')
 const streamService = require('../services/rfcx/streams')
-const { hasRole, verifyToken } = require('../middleware/authentication')
-
-const router = express.Router()
-router.use(require('../middleware/cors'))
 
 /**
  * @swagger
@@ -52,20 +48,21 @@ router.use(require('../middleware/cors'))
  *          500:
  *            description: Error while getting streams
  */
-router.route('/').get(verifyToken(), (req, res) => {
+router.route('/').get((req, res) => {
   const idToken = req.headers.authorization
   const converter = new Converter(req.query, {})
   converter.convert('keyword').optional()
   converter.convert('limit').optional().toInt()
   converter.convert('offset').optional().toInt()
   converter.convert('projects').optional().toArray()
-
-  converter.validate().then(async (params) => {
-    const response = await streamService.query(idToken, params)
-    return res
-      .header('Total-Items', response.headers['total-items'])
-      .json(response.data)
-  }).catch(httpErrorHandler(req, res, 'Error while getting streams'))
+  converter.validate()
+    .then(async (params) => {
+      const response = await streamService.query(idToken, params)
+      return res
+        .header('Total-Items', response.headers['total-items'])
+        .json(response.data)
+    })
+    .catch(httpErrorHandler(req, res, 'Error while getting streams'))
 })
 
 /**
@@ -98,7 +95,7 @@ router.route('/').get(verifyToken(), (req, res) => {
  *          500:
  *            description: Error while creating a stream.
  */
-router.route('/').post(verifyToken(), (req, res) => {
+router.route('/').post((req, res) => {
   const idToken = req.headers.authorization
   const converter = new Converter(req.body, {})
   converter.convert('name').toString()
@@ -108,19 +105,20 @@ router.route('/').post(verifyToken(), (req, res) => {
   converter.convert('description').optional().toString()
   converter.convert('is_public').optional().toBoolean().default(false)
   converter.convert('project_id').optional().toString()
-
-  converter.validate().then(async (params) => {
-    const response = await streamService.create({ ...params, idToken })
-    const id = streamService.parseIdFromHeaders(response.headers)
-    const streamData = await streamService.get({ id, idToken })
-    res.json(streamData.data)
-  }).catch(httpErrorHandler(req, res, 'Error while creating a stream.'))
+  converter.validate()
+    .then(async (params) => {
+      const response = await streamService.create({ ...params, idToken })
+      const id = streamService.parseIdFromHeaders(response.headers)
+      const streamData = await streamService.get({ id, idToken })
+      res.json(streamData.data)
+    })
+    .catch(httpErrorHandler(req, res, 'Error while creating a stream.'))
 })
 
 /**
  * HTTP function that updates a stream
  */
-async function updateEndpoint (req, res) {
+function updateEndpoint (req, res) {
   const idToken = req.headers.authorization
   const streamId = req.params.id
   const converter = new Converter(req.body, {})
@@ -131,13 +129,12 @@ async function updateEndpoint (req, res) {
   converter.convert('description').optional().toString()
   converter.convert('is_public').optional().toBoolean()
 
-  try {
-    const params = await converter.validate()
-    const response = await streamService.update({ ...params, streamId, idToken })
-    res.json(response.data)
-  } catch (e) {
-    httpErrorHandler(req, res, 'Error while updating the stream.')(e)
-  }
+  converter.validate()
+    .then(async (params) => {
+      const response = await streamService.update({ ...params, streamId, idToken })
+      res.json(response.data)
+    })
+    .catch(httpErrorHandler(req, res, 'Error while updating the stream.'))
 }
 
 /**
@@ -149,7 +146,7 @@ async function updateEndpoint (req, res) {
  *        tags:
  *          - streams
  */
-router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), updateEndpoint)
+router.route('/:id').post(updateEndpoint)
 
 /**
  * @swagger
@@ -187,20 +184,19 @@ router.route('/:id').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), updat
  *          500:
  *            description: Error while updating the stream.
  */
-router.route('/:id').patch(verifyToken(), hasRole(['appUser', 'rfcxUser']), updateEndpoint)
+router.route('/:id').patch(updateEndpoint)
 
 /**
  * HTTP function that deletes a stream
  */
-async function deleteEndpoint (req, res) {
+function deleteEndpoint (req, res) {
   const streamId = req.params.id
   const idToken = req.headers.authorization
-  try {
-    await streamService.remove({ streamId, idToken })
-    res.sendStatus(204)
-  } catch (e) {
-    httpErrorHandler(req, res, 'Error while deleting the stream.')(e)
-  }
+  streamService.remove({ streamId, idToken })
+    .then(() => {
+      res.sendStatus(204)
+    })
+    .catch(httpErrorHandler(req, res, 'Error while deleting the stream.'))
 }
 
 /**
@@ -212,7 +208,7 @@ async function deleteEndpoint (req, res) {
  *        tags:
  *          - streams
  */
-router.route('/:id/move-to-trash').post(verifyToken(), hasRole(['appUser', 'rfcxUser']), deleteEndpoint)
+router.route('/:id/move-to-trash').post(deleteEndpoint)
 
 /**
  * @swagger
@@ -234,6 +230,6 @@ router.route('/:id/move-to-trash').post(verifyToken(), hasRole(['appUser', 'rfcx
  *          400:
  *            description: Error while deleting the stream.
  */
-router.route('/:id').delete(verifyToken(), hasRole(['appUser', 'rfcxUser']), deleteEndpoint)
+router.route('/:id').delete(deleteEndpoint)
 
 module.exports = router

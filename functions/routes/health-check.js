@@ -1,10 +1,9 @@
-const express = require('express')
-var router = express.Router()
+const router = require('express').Router()
 const mongoose = require(`../utils/mongo`)
 
 /**
  * @swagger
- * 
+ *
  * /health-check:
  *   get:
  *        summary: Check health

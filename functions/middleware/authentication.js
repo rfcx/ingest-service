@@ -1,33 +1,13 @@
 const fs = require('fs')
 const jwt = require('jsonwebtoken')
 const path = require('path')
-
 const cert = fs.readFileSync(path.join(process.cwd(), 'rfcx.pub'))
-
-function obtainRoles (user) {
-  if (user.roles) { return user.roles }
-  const rfcxAppMetaUrl = 'https://rfcx.org/app_metadata'
-  if (user[rfcxAppMetaUrl] && user[rfcxAppMetaUrl].authorization && user[rfcxAppMetaUrl].authorization.roles) {
-    return user[rfcxAppMetaUrl].authorization.roles
-  }
-  if (user.scope) {
-    if (typeof user.scope === 'string') {
-      try {
-        const parsedScrope = JSON.parse(user.scope)
-        if (parsedScrope.roles) { return parsedScrope.roles }
-      } catch (e) { }
-    } else {
-      if (user.scope.roles) { return user.scope.roles }
-    }
-  }
-  return []
-}
 
 const verifyToken = function () {
   return function (req, res, next) {
     let token = req.headers.authorization
     if (!token) {
-      return res.sendStatus(403)
+      return res.sendStatus(401)
     }
     if (token.startsWith('Bearer ')) { // Remove Bearer from string
       token = token.slice(7, token.length)
@@ -47,20 +27,6 @@ const verifyToken = function () {
   }
 }
 
-const hasRole = function (expectedRoles) {
-  expectedRoles = (Array.isArray(expectedRoles) ? expectedRoles : [expectedRoles])
-  return function (req, res, next) {
-    if (expectedRoles.length === 0) { return next() }
-    if (!req.user) { return res.sendStatus(403) }
-    const roles = obtainRoles(req.user)
-    var allowed = expectedRoles.some((role) => {
-      return roles.indexOf(role) !== -1
-    })
-    return allowed ? next() : res.sendStatus(403)
-  }
-}
-
 module.exports = {
-  verifyToken,
-  hasRole,
+  verifyToken
 }

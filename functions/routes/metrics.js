@@ -2,8 +2,7 @@ const { PROMETHEUS_ENABLED, register } = require('../utils/prometheus')
 if (!PROMETHEUS_ENABLED) {
   return
 }
-const express = require('express')
-const router = express.Router()
+const router = require('express').Router()
 
 router.route('/').get(async (req, res) => {
   res.setHeader('Content-Type', register.contentType)

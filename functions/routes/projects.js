@@ -1,10 +1,6 @@
-const express = require('express')
+const router = require('express').Router()
 const { Converter, httpErrorHandler } = require('@rfcx/http-utils')
-const { verifyToken } = require('../middleware/authentication')
 const projectsService = require('../services/rfcx/projects')
-
-const router = express.Router()
-router.use(require('../middleware/cors'))
 
 /**
  * @swagger
@@ -42,19 +38,20 @@ router.use(require('../middleware/cors'))
  *                  items:
  *                    $ref: '#/components/schemas/Project'
  */
-router.route('/').get(verifyToken(), (req, res) => {
+router.route('/').get((req, res) => {
   const idToken = req.headers.authorization
   const converter = new Converter(req.query, {})
   converter.convert('keyword').optional()
   converter.convert('limit').optional()
   converter.convert('offset').optional()
-
-  converter.validate().then(async (params) => {
-    const response = await projectsService.query(idToken, params)
-    return res
-      .header('Total-Items', response.headers['total-items'])
-      .json(response.data)
-  }).catch(httpErrorHandler(req, res, 'Error while getting projects'))
+  converter.validate()
+    .then(async (params) => {
+      const response = await projectsService.query(idToken, params)
+      return res
+        .header('Total-Items', response.headers['total-items'])
+        .json(response.data)
+    })
+    .catch(httpErrorHandler(req, res, 'Error while getting projects'))
 })
 
 module.exports = router

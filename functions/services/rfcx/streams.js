@@ -1,5 +1,5 @@
 const axios = require('axios')
-const { matchAxiosErrorToRfcx } = require('../../utils/errors')
+const { matchAxiosErrorToRfcx, ForbiddenError } = require('../../utils/errors')
 
 const apiHostName = process.env.API_HOST
 
@@ -74,6 +74,21 @@ async function get (opts) {
     .catch(e => { throw matchAxiosErrorToRfcx(e) })
 }
 
+function checkPermission (permission, stream, token) {
+  const url = `${apiHostName}streams/${stream}/permissions`
+  const headers = {
+    Authorization: `${token}`,
+    'Content-Type': 'application/json'
+  }
+  return axios.get(url, { headers })
+    .then((response) => {
+      if (!response.data || !response.data.includes(permission)) {
+        throw new ForbiddenError()
+      }
+    })
+    .catch(e => { throw matchAxiosErrorToRfcx(e) })
+}
+
 function parseIdFromHeaders (headers) {
   const regexResult = /\/streams\/(?<id>\w+)$/.exec(headers.location)
   if (regexResult) {
@@ -88,5 +103,6 @@ module.exports = {
   remove,
   query,
   get,
+  checkPermission,
   parseIdFromHeaders
 }

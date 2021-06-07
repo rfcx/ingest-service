@@ -37,5 +37,6 @@ function matchAxiosErrorToRfcx (err) {
 
 module.exports = {
   IngestionError,
+  ForbiddenError,
   matchAxiosErrorToRfcx
 }

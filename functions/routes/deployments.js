@@ -1,12 +1,4 @@
-const express = require('express')
-var router = express.Router()
-
-const authentication = require('../middleware/authentication')
-const verifyToken = authentication.verifyToken
-const hasRole = authentication.hasRole
-
-router.use(require('../middleware/cors'))
-
+const router = require('express').Router()
 const { Converter, httpErrorHandler } = require('@rfcx/http-utils')
 const deploymentService = require('../services/deployments')
 
@@ -53,19 +45,17 @@ const deploymentService = require('../services/deployments')
  *          500:
  *            description: Error while getting deployments
  */
-router.route('/').get(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), async (req, res) => {
-  try {
-    const converter = new Converter(req.query, {});
-    converter.convert('active').optional().toBoolean()
-    converter.convert('limit').optional().toNonNegativeInt().default(100)
-    converter.convert('offset').optional().toNonNegativeInt().default(0)
-    const params = await converter.validate()
-    const idToken = req.headers.authorization
-    const data = await deploymentService.query(params, idToken)
-    res.json(data)
-  } catch (e) {
-    httpErrorHandler(req, res, 'Failed getting deployments.')(e);
-  }
+router.route('/').get((req, res) => {
+  const converter = new Converter(req.query, {});
+  converter.convert('active').optional().toBoolean()
+  converter.convert('limit').optional().toNonNegativeInt().default(100)
+  converter.convert('offset').optional().toNonNegativeInt().default(0)
+  converter.validate()
+    .then(async (params) => {
+      const data = await deploymentService.query(params, req.headers.authorization)
+      res.json(data)
+    })
+    .catch(httpErrorHandler(req, res, 'Failed getting deployments.'))
 })
 
 /**
@@ -93,15 +83,12 @@ router.route('/').get(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser
  *          404:
  *            description: DeploymentInfo does not exist
  */
-router.route('/:id').get(verifyToken(), hasRole(['appUser', 'rfcxUser', 'systemUser']), async (req, res) => {
-  const idToken = req.headers.authorization
-  const id = req.params.id
-  try {
-    const data = await deploymentService.get(id, idToken)
-    res.json(data)
-  } catch (e) {
-    httpErrorHandler(req, res, 'Failed getting deployment info with given id.')(e);
-  }
+router.route('/:id').get((req, res) => {
+  deploymentService.get(req.params.id, req.headers.authorization)
+    .then((data) => {
+      res.json(data)
+    })
+    .catch(httpErrorHandler(req, res, 'Failed getting deployment info with given id.'))
 })
 
 module.exports = router
