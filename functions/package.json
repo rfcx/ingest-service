@@ -5,10 +5,10 @@
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
-    "lint": "eslint .",
-    "lint-fix": "eslint . --fix",
     "start.mongo": ". ../bin/mongo/start.sh",
-    "stop.mongo": "docker container stop ingest-service-mongo"
+    "stop.mongo": "docker container stop ingest-service-mongo",
+    "test": "eslint \"**/*.js\"",
+    "lint": "eslint \"**/*.js\""
   },
   "main": "index.js",
   "engines": {
