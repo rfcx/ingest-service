@@ -25,6 +25,7 @@ const route = require('./uploads')
 app.use('/uploads', route)
 
 beforeAll(async () => {
+  muteConsole()
   await startDb()
 })
 beforeEach(async () => {
@@ -37,10 +38,10 @@ afterEach(async () => {
   checkPermission.mockRestore()
   getExistingSourceFiles.mockRestore()
   getSignedUrl.mockRestore()
-});
-afterAll( async () => {
+})
+afterAll(async () => {
   await stopDb()
-});
+})
 
 describe('POST /uploads', () => {
   test('returns validation error if filename is not set', async () => {
@@ -98,7 +99,7 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(403)
   })
   test('returns validation error with "Duplicate." message if file was already uploaded and has same filename', async () => {
-    getExistingSourceFiles.mockImplementation(() => [ { filename: '0a1824085e3f-2021-06-08T19-26-40.flac' } ])
+    getExistingSourceFiles.mockImplementation(() => [{ filename: '0a1824085e3f-2021-06-08T19-26-40.flac' }])
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
@@ -112,7 +113,7 @@ describe('POST /uploads', () => {
     expect(response.body.message).toBe('Duplicate.')
   })
   test('returns validation error with "Invalid." message if file was already uploaded and has different filename', async () => {
-    getExistingSourceFiles.mockImplementation(() => [ { filename: '0a1824085e3f-2021-06-08T12-26-40.flac' } ])
+    getExistingSourceFiles.mockImplementation(() => [{ filename: '0a1824085e3f-2021-06-08T12-26-40.flac' }])
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
