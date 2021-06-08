@@ -19,6 +19,16 @@ const streamService = require('../services/rfcx/streams')
  *            description: Filter streams by projects
  *            in: query
  *            type: array
+ *          - name: permissions
+ *            description: Return streams for which you have selected permission
+ *            in: query
+ *            schema:
+ *              type: string
+ *              enum:
+ *                - "R"
+ *                - "U"
+ *                - "D"
+ *            default: ["U"]
  *          - name: limit
  *            description: Maximum number of results to return
  *            in: query
@@ -55,6 +65,8 @@ router.route('/').get((req, res) => {
   converter.convert('limit').optional().toInt()
   converter.convert('offset').optional().toInt()
   converter.convert('projects').optional().toArray()
+  converter.convert('permission').optional().toString().default('U')
+  converter.convert('permission').default('U').toString().isEqualToAny(['R', 'U', 'U'])
   converter.validate()
     .then(async (params) => {
       const response = await streamService.query(idToken, params)

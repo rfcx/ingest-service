@@ -6,6 +6,9 @@
 
 ### Other
 * Refactor routes code: call middleware from root; delete Auth0 roles checks
+* Refactor app structure; delete firebase-releated stuff
+* Request only streams for which user has update permission ([CE-831](https://jira.rfcx.org/browse/CE-831))
+* Add pull_request Gihub action which checks lint errors
 
 <a name="1.0.5"></a>
 ## 1.0.5 (2021-05-26)

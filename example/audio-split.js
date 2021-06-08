@@ -1,4 +1,4 @@
-const audio = require('../functions/services/audio')
+const audio = require('../services/audio')
 
 audio.split('./example20mb.wav', './tmp', 20).then(result => {
   result.forEach(element => {

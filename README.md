@@ -27,11 +27,10 @@ And these services in `amazon` mode:
 
 ## Local development
 
-1. Copy `functions/.env.example` to `functions/.env`. Set the AWS and Auth0 keys as a minimum.
+1. Copy `.env.example` to `.env`. Set the AWS and Auth0 keys as a minimum.
 
 2. Install dependencies.
    ```
-   cd functions
    npm install
    ```
 
@@ -77,7 +76,7 @@ _TODO - this doesn't look like it works anymore_
 
 The `example` folder contains `upload.js` which can be run as `node upload.js filename.mp3` to perform the client-side steps to upload the file (get a signed url, upload the file to storage, and check the upload status). (Install the dependencies before you start `cd example ; npm i`.)
 
-To test the trigger from storage, use the `npm run shellfb` described above (from the `functions` folder).
+To test the trigger from storage, use the `npm run shellfb` described above.
 
 
 ## Ingestion methods
@@ -102,53 +101,3 @@ Set the `INGEST_METHOD` to `stream` in the environment variables (.env).
 _TODO - needs further explanation: what needs to be setup on Github? why are we using a fork of Nuts?_
 
 The ingest service can expose endpoints for auto-updating the client application (RFCx Uploader). It uses [Nuts](https://nuts.gitbook.com).
-
-
-## Setup project in Google Cloud
-
-Use existing or create a Google Cloud project (e.g. `rfcx-staging`) -- preferably attached to the RFCx organization.
-
-Follow [these](https://cloud.google.com/storage/docs/reporting-changes?authuser=1#prereqs) instructions to make sure you have Pub/Sub and Cloud Storage enabled for your project
-
-Get a Service Account key for the Google Cloud project with roles: `Pub/Sub Subscriber`, `Storage Object Admin`, `Storage Object Creator`, `Storage Object Viewer` (replace `john-doe` and `John Doe` with your name):
-```sh
-gcloud iam service-accounts create ingest-service-john-doe --project rfcx-staging \
-    --description "Service Account for Ingest Service" \
-    --display-name "Ingest Service John Doe"
-
-gcloud projects add-iam-policy-binding rfcx-staging \
-  --member serviceAccount:ingest-service-john-doe@rfcx-staging.iam.gserviceaccount.com \
-  --role roles/pubsub.subscriber
-
-gcloud projects add-iam-policy-binding rfcx-staging \
-  --member serviceAccount:ingest-service-john-doe@rfcx-staging.iam.gserviceaccount.com \
-  --role roles/storage.objectAdmin
-
-gcloud projects add-iam-policy-binding rfcx-staging \
-  --member serviceAccount:ingest-service-john-doe@rfcx-staging.iam.gserviceaccount.com \
-  --role roles/storage.objectCreator
-
-gcloud projects add-iam-policy-binding rfcx-staging \
-  --member serviceAccount:ingest-service-john-doe@rfcx-staging.iam.gserviceaccount.com \
-  --role roles/storage.objectViewer
-
-gcloud iam service-accounts keys create functions/service-account.json \
-  --iam-account ingest-service-john-doe@rfcx-staging.iam.gserviceaccount.com --project rfcx-staging
-```
-:exclamation: Make sure that you won't add the service file to git repository!
-
-Create two Cloud Storage buckets: one for uploaded files, one for ingested files
-```sh
-gsutil mb -p rfcx-staging -c STANDARD -l US-EAST1 gs://rfcx-ingest-staging
-gsutil mb -p rfcx-staging -c STANDARD -l US-EAST1 gs://rfcx-streams-staging
-```
-
-Create storage-pubsub notification for uploaded files:
-```
-gsutil notification create -t ingest-service-upload-staging -e OBJECT_FINALIZE -f json gs://rfcx-ingest-staging
-```
-
-Check notifications:
-```
-gsutil notification list gs://rfcx-ingest-staging
-```
