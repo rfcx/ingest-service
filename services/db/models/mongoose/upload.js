@@ -1,6 +1,5 @@
 const mongoose = require('mongoose')
 require('mongoose-long')(mongoose)
-const Long = mongoose.Schema.Types.Long
 
 const UploadSchema = new mongoose.Schema({
   streamId: String,

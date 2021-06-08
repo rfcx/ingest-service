@@ -11,7 +11,7 @@ if (PROMETHEUS_ENABLED) {
   register.setDefaultLabels({
     app: `ingest-service-${env}`
   })
-  client.collectDefaultMetrics({register})
+  client.collectDefaultMetrics({ register })
 
   class Histogram {
     constructor (name, help, buckets) {
@@ -26,10 +26,11 @@ if (PROMETHEUS_ENABLED) {
           1, 1.5, 2, 2.5, 5, 7.5,
           10, 12.5, 15, 17.5, 20, 25, 30, 35, 40, 45, 50, 75,
           100, 150, 200, 250, 375, 500
-        ],
-      });
+        ]
+      })
       register.registerMetric(this.histogram)
     }
+
     push (value) {
       this.histogram.observe(value)
     }
@@ -46,11 +47,11 @@ if (PROMETHEUS_ENABLED) {
       this.gauge = new client.Gauge({
         name,
         help,
-        async collect() {
-          const currentValue = await func();
-          this.set(currentValue);
+        async collect () {
+          const currentValue = await func()
+          this.set(currentValue)
         }
-      });
+      })
       register.registerMetric(this.gauge)
     }
   }

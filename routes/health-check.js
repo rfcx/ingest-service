@@ -1,5 +1,5 @@
 const router = require('express').Router()
-const mongoose = require(`../utils/mongo`)
+const mongoose = require('../utils/mongo')
 
 /**
  * @swagger

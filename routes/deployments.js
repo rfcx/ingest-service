@@ -46,7 +46,7 @@ const deploymentService = require('../services/deployments')
  *            description: Error while getting deployments
  */
 router.route('/').get((req, res) => {
-  const converter = new Converter(req.query, {});
+  const converter = new Converter(req.query, {})
   converter.convert('active').optional().toBoolean()
   converter.convert('limit').optional().toNonNegativeInt().default(100)
   converter.convert('offset').optional().toNonNegativeInt().default(0)

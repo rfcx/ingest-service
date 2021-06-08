@@ -107,7 +107,7 @@ async function transcode (filePath, fileData) {
   let destinationFilePath = filePath
   if (extensionsRequiringConvToWav.includes(fileExtension)) {
     destinationFilePath = filePath.replace(path.extname(filePath), '.wav')
-    var { meta } = await audioService.convert(filePath, destinationFilePath)
+    var { meta } = await audioService.convert(filePath, destinationFilePath) // eslint-disable-line no-var
   }
   console.log('Splitting original file into segments')
   const segmentDuration = fileData.duration >= 120 ? 60 : 120
@@ -123,7 +123,7 @@ async function transcode (filePath, fileData) {
   }
   return {
     wavMeta: meta,
-    outputFiles,
+    outputFiles
   }
 }
 
@@ -148,8 +148,8 @@ function setAdditionalFileAttrs (outputFiles, upload) {
  * @param {*} fileDataWav
  * @param {*} upload
  */
- function combineSourceFileData (fileData, wavMeta, upload) {
-  let data = { ...fileData }
+function combineSourceFileData (fileData, wavMeta, upload) {
+  const data = { ...fileData }
   data.stream = upload.streamId
   data.filename = upload.originalFilename
   if (wavMeta) {
@@ -157,8 +157,8 @@ function setAdditionalFileAttrs (outputFiles, upload) {
     data.duration = wavMeta.duration
   }
   // if sampleRate and bitRate were specified on upload request, then set them implicitly
-  if (upload.sampleRate) data.sampleRate = upload.sampleRate
-  if (upload.targetBitrate) data.bitRate = upload.targetBitrate
+  if (upload.sampleRate) { data.sampleRate = upload.sampleRate }
+  if (upload.targetBitrate) { data.bitRate = upload.targetBitrate }
   return data
 }
 
@@ -226,7 +226,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
     streamSourceFileId = await segmentService.createStreamFileData(upload.streamId, corePayload)
 
-    console.log(`Uploading segments`)
+    console.log('Uploading segments')
     await Promise.all(
       outputFiles.map(f => storage.upload(ingestBucket, f.remotePath, f.path))
     )
@@ -246,7 +246,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
   } catch (err) {
     console.error(`Error thrown for upload ${uploadId}`, err.message || '')
     const message = err instanceof IngestionError ? err.message : 'Server failed with processing your file. Please try again later.'
-    let status = err instanceof IngestionError ? err.status : db.status.FAILED
+    const status = err instanceof IngestionError ? err.status : db.status.FAILED
     db.updateUploadStatus(uploadId, status, message)
     for (const file of outputFiles) {
       storage.deleteObject(ingestBucket, file.remotePath)

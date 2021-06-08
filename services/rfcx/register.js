@@ -22,7 +22,7 @@ async function register (guardianGuid, guardianToken, shortname, site, idToken) 
     .then(response => {
       console.log('Successfully created stream')
     }).catch(err => {
-      if (err.response && err.response.data && err.response.data.message == 'Site with given guid not found.') {
+      if (err.response && err.response.data && err.response.data.message === 'Site with given guid not found.') {
         throw new Error(errors.SITE_NOT_FOUND)
       }
       if (err.response && err.response.status === 401) {

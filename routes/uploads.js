@@ -1,5 +1,5 @@
 const express = require('express')
-var router = express.Router()
+const router = express.Router()
 const { Converter, ValidationError, httpErrorHandler, EmptyResultError, ForbiddenError } = require('@rfcx/http-utils')
 const platform = process.env.PLATFORM || 'google'
 const db = require('../services/db/mongo')
@@ -46,13 +46,13 @@ const streamService = require('../services/rfcx/streams')
 router.route('/').post((req, res) => {
   const idToken = req.headers.authorization
   const userId = req.user.guid || req.user.sub || 'unknown'
-  const converter = new Converter(req.body, {});
-  converter.convert('filename').toString();
-  converter.convert('timestamp').toMomentUtc();
-  converter.convert('stream').toString();
-  converter.convert('sampleRate').optional().toInt();
-  converter.convert('targetBitrate').optional().toInt();
-  converter.convert('checksum').optional().toString();
+  const converter = new Converter(req.body, {})
+  converter.convert('filename').toString()
+  converter.convert('timestamp').toMomentUtc()
+  converter.convert('stream').toString()
+  converter.convert('sampleRate').optional().toInt()
+  converter.convert('targetBitrate').optional().toInt()
+  converter.convert('checksum').optional().toString()
 
   converter.validate()
     .then(async (params) => {

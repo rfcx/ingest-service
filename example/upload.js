@@ -1,16 +1,15 @@
 const axios = require('axios')
-const fs = require("fs")
+const fs = require('fs')
 
 const apiUrl = 'https://us-central1-rfcx-ingest-dev.cloudfunctions.net/api'
 // const apiUrl = 'http://localhost:5000/rfcx-ingest-dev/us-central1/api'
 // const apiUrl = 'http://localhost:3030' // local address for v2
 
-const arguments = process.argv.slice(2);
-const filePath = arguments[0] || 'example.mp3'
+const args = process.argv.slice(2)
+const filePath = args[0] || 'example.mp3'
 const filename = '20191010-010101.mp3'
 const stream = 'g1smnj4td3kkmfo7kc1i'
-const timestamp = '2019-10-10T01:01:01.000Z';
-
+const timestamp = '2019-10-10T01:01:01.000Z'
 
 // Part 1: Get signed url
 
@@ -23,7 +22,6 @@ function requestUploadUrl (originalFilename, streamId) {
       return { url, uploadId }
     })
 }
-
 
 // Part 2: Upload
 
@@ -38,7 +36,6 @@ function upload (signedUrl, filePath) {
   return axios.put(signedUrl, readStream, options)
 }
 
-
 // Part 3: Get ingest status
 
 function checkStatus (uploadId) {
@@ -48,9 +45,8 @@ function checkStatus (uploadId) {
     })
 }
 
-
 // Let's do this...
-var uploadId
+let uploadId
 requestUploadUrl(filename, stream).then((data) => {
   uploadId = data.uploadId
   return upload(data.url, filePath).then(() => {
@@ -68,7 +64,7 @@ setTimeout(() => {
       console.log('Ingest success')
     } else if (upload.status >= 10) {
       console.log('Started ingesting, but not yet finished')
-    } else if (upload.status == 0) {
+    } else if (upload.status === 0) {
       console.log('Waiting to be ingested')
     }
   }).catch((err) => console.log(err))

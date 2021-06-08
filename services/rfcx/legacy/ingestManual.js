@@ -1,6 +1,5 @@
 const axios = require('axios')
 const fs = require('fs')
-const qs = require('querystring')
 const moment = require('moment')
 const sha1File = require('sha1-file')
 const { identify } = require('../../audio')
@@ -34,14 +33,14 @@ async function postAudio (guardianGuid, measuredAt, sha1Checksum, sampleCount, f
   }
 
   try {
-    const response = await axios.post(url, data, { headers })
+    await axios.post(url, data, { headers })
   } catch (err) {
     console.log(JSON.stringify(err.response.data))
     if (err.response && err.response.data && err.response.data.msg) {
-      if (err.response.data.msg == 'Failed to create audio: SequelizeUniqueConstraintError: Validation error') {
-        throw { message: 'Duplicate file. Matching sha1 signature already ingested.' }
+      if (err.response.data.msg === 'Failed to create audio: SequelizeUniqueConstraintError: Validation error') {
+        throw new Error('Duplicate file. Matching sha1 signature already ingested.')
       } else {
-        throw { message: err.response.data.msg }
+        throw new Error(err.response.data.msg)
       }
     } else {
       throw err

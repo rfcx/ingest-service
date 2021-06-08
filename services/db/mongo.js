@@ -1,8 +1,6 @@
-const db = require('../../utils/mongo')
 const UploadModel = require('./models/mongoose/upload').Upload
 const DeploymentInfoModel = require('./models/mongoose/deploymentInfo').DeploymentInfo
 const moment = require('moment-timezone')
-const hash = require('../../utils/hash')
 
 const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31, CHECKSUM: 32 }
 const statusNumbers = Object.values(status)
@@ -41,12 +39,12 @@ function getUpload (id) {
 
 function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
   if (!statusNumbers.includes(statusNumber)) {
-    return Promise.reject('Invalid status')
+    throw new Error('Invalid status')
   }
   return getUpload(uploadId)
     .then((upload) => {
       if (!upload) {
-        return Promise.reject('Upload does not exist')
+        throw new Error('Upload does not exist')
       }
       upload.status = statusNumber
       upload.updatedAt = moment().tz('UTC').toDate()
@@ -57,13 +55,13 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
     })
 }
 
-function getUploadDuplicateCount() {
+function getUploadDuplicateCount () {
   return UploadModel.count({
     status: status.DUPLICATE
   })
 }
 
-function getUploadFailedCount() {
+function getUploadFailedCount () {
   return UploadModel.count({
     status: status.FAILED
   })
@@ -72,7 +70,7 @@ function getUploadFailedCount() {
 function getDeploymentInfo (deploymentId) {
   return DeploymentInfoModel.findOne({ deploymentId: deploymentId }).then((result) => {
     if (!result) {
-      return Promise.reject('DeploymentInfo does not exist')
+      throw new Error('DeploymentInfo does not exist')
     } else {
       return result
     }
@@ -107,7 +105,7 @@ function updateDeploymentInfo (opts) {
   return getDeploymentInfo(deploymentId)
     .then((deploymentInfo) => {
       if (!deploymentInfo) {
-        return Promise.reject('DeploymentInfo does not exist')
+        throw new Error('DeploymentInfo does not exist')
       }
 
       deploymentInfo.locationName = locationName

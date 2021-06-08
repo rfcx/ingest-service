@@ -37,7 +37,7 @@ function getGZippedJSON (json) {
   const jsonStr = JSON.stringify(json)
   return new Promise((resolve, reject) => {
     zlib.gzip(jsonStr, (error, gzip) => {
-      if (error) reject(error)
+      if (error) { reject(error) }
       const base64 = Buffer.from(gzip, 'ascii').toString('base64')
       const hexdump = Buffer.from(base64).toString('hex')
       const hexArray = hexdump.match(/.{1,2}/g)

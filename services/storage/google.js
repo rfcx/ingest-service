@@ -2,7 +2,6 @@ const { Storage } = require('@google-cloud/storage')
 const storage = new Storage()
 
 const uploadBucket = storage.bucket(process.env.UPLOAD_BUCKET)
-const ingestBucket = storage.bucket(process.env.INGEST_BUCKET)
 
 function getSignedUrl (filePath, contentType) {
   // Get a reference to the destination file in GCS
