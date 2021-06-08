@@ -1,0 +1,35 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [master, staging, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Setup: Node.js"
+        uses: actions/setup-node@v1
+        with:
+          node-version: "12.x"
+
+      - name: "Setup: Git checkout"
+        uses: actions/checkout@v2
+
+      - name: "Setup: Copy cached dependencies"
+        uses: actions/cache@v2
+        id: npm-cache
+        with:
+          path: "**/node_modules"
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: "Setup: Install dependencies"
+        if: steps.npm-cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: "Test: Lint"
+        run: npm run lint
+
+      - name: "Test: Jest"
+        run: npm run jest
