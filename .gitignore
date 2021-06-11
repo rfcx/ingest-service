@@ -70,3 +70,10 @@ serviceAccountKeyStorage.json
 .runtimeconfig.json
 ingest_production_env
 ingest_staging_env
+
+node_modules/
+rfcx.cert
+serviceAccountKeyStorage*.json
+.env-amazon
+.env-google
+service-account.json

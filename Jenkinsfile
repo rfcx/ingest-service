@@ -96,7 +96,7 @@ spec:
                 }
         unstable {
             echo 'pipeline failed, at least one step unstable'
-                    
+
             }
         failure {
             echo 'I failed :('
@@ -113,8 +113,8 @@ spec:
         slackChannel = "alerts-deployment"
         withCredentials([file(credentialsId: 'ingest_staging_env', variable: 'PRIVATE_ENV')]) {
         sh "chmod -R 777 *"
-        sh "cp $PRIVATE_ENV functions/.env"
-        sh "chmod 777 functions/.env"
+        sh "cp $PRIVATE_ENV .env"
+        sh "chmod 777 .env"
         }
         }
         if (branch == 'master') {
@@ -122,12 +122,12 @@ spec:
         slackChannel = "alerts-deployment-prod"
         withCredentials([file(credentialsId: 'ingest_production_env', variable: 'PRIVATE_ENV')]) {
         sh "chmod -R 777 *"
-        sh "cp $PRIVATE_ENV functions/.env"
-        sh "chmod 777 functions/.env"
+        sh "cp $PRIVATE_ENV .env"
+        sh "chmod 777 .env"
         }
          }
          echo "BRANCH:${branch} -> CONFIGURATION:${result}"
-       
+
          }
          return result
      }

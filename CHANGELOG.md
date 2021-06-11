@@ -1,3 +1,16 @@
+<a name="1.0.6"></a>
+## 1.0.6 (2021-06-XX)
+
+### Bug Fixes
+* Check user permissions for stream before creating an upload ([CE-831](https://jira.rfcx.org/browse/CE-831))
+
+### Other
+* Refactor routes code: call middleware from root; delete Auth0 roles checks
+* Refactor app structure; delete firebase-releated stuff
+* Request only streams for which user has update permission ([CE-831](https://jira.rfcx.org/browse/CE-831))
+* Add pull_request Gihub action which checks lint errors
+* Add integration tests for uploads routes
+
 <a name="1.0.5"></a>
 ## 1.0.5 (2021-05-26)
 
