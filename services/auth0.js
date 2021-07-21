@@ -34,6 +34,26 @@ async function createToken () {
     })
 }
 
+function getRoles (user) {
+  if (user.roles) { return user.roles }
+  const rfcxAppMetaUrl = 'https://rfcx.org/app_metadata'
+  if (user[rfcxAppMetaUrl] && user[rfcxAppMetaUrl].authorization && user[rfcxAppMetaUrl].authorization.roles) {
+    return user[rfcxAppMetaUrl].authorization.roles
+  }
+  if (user.scope) {
+    if (typeof user.scope === 'string') {
+      try {
+        const parsedScrope = JSON.parse(user.scope)
+        if (parsedScrope.roles) { return parsedScrope.roles }
+      } catch (e) { }
+    } else {
+      if (user.scope.roles) { return user.scope.roles }
+    }
+  }
+  return []
+}
+
 module.exports = {
-  getToken
+  getToken,
+  getRoles
 }

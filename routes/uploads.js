@@ -6,6 +6,7 @@ const db = require('../services/db/mongo')
 const storage = require(`../services/storage/${platform}`)
 const segmentService = require('../services/rfcx/segments')
 const streamService = require('../services/rfcx/streams')
+const auth0Service = require('../services/auth0')
 
 /**
  * @swagger
@@ -56,7 +57,9 @@ router.route('/').post((req, res) => {
 
   converter.validate()
     .then(async (params) => {
-      await streamService.checkPermission('U', params.stream, idToken)
+      if (!auth0Service.getRoles(req.user).includes('systemUser')) {
+        await streamService.checkPermission('U', params.stream, idToken)
+      }
       const fileExtension = params.filename.split('.').pop().toLowerCase()
       const { filename, timestamp, stream, sampleRate, targetBitrate, checksum } = params
       if (params.checksum) {
