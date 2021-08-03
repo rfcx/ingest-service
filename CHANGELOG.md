@@ -1,5 +1,5 @@
 <a name="1.0.6"></a>
-## 1.0.6 (2021-06-XX)
+## 1.0.6 (2021-08-03)
 
 ### Bug Fixes
 * Check user permissions for stream before creating an upload ([CE-831](https://jira.rfcx.org/browse/CE-831))
