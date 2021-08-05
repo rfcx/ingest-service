@@ -6,7 +6,7 @@ const apiHostName = process.env.API_HOST
 async function query (idToken, opts) {
   const url = `${apiHostName}projects`
   const params = {
-    fields: ['id', 'name'],
+    fields: ['id', 'name', 'permissions'],
     keyword: opts.keyword,
     limit: opts.limit,
     offset: opts.offset
