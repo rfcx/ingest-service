@@ -3,6 +3,7 @@
 
 ### Features
 * Add user permissions into get projects endpoint ([CE-1175](https://jira.rfcx.org/browse/CE-1175))
+* Parse sample rate from guardian audio filename ([CE-1264](https://jira.rfcx.org/browse/CE-1264))
 
 <a name="1.0.6"></a>
 ## 1.0.6 (2021-08-03)
