@@ -7,7 +7,7 @@ const storage = require(`../services/storage/${platform}`)
 const segmentService = require('../services/rfcx/segments')
 const streamService = require('../services/rfcx/streams')
 const auth0Service = require('../services/auth0')
-const { parseGuardianAudioFilename } = require('../services/rfcx/guardian')
+const { getSampleRateFromFilename } = require('../services/rfcx/guardian')
 
 /**
  * @swagger
@@ -71,8 +71,8 @@ router.route('/').post((req, res) => {
           throw new ValidationError(message)
         }
       }
-      const gData = parseGuardianAudioFilename(params.filename)
-      sampleRate = sampleRate || gData.sampleRate || undefined
+      const gSampleRate = getSampleRateFromFilename(params.filename)
+      sampleRate = sampleRate || gSampleRate
       const upload = await db.generateUpload({
         streamId: stream,
         userId,
