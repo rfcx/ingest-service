@@ -1,5 +1,5 @@
 <a name="1.0.7"></a>
-## 1.0.7 (2021-08-xx)
+## 1.0.7 (2021-08-05)
 
 ### Features
 * Add user permissions into get projects endpoint ([CE-1175](https://jira.rfcx.org/browse/CE-1175))
