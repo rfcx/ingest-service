@@ -1,3 +1,9 @@
+<a name="1.0.8"></a>
+## 1.0.8 (2021-08-XX)
+
+### Features
+* Parse sample rate from guardian audio filename ([CE-1264](https://jira.rfcx.org/browse/CE-1264))
+
 <a name="1.0.7"></a>
 ## 1.0.7 (2021-08-05)
 
