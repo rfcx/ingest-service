@@ -16,7 +16,6 @@ const errorBucket = process.env.ERROR_BUCKET
 const supportedExtensions = ['.wav', '.flac', '.opus']
 const losslessExtensions = ['.wav', '.flac']
 const extensionsRequiringConvToWav = ['.flac']
-const extensionsRequiringAdditionalData = ['.opus']
 
 const { IngestionError } = require('../../utils/errors')
 const loggerIgnoredErrors = [
@@ -81,14 +80,6 @@ function validateAudioMeta (upload, meta, extension) {
   }
   if (isNaN(meta.sampleCount) || meta.sampleCount === 0) {
     throw new IngestionError('Audio sampleCount is zero')
-  }
-  if (extensionsRequiringAdditionalData.includes(extension)) {
-    if (!upload.sampleRate) {
-      throw new IngestionError(`"sampleRate" must be provided for "${extension}" file ingestion.`)
-    }
-    if (!upload.targetBitrate) {
-      throw new IngestionError(`"targetBitrate" must be provided for ${extension} file ingestion.`)
-    }
   }
   if (upload.checksum && upload.checksum !== meta.checksum) {
     throw new IngestionError('Checksum mismatch.', db.status.CHECKSUM)

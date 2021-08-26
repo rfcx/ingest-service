@@ -175,6 +175,32 @@ describe('POST /uploads', () => {
     expect(upload.targetBitrate).toBe(requestBody.targetBitrate)
     expect(upload.checksum).toBe(requestBody.checksum)
   })
+  test('saves sample rate from the filename only for opus format', async () => {
+    const requestBody = {
+      filename: 'p0gccfokn3p9_2014-12-31T21-04-10.261-0300_24kHz_90.923secs.flac',
+      timestamp: '2015-01-01T00:04:10.261Z',
+      stream: 'p0gccfokn3p9',
+      checksum: 'bcd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
+    expect(response.statusCode).toBe(200)
+    expect(upload.sampleRate).toBeUndefined()
+  })
+  test('saves sample rate from the filename only if it has valid format', async () => {
+    const requestBody = {
+      filename: 'p0gccfokn3p9_2014-12-31T21-04-10.261-0300_24kH_90.923secs.opus',
+      timestamp: '2015-01-01T00:04:10.261Z',
+      stream: 'p0gccfokn3p9',
+      checksum: 'bcd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
+    expect(response.statusCode).toBe(200)
+    expect(upload.sampleRate).toBeUndefined()
+  })
   test('does not call segmentService.getExistingSourceFiles if checksum is not provided', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',

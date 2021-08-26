@@ -71,8 +71,12 @@ router.route('/').post((req, res) => {
           throw new ValidationError(message)
         }
       }
-      const gSampleRate = getSampleRateFromFilename(params.filename)
-      sampleRate = sampleRate || gSampleRate
+      if (params.filename.endsWith('.opus')) {
+        const gSampleRate = getSampleRateFromFilename(params.filename)
+        if (gSampleRate) {
+          sampleRate = gSampleRate
+        }
+      }
       const upload = await db.generateUpload({
         streamId: stream,
         userId,
