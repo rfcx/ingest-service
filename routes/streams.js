@@ -127,6 +127,25 @@ router.route('/').post((req, res) => {
 })
 
 /**
+ * @swagger
+ *
+ * /streams/{id}:
+ *   get:
+ *        summary: Get stream by id
+ *        tags:
+ *          - streams
+ */
+router.route('/:id').get(async (req, res) => {
+  const idToken = req.headers.authorization
+  const id = req.params.id
+  streamService.get({ id, idToken })
+    .then((response) => {
+      res.json(response.data)
+    })
+    .catch(httpErrorHandler(req, res, 'Error while getting stream with given id.'))
+})
+
+/**
  * HTTP function that updates a stream
  */
 function updateEndpoint (req, res) {
