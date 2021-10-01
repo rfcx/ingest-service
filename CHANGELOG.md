@@ -1,5 +1,5 @@
 <a name="1.0.9"></a>
-## 1.0.9 (2021-09-30)
+## 1.0.9 (2021-10-01)
 
 ### Features
 * Endpoint to get stream by id ([CE-954](https://jira.rfcx.org/browse/CE-954))
