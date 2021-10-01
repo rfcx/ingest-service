@@ -134,6 +134,25 @@ router.route('/').post((req, res) => {
  *        summary: Get stream by id
  *        tags:
  *          - streams
+ *        parameters:
+ *          - name: id
+ *            description: An id of stream
+ *            in: path
+ *            required: true
+ *            type: string
+ *        responses:
+ *          200:
+ *            description: Stream information
+ *            content:
+ *              application/json:
+ *                schema:
+ *                  type: array
+ *                  items:
+ *                  $ref: '#/components/schemas/Stream'
+ *          400:
+ *            description: Error while getting stream with given id.
+ *          500:
+ *            description: Error while getting stream with given id.
  */
 router.route('/:id').get(async (req, res) => {
   const idToken = req.headers.authorization
