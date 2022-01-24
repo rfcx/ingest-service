@@ -4,5 +4,3 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
-  - externalmetrics.yaml
-  - hpa.yaml
