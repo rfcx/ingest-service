@@ -5,7 +5,7 @@ ADD . /var/app/
 WORKDIR /var/app
 RUN npm install
 
-FROM 887044485231.dkr.ecr.eu-west-1.amazonaws.com/node12_base:latest
+FROM 887044485231.dkr.ecr.eu-west-1.amazonaws.com/node12_base:latest as ingest-service
 
 COPY --from=builder /var/app/ /var/app/
 WORKDIR /var/app
