@@ -13,7 +13,7 @@ spec:
     spec:
       containers:
       - name: ingest-service
-        image: 887044485231.dkr.ecr.eu-west-1.amazonaws.com/ingest-service/staging:latest
+        image: 887044485231.dkr.ecr.eu-west-1.amazonaws.com/ingest-service:latest
         resources:
           requests:
             memory: "128Mi"
