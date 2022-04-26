@@ -9,6 +9,7 @@ metadata:
     nginx.ingress.kubernetes.io/use-proxy-protocol: "true"
     nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
   name: ingest-service-ingress
+  namespace: staging
   labels:
       app: "ingest-service"
 spec:

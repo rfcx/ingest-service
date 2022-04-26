@@ -2,6 +2,7 @@ apiVersion: metrics.aws/v1alpha1
 kind: ExternalMetric
 metadata:
   name: sqs-ingest-service-upload-production-length
+  namespace: production
 spec:
   name: sqs-ingest-service-upload-production-length
   queries:

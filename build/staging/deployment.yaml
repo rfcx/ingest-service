@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ingest-service
+  namespace: staging
 spec:
   selector:
     matchLabels:
@@ -21,4 +22,9 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "300"
+          envFrom:
+            - secretRef:
+                name: ingest-service-secrets
+            - configMapRef:
+                name: ingest-service-config
       terminationGracePeriodSeconds: 600

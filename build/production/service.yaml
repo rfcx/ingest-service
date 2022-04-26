@@ -2,10 +2,11 @@ kind: Service
 apiVersion: v1
 metadata:
   name: ingest-service-service
+  namespace: production
 spec:
   selector:
     app: ingest-service
-  type: ClusterIP 
+  type: ClusterIP
   ports:
   - name: node
     port: 80

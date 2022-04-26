@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingest-service-config
+  namespace: production
+data:
+  PLATFORM: "amazon"
+  MONGO_HOSTNAME: "prod-mongodb.production.svc.cluster.local"
+  MONGO_DB: "rfcx"
+  NODE_ENV: "production"
+  PORT: "80"
+  GCS_SERVICE_ACCOUNT_KEY_FILE: "serviceAccountKeyStorage.json"
+  UPLOAD_BUCKET: "rfcx-ingest-production"
+  INGEST_BUCKET: "rfcx-streams-production"
+  ERROR_BUCKET: "rfcx-streams-errors-production"
+  MAX_UPLOAD_BYTES: "209715200"
+  API_HOST: http://core-api-service.production.svc.cluster.local/
+  INGEST_METHOD: "stream"
+  CACHE_DIRECTORY: "/tmp/ingest-service/"
+  SQS_INGEST_TRIGGER_QUEUE_URL: "https://sqs.eu-west-1.amazonaws.com/887044485231/ingest-service-upload-production"
+  S3_INGEST_MANUAL_BUCKET: "rfcx-ark"
+  AUTHZERO_DOMAIN: "rfcx.eu.auth0.com"
+  AUTHZERO_AUDIENCE: "https://rfcx.org"
+  AUTHZERO_GRANT_TYPE: "client_credentials"
+  ARBIMON_ENABLED: "true"
+  ARBIMON_HOST: "https://arbimon.rfcx.org/"
+  AUTOUPDATE_ENABLED: "true"
+  AUTOUPDATE_GITHUB_REPO: "rfcx/ingest-app"
+  PROMETHEUS_ENABLED: "true"
+  DEVICE_API_HOST: "https://device-api.rfcx.org/"
