@@ -22,9 +22,9 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "300m"
-          envFrom:
-            - secretRef:
-                name: ingest-service-secrets
-            - configMapRef:
-                name: ingest-service-config
+        envFrom:
+          - secretRef:
+              name: ingest-service-secrets
+          - configMapRef:
+              name: ingest-service-config
       terminationGracePeriodSeconds: 600
