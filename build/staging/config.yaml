@@ -15,7 +15,6 @@ data:
   ERROR_BUCKET: "rfcx-streams-errors-staging"
   MAX_UPLOAD_BYTES: "209715200"
   API_HOST: https://staging-api.rfcx.org/
-  CACHE_DIRECTORY: "/tmp/ingest-service/"
   SQS_INGEST_TRIGGER_QUEUE_URL: "https://sqs.eu-west-1.amazonaws.com/887044485231/ingest-service-upload-staging"
   AUTHZERO_DOMAIN: "rfcx.eu.auth0.com"
   AUTHZERO_AUDIENCE: "https://rfcx.org"

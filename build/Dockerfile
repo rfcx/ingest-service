@@ -1,11 +1,40 @@
+FROM ubuntu:18.04 as base
+RUN apt update \
+    && apt install -y \
+        curl \
+        gnupg \
+        gcc \
+        g++ \
+        make \
+        sox \
+        pngcrush \
+        imagemagick \
+        python-minimal \
+        software-properties-common \
+        libsox-fmt-all
+RUN add-apt-repository ppa:jonathonf/ffmpeg-4 && \
+    apt install -y  ffmpeg libsox-fmt-all && \
+    mkdir -p /var/app/ && \
+    curl -sL https://deb.nodesource.com/setup_12.x | bash - && \
+    apt update && \
+    apt install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+ENV CACHE_DIRECTORY="/tmp/ingest-service/"
+RUN mkdir /tmp/ingest-service
+
+# -- Builder
+
 FROM node:12 as builder
+
 
 RUN mkdir /var/app
 ADD . /var/app/
 WORKDIR /var/app
 RUN npm install
 
-FROM 887044485231.dkr.ecr.eu-west-1.amazonaws.com/node12_base:latest as ingest-service
+# -- Target
+
+FROM base as ingest-service
 
 COPY --from=builder /var/app/ /var/app/
 WORKDIR /var/app
