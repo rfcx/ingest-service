@@ -50,22 +50,22 @@ let uploadId
 requestUploadUrl(filename, stream).then((data) => {
   uploadId = data.uploadId
   return upload(data.url, filePath).then(() => {
-    console.log('Upload complete')
+    console.info('Upload complete')
   })
-}).catch((err) => console.log(err))
+}).catch((err) => console.error(err))
 
 // and keep checking for the result
-console.log('Waiting 10 secs to check the ingest status')
+console.info('Waiting 10 secs to check the ingest status')
 setTimeout(() => {
   checkStatus(uploadId).then(upload => {
     if (upload.status >= 30) {
-      console.log('Ingest failed: ' + upload.failureMessage)
+      console.info('Ingest failed: ' + upload.failureMessage)
     } else if (upload.status >= 20) {
-      console.log('Ingest success')
+      console.info('Ingest success')
     } else if (upload.status >= 10) {
-      console.log('Started ingesting, but not yet finished')
+      console.info('Started ingesting, but not yet finished')
     } else if (upload.status === 0) {
-      console.log('Waiting to be ingested')
+      console.info('Waiting to be ingested')
     }
-  }).catch((err) => console.log(err))
+  }).catch((err) => console.error(err))
 }, 10000)

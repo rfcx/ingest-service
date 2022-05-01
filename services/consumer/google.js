@@ -15,7 +15,7 @@ function start () {
   const pubSubClient = new PubSub()
   const subscription = pubSubClient.subscription(subscriptionName)
   subscription.on('message', messageHandler)
-  console.log(`PubSub is listening to messages in subscription "${subscriptionName}"`)
+  console.info(`PubSub is listening to messages in subscription "${subscriptionName}"`)
 }
 
 module.exports = {

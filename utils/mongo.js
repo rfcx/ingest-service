@@ -4,13 +4,13 @@ const mongoUri = `mongodb://${process.env.MONGO_HOSTNAME}/${process.env.MONGO_DB
 
 const db = mongoose.connection
 db.on('connecting', function () {
-  console.log('Connecting to MongoDB')
+  console.info('Connecting to MongoDB')
 })
 db.on('open', function () {
-  console.log('Connected to MongoDB')
+  console.info('Connected to MongoDB')
 })
 db.on('reconnected', function () {
-  console.log('Reconnected to MongoDB')
+  console.info('Reconnected to MongoDB')
 })
 db.on('disconnected', function () {
   console.error('Disconnected from MongoDB')
@@ -20,7 +20,7 @@ db.on('reconnectFailed', function () {
 })
 
 const connectWithRetry = () => {
-  console.log('Establishing connection to MongoDB')
+  console.info('Establishing connection to MongoDB')
   mongoose.connect(mongoUri, {
     user: process.env.MONGO_USERNAME,
     pass: process.env.MONGO_PASSWORD,
@@ -31,7 +31,7 @@ const connectWithRetry = () => {
     reconnectInterval: 5000
   })
     .catch((e) => {
-      console.log('Connection to MongoDB failed:', e && e.message ? e.message : '')
+      console.error('Connection to MongoDB failed:', e && e.message ? e.message : '')
       setTimeout(connectWithRetry, 5000)
     })
 }

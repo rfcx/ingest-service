@@ -100,10 +100,10 @@ async function transcode (filePath, fileData) {
     destinationFilePath = filePath.replace(path.extname(filePath), '.wav')
     var { meta } = await audioService.convert(filePath, destinationFilePath) // eslint-disable-line no-var
   }
-  console.log('Splitting original file into segments')
+  console.info('Splitting original file into segments')
   const segmentDuration = fileData.duration >= 120 ? 60 : 120
   const outputFiles = await audioService.split(destinationFilePath, path.dirname(filePath), segmentDuration)
-  console.log(`File was split into ${outputFiles.length} segments`)
+  console.info(`File was split into ${outputFiles.length} segments`)
 
   if (isLosslessFile) { // convert lossless files to flac format
     for (const file of outputFiles) {
@@ -197,18 +197,18 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
 
     validateFileFormat(fileExtension)
     await createStreamLocalPath(streamLocalPath)
-    console.log('Downloading file from storage')
+    console.info('Downloading file from storage')
     await storage.download(fileStoragePath, getFileLocalPath(fileStoragePath))
-    console.log('Updating upload status to UPLOADED')
+    console.info('Updating upload status to UPLOADED')
     await db.updateUploadStatus(uploadId, db.status.UPLOADED)
 
     const fileData = await audioService.identify(fileLocalPath)
-    console.log('Audio metadata', JSON.stringify(fileData))
+    console.info('Audio metadata', JSON.stringify(fileData))
     const upload = await db.getUpload(uploadId)
-    console.log('Upload metadata from database ', JSON.stringify(upload))
+    console.info('Upload metadata from database ', JSON.stringify(upload))
     validateAudioMeta(upload, fileData, fileExtension)
 
-    console.log('Transcoding file')
+    console.info('Transcoding file')
     const transcodeData = await transcode(fileLocalPath, fileData)
     outputFiles = transcodeData.outputFiles
     setAdditionalFileAttrs(outputFiles, upload)
@@ -222,20 +222,24 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       outputFiles.map(f => storage.upload(ingestBucket, f.remotePath, f.path))
     )
 
-    console.log(`Modifying status to INGESTED (${db.status.INGESTED})`)
+    console.info(`Modifying status to INGESTED (${db.status.INGESTED})`)
     await db.updateUploadStatus(uploadId, db.status.INGESTED)
 
     uploadId = null
     if (PROMETHEUS_ENABLED && fileData.sampleCount) {
-      console.log('Updating processing metrics')
+      console.info('Updating processing metrics')
       const processingValue = (Date.now() - startTimestamp) / fileData.sampleCount * 10000 // we use multiplier because values are far less than 1 in other case
       pushHistogramMetric(fileExtension.substr(1), processingValue)
     }
-    console.log('Cleaning up files')
+    console.info('Cleaning up files')
     await storage.deleteObject(uploadBucket, fileStoragePath)
     await dirUtil.removeDirRecursively(streamLocalPath)
   } catch (err) {
-    console.error(`Error thrown for upload ${uploadId}`, err.message || '')
+    if (loggerIgnoredErrors.includes(err.message)) {
+      console.warn(`Warn for upload ${uploadId} ${err.message}`)
+    } else {
+      console.error(`Error for upload ${uploadId} ${err.message}`)
+    }
     const message = err instanceof IngestionError ? err.message : 'Server failed with processing your file. Please try again later.'
     const status = err instanceof IngestionError ? err.status : db.status.FAILED
     db.updateUploadStatus(uploadId, status, message)

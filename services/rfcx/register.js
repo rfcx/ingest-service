@@ -20,7 +20,7 @@ async function register (guardianGuid, guardianToken, shortname, site, idToken) 
 
   return axios.post(url, qs.stringify(data), { headers })
     .then(response => {
-      console.log('Successfully created stream')
+      console.info('Successfully created stream')
     }).catch(err => {
       if (err.response && err.response.data && err.response.data.message === 'Site with given guid not found.') {
         throw new Error(errors.SITE_NOT_FOUND)
