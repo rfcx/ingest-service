@@ -240,12 +240,12 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     }
     const message = err instanceof IngestionError ? err.message : 'Server failed with processing your file. Please try again later.'
     const status = err instanceof IngestionError ? err.status : db.status.FAILED
-    db.updateUploadStatus(uploadId, status, message)
+    await db.updateUploadStatus(uploadId, status, message)
     for (const file of outputFiles) {
-      storage.deleteObject(ingestBucket, file.remotePath)
+      await storage.deleteObject(ingestBucket, file.remotePath)
     }
     if (streamSourceFileId) {
-      segmentService.deleteStreamSourceFile(streamSourceFileId)
+      await segmentService.deleteStreamSourceFile(streamSourceFileId)
     }
 
     if (!loggerIgnoredErrors.includes(message)) {
@@ -256,7 +256,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     }
 
     await storage.deleteObject(uploadBucket, fileStoragePath)
-    dirUtil.removeDirRecursively(streamLocalPath)
+    await dirUtil.removeDirRecursively(streamLocalPath)
   }
 }
 
