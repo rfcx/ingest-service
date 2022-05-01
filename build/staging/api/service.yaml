@@ -5,7 +5,7 @@ metadata:
   namespace: staging
 spec:
   selector:
-    app: ingest-service
+    app: ingest-service-api
   type: ClusterIP
   ports:
   - name: node

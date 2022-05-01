@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingest-service-api
+  namespace: staging
+spec:
+  selector:
+    matchLabels:
+      app: ingest-service-api
+  template:
+    metadata:
+      labels:
+        app: ingest-service-api
+    spec:
+      containers:
+      - name: ingest-service-api
+        image: 887044485231.dkr.ecr.eu-west-1.amazonaws.com/ingest-service:latest
+        args: ["npm", "run", "start:api"]
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "300"
+        envFrom:
+          - secretRef:
+              name: ingest-service-secrets
+          - configMapRef:
+              name: ingest-service-config
+      terminationGracePeriodSeconds: 10
