@@ -1,5 +1,9 @@
 # Deployment Notes
 
+## v1.1.0
+
+- Delete the ingest-service deployment from Kubernetes (it is replaced by ingest-service-api and -tasks)
+
 ## v1.0.4
 
 - Delete `ARBIMON_ENABLED` and `ARBIMON_HOST` env vars
