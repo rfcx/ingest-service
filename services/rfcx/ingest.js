@@ -213,14 +213,12 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     outputFiles = transcodeData.outputFiles
     setAdditionalFileAttrs(outputFiles, upload)
 
-    console.log('Saving data in the Core API')
+    console.info('Saving data in the Core API')
     const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
     streamSourceFileId = await segmentService.createStreamFileData(upload.streamId, corePayload)
 
-    console.log('Uploading segments')
-    await Promise.all(
-      outputFiles.map(f => storage.upload(ingestBucket, f.remotePath, f.path))
-    )
+    console.info('Uploading segments')
+    await Promise.all(outputFiles.map(f => storage.upload(ingestBucket, f.remotePath, f.path)))
 
     console.info(`Modifying status to INGESTED (${db.status.INGESTED})`)
     await db.updateUploadStatus(uploadId, db.status.INGESTED)

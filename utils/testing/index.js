@@ -38,6 +38,7 @@ function expressApp (userAdditions = {}) {
 
 function muteConsole (levels = ['log', 'info', 'warn', 'error']) {
   (typeof levels === 'string' ? [levels] : levels).forEach((f) => {
+    // eslint-disable-next-line no-console
     console[f] = function () {}
   })
 }
