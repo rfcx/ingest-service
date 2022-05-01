@@ -1,5 +1,5 @@
 const { PubSub } = require('@google-cloud/pubsub')
-const { ingest } = require('../rfcx/ingestStream')
+const { ingest } = require('../rfcx/ingest')
 const { parseUploadFromFileName } = require('./misc')
 
 async function messageHandler (message) {

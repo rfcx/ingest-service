@@ -1,6 +1,6 @@
 const { Consumer } = require('sqs-consumer')
 const AWS = require('../../utils/aws')
-const { ingest } = require('../rfcx/ingestStream')
+const { ingest } = require('../rfcx/ingest')
 const { parseUploadFromFileName } = require('./misc')
 
 const consumer = Consumer.create({
