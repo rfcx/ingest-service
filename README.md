@@ -36,13 +36,13 @@ And these services in `amazon` mode:
 
 3. Start MongoDB using Docker.
    ```
-   npm run start.mongo
+   npm run db-start
    ```
    MongoDB will start on `localhost` with port `27017`, db name `admin`, user `admin-user`, and password `test`.
 
    (When you want to stop MongoDB, use:)
    ```
-   npm run stop.mongo
+   npm run db-stop
    ```
 
 4. Start the API (with live reloading).
@@ -52,7 +52,11 @@ And these services in `amazon` mode:
 
    In production the API endpoints are run directly:
    ```
-   npm start
+   npm start:api
+   ```
+   and
+   ```
+   npm start:tasks
    ```
 
 5. Open [localhost:3030/docs](http://localhost:3030/docs) to test the endpoints.
@@ -77,23 +81,6 @@ _TODO - this doesn't look like it works anymore_
 The `example` folder contains `upload.js` which can be run as `node upload.js filename.mp3` to perform the client-side steps to upload the file (get a signed url, upload the file to storage, and check the upload status). (Install the dependencies before you start `cd example ; npm i`.)
 
 To test the trigger from storage, use the `npm run shellfb` described above.
-
-
-## Ingestion methods
-
-_TODO - probably not relevant now (always use `stream`)_
-
-1. Checkin endpoint
-
-Set the `INGEST_METHOD` to `checkin` in the environment variables (.env). No extra configuration required.
-
-2. Manual S3 upload and audio endpoint
-
-Set the `INGEST_METHOD` to `manual` and `ingestManualBucketName` to `rfcx-guardian-ark-staging` in the environment variables (.env). Also add the AWS S3 user config: `S3_ACCESS_KEY_ID`, `S3_SECRET_KEY`, `S3_REGION_ID`.
-
-3. Streams endpoint - not yet implemented
-
-Set the `INGEST_METHOD` to `stream` in the environment variables (.env).
 
 
 ## Auto-update endpoints
