@@ -28,4 +28,3 @@ spec:
               name: ingest-service-secrets
           - configMapRef:
               name: ingest-service-config
-      terminationGracePeriodSeconds: 10
