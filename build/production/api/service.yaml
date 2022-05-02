@@ -1,7 +1,7 @@
 kind: Service
 apiVersion: v1
 metadata:
-  name: ingest-service-service
+  name: ingest-service-api-service
   namespace: production
 spec:
   selector:
