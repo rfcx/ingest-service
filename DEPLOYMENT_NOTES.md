@@ -1,5 +1,10 @@
 # Deployment Notes
 
+## v1.1.0
+
+- Delete the `ingest-service` deployment and `ingest-service-service` service from Kubernetes (it is replaced by `ingest-service-api` and `-tasks`)
+- Change `INGEST_SERVICE_BASE_URL` in `noncore-api-configmap` to `http://ingest-service-api-service.production.svc.cluster.local/`
+
 ## v1.0.4
 
 - Delete `ARBIMON_ENABLED` and `ARBIMON_HOST` env vars

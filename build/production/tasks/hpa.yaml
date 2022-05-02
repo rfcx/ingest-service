@@ -7,7 +7,7 @@ spec:
   scaleTargetRef:
     apiVersion: apps/v1beta1
     kind: Deployment
-    name: ingest-service
+    name: ingest-service-tasks
   minReplicas: 1
   maxReplicas: 13
   metrics:

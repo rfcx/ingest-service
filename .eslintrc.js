@@ -17,6 +17,7 @@ module.exports = {
     'jest'
   ],
   rules: {
-    curly: ['error', 'all']
+    curly: ['error', 'all'],
+    'no-console': ['error', { allow: ['info', 'warn', 'error'] }] // only intentional logs (info/warn/error); disallow console.log
   }
 }

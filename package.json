@@ -1,12 +1,14 @@
 {
   "name": "ingest-service",
   "description": "RFCx Ingest Service",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "scripts": {
-    "dev": "nodemon index.js",
-    "start": "node index.js",
-    "start.mongo": ". ./bin/mongo/start.sh",
-    "stop.mongo": "docker container stop ingest-service-mongo",
+    "dev": "nodemon main-all.js",
+    "start": "node main-all.js",
+    "start:api": "node main-api.js",
+    "start:tasks": "node main-tasks.js",
+    "db-start": ". ./bin/mongo/start.sh",
+    "db-stop": "docker container stop ingest-service-mongo",
     "test": "eslint \"**/*.js\" && jest",
     "jest": "jest",
     "lint": "eslint \"**/*.js\""

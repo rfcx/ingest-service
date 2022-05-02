@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const { Converter, ValidationError, httpErrorHandler, EmptyResultError, ForbiddenError } = require('@rfcx/http-utils')
-const platform = process.env.PLATFORM || 'google'
+const platform = process.env.PLATFORM || 'amazon'
 const db = require('../services/db/mongo')
 const storage = require(`../services/storage/${platform}`)
 const segmentService = require('../services/rfcx/segments')

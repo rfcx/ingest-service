@@ -1,27 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ingest-service
-  namespace: production
+  name: ingest-service-tasks
+  namespace: staging
 spec:
   selector:
     matchLabels:
-      app: ingest-service
+      app: ingest-service-tasks
   template:
     metadata:
       labels:
-        app: ingest-service
+        app: ingest-service-tasks
     spec:
       containers:
-      - name: ingest-service
+      - name: ingest-service-tasks
         image: 887044485231.dkr.ecr.eu-west-1.amazonaws.com/ingest-service:latest
+        args: ["npm", "run", "start:tasks"]
         resources:
           requests:
             memory: "128Mi"
             cpu: "100m"
           limits:
             memory: "512Mi"
-            cpu: "300m"
+            cpu: "300"
         envFrom:
           - secretRef:
               name: ingest-service-secrets
