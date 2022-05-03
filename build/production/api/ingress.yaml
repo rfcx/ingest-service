@@ -18,5 +18,5 @@ spec:
     http:
       paths:
       - backend:
-          serviceName: ingest-service-service
+          serviceName: ingest-service-api-service
           servicePort: 80
