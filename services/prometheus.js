@@ -1,18 +1,21 @@
-const { PROMETHEUS_ENABLED, Histogram, UploadsGauge } = require('../utils/prometheus')
+const PROMETHEUS_ENABLED = `${process.env.PROMETHEUS_ENABLED}` === 'true'
 let exp = {
   PROMETHEUS_ENABLED
 }
 
 if (PROMETHEUS_ENABLED) {
+  const { Histogram, Gauge, getRegister } = require('@rfcx/prometheus-metrics')
+  const registerName = `ingest-service-${process.env.NODE_ENV || 'dev'}`
+  const register = getRegister(registerName)
   const db = require('../services/db/mongo')
 
-  new UploadsGauge('uploads_failed', 'Number or failed uploads', db.getUploadFailedCount) // eslint-disable-line no-new
-  new UploadsGauge('uploads_duplicated', 'Number or duplicated uploads', db.getUploadDuplicateCount) // eslint-disable-line no-new
+  new Gauge(registerName, 'uploads_failed', 'Number or failed uploads', db.getUploadFailedCount) // eslint-disable-line no-new
+  new Gauge(registerName, 'uploads_duplicated', 'Number or duplicated uploads', db.getUploadDuplicateCount) // eslint-disable-line no-new
 
   const histograms = {}
 
   function registerHistogram (name, help) { // eslint-disable-line no-inner-declarations
-    histograms[name] = new Histogram(name, help)
+    histograms[name] = new Histogram(registerName, name, help)
   }
 
   function pushHistogramMetric (histogramName, value) { // eslint-disable-line no-inner-declarations
@@ -26,7 +29,8 @@ if (PROMETHEUS_ENABLED) {
   exp = {
     PROMETHEUS_ENABLED,
     registerHistogram,
-    pushHistogramMetric
+    pushHistogramMetric,
+    register
   }
 }
 

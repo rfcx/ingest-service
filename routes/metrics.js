@@ -1,12 +1,17 @@
-const { PROMETHEUS_ENABLED, register } = require('../utils/prometheus')
-if (PROMETHEUS_ENABLED) {
-  const router = require('express').Router()
+const router = require('express').Router()
+const { PROMETHEUS_ENABLED, register } = require('../services/prometheus')
 
-  router.route('/').get(async (req, res) => {
-    res.setHeader('Content-Type', register.contentType)
-    res.send(await register.metrics())
-    register.resetMetrics()
-  })
+router.route('/').get((req, res) => {
+  if (!PROMETHEUS_ENABLED) {
+    res.sendStatus(501)
+  } else {
+    register.metrics()
+      .then((metrics) => {
+        res.setHeader('Content-Type', register.contentType)
+        res.send(metrics)
+        register.resetMetrics()
+      })
+  }
+})
 
-  module.exports = router
-}
+module.exports = router
