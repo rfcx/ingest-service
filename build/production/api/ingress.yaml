@@ -8,15 +8,15 @@ metadata:
     nginx.ingress.kubernetes.io/backend-protocol: "http"
     nginx.ingress.kubernetes.io/use-proxy-protocol: "true"
     nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
-  name: ingest-service-ingress
+  name: ingest-service-api-ingress
   namespace: production
   labels:
-      app: "ingest-service"
+      app: "ingest-service-api"
 spec:
   rules:
   - host: ingest.rfcx.org
     http:
       paths:
       - backend:
-          serviceName: ingest-service-service
+          serviceName: ingest-service-api-service
           servicePort: 80
