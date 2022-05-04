@@ -213,12 +213,12 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     outputFiles = transcodeData.outputFiles
     setAdditionalFileAttrs(outputFiles, upload)
 
+    console.info('Uploading segments')
+    await Promise.all(outputFiles.map(f => storage.upload(ingestBucket, f.remotePath, f.path)))
+
     console.info('Saving data in the Core API')
     const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
     streamSourceFileId = await segmentService.createStreamFileData(upload.streamId, corePayload)
-
-    console.info('Uploading segments')
-    await Promise.all(outputFiles.map(f => storage.upload(ingestBucket, f.remotePath, f.path)))
 
     console.info(`Modifying status to INGESTED (${db.status.INGESTED})`)
     await db.updateUploadStatus(uploadId, db.status.INGESTED)
@@ -240,12 +240,20 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     }
     const message = err instanceof IngestionError ? err.message : 'Server failed with processing your file. Please try again later.'
     const status = err instanceof IngestionError ? err.status : db.status.FAILED
-    db.updateUploadStatus(uploadId, status, message)
+    await db.updateUploadStatus(uploadId, status, message)
     for (const file of outputFiles) {
-      storage.deleteObject(ingestBucket, file.remotePath)
+      try {
+        await storage.deleteObject(ingestBucket, file.remotePath)
+      } catch (e) {
+        console.info(`Rollback: failed deleting file ${file.remotePath}`)
+      }
     }
     if (streamSourceFileId) {
-      segmentService.deleteStreamSourceFile(streamSourceFileId)
+      try {
+        await segmentService.deleteStreamSourceFile(streamSourceFileId)
+      } catch (e) {
+        console.info(`Rollback: failed deleting stream source file ${streamSourceFileId}`)
+      }
     }
 
     if (!loggerIgnoredErrors.includes(message)) {
@@ -256,7 +264,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     }
 
     await storage.deleteObject(uploadBucket, fileStoragePath)
-    dirUtil.removeDirRecursively(streamLocalPath)
+    await dirUtil.removeDirRecursively(streamLocalPath)
   }
 }
 
