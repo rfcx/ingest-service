@@ -1,0 +1,13 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: ingest-service-tasks-service
+  namespace: staging
+spec:
+  selector:
+    app: ingest-service-tasks
+  type: ClusterIP
+  ports:
+  - name: node
+    port: 80
+    targetPort: 80
