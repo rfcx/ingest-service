@@ -242,10 +242,18 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     const status = err instanceof IngestionError ? err.status : db.status.FAILED
     await db.updateUploadStatus(uploadId, status, message)
     for (const file of outputFiles) {
-      await storage.deleteObject(ingestBucket, file.remotePath)
+      try {
+        await storage.deleteObject(ingestBucket, file.remotePath)
+      } catch (e) {
+        console.info(`Rollback: failed deleting file ${file.remotePath}`)
+      }
     }
     if (streamSourceFileId) {
-      await segmentService.deleteStreamSourceFile(streamSourceFileId)
+      try {
+        await segmentService.deleteStreamSourceFile(streamSourceFileId)
+      } catch (e) {
+        console.info(`Rollback: failed deleting stream source file ${streamSourceFileId}`)
+      }
     }
 
     if (!loggerIgnoredErrors.includes(message)) {
