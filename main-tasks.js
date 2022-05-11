@@ -1,7 +1,7 @@
 require('dotenv').config()
 
 console.info('Tasks: starting')
-
+require('./utils/mongo')
 const api = require('./routes/index-tasks')
 
 const port = process.env.PORT || 3030

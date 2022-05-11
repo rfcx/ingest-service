@@ -1,7 +1,7 @@
 require('dotenv').config()
 
 console.info('API: starting')
-
+require('./utils/mongo')
 const api = require('./routes')
 
 const port = process.env.PORT || 3030

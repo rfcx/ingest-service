@@ -1,4 +1,3 @@
-require('../../utils/mongo')
 const UploadModel = require('./models/mongoose/upload').Upload
 const DeploymentInfoModel = require('./models/mongoose/deploymentInfo').DeploymentInfo
 const moment = require('moment-timezone')
