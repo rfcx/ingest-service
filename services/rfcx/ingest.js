@@ -214,7 +214,14 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     setAdditionalFileAttrs(outputFiles, upload)
 
     console.info('Uploading segments')
-    await Promise.all(outputFiles.map(f => storage.upload(ingestBucket, f.remotePath, f.path)))
+    await Promise.all(outputFiles.map((f) => {
+      return storage.upload(ingestBucket, f.remotePath, f.path)
+        .then((data) => {
+          if (!data || !data.ETag) {
+            throw new Error('Error while uploading file to storage')
+          }
+        })
+    }))
 
     console.info('Saving data in the Core API')
     const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
