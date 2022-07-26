@@ -5,6 +5,7 @@ const db = require('../db/mongo')
 const audioService = require('../audio')
 const dirUtil = require('../../utils/dir')
 const segmentService = require('../rfcx/segments')
+const { chunks } = require('../../utils/array')
 const { PROMETHEUS_ENABLED, registerHistogram, pushHistogramMetric } = require('../../services/prometheus')
 const path = require('path')
 const moment = require('moment-timezone')
@@ -214,14 +215,19 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     setAdditionalFileAttrs(outputFiles, upload)
 
     console.info('Uploading segments')
-    await Promise.all(outputFiles.map((f) => {
-      return storage.upload(ingestBucket, f.remotePath, f.path)
-        .then((data) => {
-          if (!data || !data.ETag) {
-            throw new Error('Error while uploading file to storage')
-          }
-        })
-    }))
+    let processedSegCount = 0
+    for (const chunk of [...chunks(outputFiles, 5)]) {
+      await Promise.all(chunk.map((f) => {
+        return storage.upload(ingestBucket, f.remotePath, f.path)
+          .then((data) => {
+            if (!data || !data.ETag) {
+              throw new Error('Error while uploading file to storage')
+            }
+          })
+      }))
+      processedSegCount += chunk.length
+      console.info(`Processed ${processedSegCount} recordings of ${outputFiles.length}`)
+    }
 
     console.info('Saving data in the Core API')
     const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
