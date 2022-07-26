@@ -49,7 +49,7 @@ function split (sourceFile, destinationPath, maxDuration) {
   const outputFileFormat = destinationPath + path.basename(sourceFile).replace(/\.([^.]*)$/, '.%03d.$1') // convert hello.wav to hello.%03d.wav
 
   return new Promise((resolve, reject) => {
-    const command = ffmpeg(sourceFile)
+    const command = ffmpeg(sourceFile, { stdoutLines: 50000 })
       .noVideo()
       .audioCodec('copy')
       .output(outputFileFormat)
