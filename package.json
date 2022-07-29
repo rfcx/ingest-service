@@ -1,7 +1,7 @@
 {
   "name": "ingest-service",
-  "description": "RFCx Ingest Service",
-  "version": "1.1.0",
+  "description": "Ingest Service",
+  "version": "1.0.9",
   "scripts": {
     "dev": "nodemon main-all.js",
     "start": "node main-all.js",
@@ -15,7 +15,7 @@
   },
   "main": "index.js",
   "engines": {
-    "node": "10"
+    "node": "12"
   },
   "dependencies": {
     "@google-cloud/pubsub": "^2.3.0",

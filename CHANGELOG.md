@@ -1,8 +1,11 @@
 <a name="1.0.9"></a>
-## 1.0.9 (2021-10-01)
+## 1.0.9 (2022-07-29)
 
-### Features
-* Endpoint to get stream by id ([CE-954](https://jira.rfcx.org/browse/CE-954))
+### Bug Fixes
+* Fix max processing segments by ffmpeg ([#77](https://github.com/rfcx/engineering-support/issues/77))
+
+### Performance Improvements
+* Upload splitted segments 5 files at a time ([CE-954](https://jira.rfcx.org/browse/CE-954))
 
 <a name="1.0.8"></a>
 ## 1.0.8 (2021-09-06)
