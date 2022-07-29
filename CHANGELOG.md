@@ -5,7 +5,7 @@
 * Fix max processing segments by ffmpeg ([#77](https://github.com/rfcx/engineering-support/issues/77))
 
 ### Performance Improvements
-* Upload splitted segments 5 files at a time ([CE-954](https://jira.rfcx.org/browse/CE-954))
+* Upload splitted segments 5 files at a time ([#77](https://github.com/rfcx/engineering-support/issues/77))
 
 <a name="1.0.8"></a>
 ## 1.0.8 (2021-09-06)
