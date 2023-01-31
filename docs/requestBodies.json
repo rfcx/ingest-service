@@ -85,12 +85,12 @@
     "properties": {
       "filename": {
         "type": "string",
-        "description": "A stream name",
-        "example": "My Stream 1"
+        "description": "A file name",
+        "example": "20221231_154400.WAV"
       },
       "timestamp": {
         "type": "date",
-        "description": "A update date (iso 8601)",
+        "description": "Audio file timestamp (iso 8601)",
         "example": "2020-11-16T09:03:24.928Z"
       },
       "stream": {
@@ -100,17 +100,17 @@
       },
       "sampleRate": {
         "type": "number",
-        "description": "A stream sample rate",
+        "description": "File's sample rate",
         "example": 24000
       },
       "targetBitrate": {
         "type": "number",
-        "description": "A stream target bitrate",
+        "description": "File's target bitrate",
         "example": 24000
       },
       "checksum": {
         "type": "string",
-        "description": "Checksum",
+        "description": "File checksum",
         "example": "xxxxxxx"
       }
     },
