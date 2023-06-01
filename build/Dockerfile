@@ -15,7 +15,7 @@ RUN apt update \
 RUN add-apt-repository ppa:jonathonf/ffmpeg-4 && \
     apt install -y  ffmpeg libsox-fmt-all && \
     mkdir -p /var/app/ && \
-    curl -sL https://deb.nodesource.com/setup_12.x | bash - && \
+    curl -sL https://deb.nodesource.com/setup_16.x | bash - && \
     apt update && \
     apt install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
@@ -24,7 +24,7 @@ RUN mkdir /tmp/ingest-service
 
 # -- Builder
 
-FROM node:12 as builder
+FROM node:16 as builder
 RUN mkdir /var/app
 ADD . /var/app/
 WORKDIR /var/app
