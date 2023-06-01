@@ -38,7 +38,7 @@
     "moment-timezone": "0.5.27",
     "mongoose": "^5.10.0",
     "mongoose-long": "^0.3.0",
-    "nuts-serve": "github:rassokhina-e/nuts",
+    "nuts-serve": "git+https://github.com/rassokhina-e/nuts.git",
     "prom-client": "^13.0.0",
     "querystring": "^0.2.0",
     "rimraf": "^3.0.0",
