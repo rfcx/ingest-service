@@ -334,6 +334,16 @@ describe('GET /uploads/:id', () => {
     expect(response.statusCode).toBe(404)
     expect(response.body._id).toBeUndefined()
   })
+  test('returns not found error when id has incorrect number format', async () => {
+    const response = await request(app).get('/uploads/1234')
+    expect(response.statusCode).toBe(404)
+    expect(response.body._id).toBeUndefined()
+  })
+  test('returns not found error when id has incorrect text format', async () => {
+    const response = await request(app).get('/uploads/xyz')
+    expect(response.statusCode).toBe(404)
+    expect(response.body._id).toBeUndefined()
+  })
   test('returns forbidden error for upload which is not yours', async () => {
     const dbUpload = await new UploadModel({
       streamId: '123456789012',

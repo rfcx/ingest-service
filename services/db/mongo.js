@@ -1,6 +1,8 @@
 const UploadModel = require('./models/mongoose/upload').Upload
 const DeploymentInfoModel = require('./models/mongoose/deploymentInfo').DeploymentInfo
+const { EmptyResultError } = require('@rfcx/http-utils')
 const moment = require('moment-timezone')
+const { CastError } = require('mongoose')
 
 const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31, CHECKSUM: 32 }
 const statusNumbers = Object.values(status)
@@ -34,7 +36,14 @@ function generateUpload (opts) {
 }
 
 function getUpload (id) {
-  return UploadModel.findById(id)
+  return UploadModel
+    .findById(id)
+    .catch((err) => {
+      if (err instanceof CastError) {
+        throw new EmptyResultError('Upload with given id not found.')
+      }
+      throw err
+    })
 }
 
 function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
