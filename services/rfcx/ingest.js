@@ -9,7 +9,6 @@ const { chunks } = require('../../utils/array')
 const { PROMETHEUS_ENABLED, registerHistogram, pushHistogramMetric } = require('../../services/prometheus')
 const path = require('path')
 const moment = require('moment-timezone')
-const uuid = require('uuid/v4')
 const uploadBucket = process.env.UPLOAD_BUCKET
 const ingestBucket = process.env.INGEST_BUCKET
 const errorBucket = process.env.ERROR_BUCKET
@@ -127,9 +126,16 @@ function setAdditionalFileAttrs (outputFiles, upload) {
     const ts = moment.tz(timestamp, 'UTC').add(totalDurationMs, 'milliseconds')
     file.start = ts.toISOString()
     file.end = ts.clone().add(duration, 'milliseconds').toISOString()
-    file.guid = uuid()
-    file.remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${upload.streamId}/${file.guid}${path.extname(file.path)}`
     totalDurationMs += duration
+  }
+}
+
+function setFilesIdAndPath (outputFiles, data, streamId) {
+  for (const file of outputFiles) {
+    const dataItem = data.find(d => file.start === data.start)
+    file.guid = dataItem.id
+    const ts = moment.utc(file.start)
+    file.remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${streamId}/${file.guid}${path.extname(file.path)}`
   }
 }
 
@@ -214,6 +220,13 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     outputFiles = transcodeData.outputFiles
     setAdditionalFileAttrs(outputFiles, upload)
 
+    console.info('Saving data in the Core API')
+    const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
+    const coreData = await segmentService.createStreamFileData(upload.streamId, corePayload)
+    streamSourceFileId = coreData.streamSourceFileId
+
+    setFilesIdAndPath(outputFiles, coreData.streamSegments, upload.streamId)
+
     console.info('Uploading segments')
     let processedSegCount = 0
     for (const chunk of [...chunks(outputFiles, 5)]) {
@@ -228,10 +241,6 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       processedSegCount += chunk.length
       console.info(`Processed ${processedSegCount} recordings of ${outputFiles.length}`)
     }
-
-    console.info('Saving data in the Core API')
-    const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
-    streamSourceFileId = await segmentService.createStreamFileData(upload.streamId, corePayload)
 
     console.info(`Modifying status to INGESTED (${db.status.INGESTED})`)
     await db.updateUploadStatus(uploadId, db.status.INGESTED)
