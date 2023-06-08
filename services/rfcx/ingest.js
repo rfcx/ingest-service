@@ -132,7 +132,7 @@ function setAdditionalFileAttrs (outputFiles, upload) {
 
 function setFilesIdAndPath (outputFiles, data, streamId) {
   for (const file of outputFiles) {
-    const dataItem = data.find(d => file.start === data.start)
+    const dataItem = data.find(d => file.start === d.start)
     file.guid = dataItem.id
     const ts = moment.utc(file.start)
     file.remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${streamId}/${file.guid}${path.extname(file.path)}`
