@@ -71,7 +71,10 @@ async function createStreamFileData (stream, payload) {
       if (!response || response.status !== 201) {
         throw new Error('Stream source file was not created')
       }
-      return response.headers.location.replace('/stream-source-files/', '')
+      return {
+        streamSourceFileId: response.headers.location.replace('/stream-source-files/', ''),
+        streamSegments: response.body.stream_segments
+      }
     })
     .catch((err) => {
       if (err.response && err.response.data && err.response.data.message) {
