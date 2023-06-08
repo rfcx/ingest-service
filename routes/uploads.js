@@ -67,7 +67,7 @@ router.route('/').post((req, res) => {
         const existingStreamSourceFiles = await segmentService.getExistingSourceFiles({ stream, checksum, idToken })
         if (existingStreamSourceFiles && existingStreamSourceFiles.length) {
           const sameFile = existingStreamSourceFiles.find(x => x.filename === filename)
-          if (sameFile.availability !== 0) {
+          if (!sameFile || (sameFile && sameFile.availability !== 0)) {
             const message = sameFile ? 'Duplicate.' : 'Invalid.'
             throw new ValidationError(message)
           }

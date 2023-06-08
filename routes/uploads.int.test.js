@@ -126,6 +126,19 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toBe('Invalid.')
   })
+  test('does not return validation error message if file was already uploaded but is unavailable', async () => {
+    getExistingSourceFiles.mockImplementation(() => [{ filename: '0a1824085e3f-2021-06-08T19-26-40.flac', availability: 0 }])
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(200)
+  })
   test('creates upload document and returns correct data', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
