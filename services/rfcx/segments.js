@@ -73,7 +73,7 @@ async function createStreamFileData (stream, payload) {
       }
       return {
         streamSourceFileId: response.headers.location.replace('/stream-source-files/', ''),
-        streamSegments: response.body.stream_segments
+        streamSegments: response.data.stream_segments
       }
     })
     .catch((err) => {
