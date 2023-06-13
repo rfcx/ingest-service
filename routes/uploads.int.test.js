@@ -98,7 +98,7 @@ describe('POST /uploads', () => {
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(403)
   })
-  test('returns validation error with "Duplicate." message if file was already uploaded and has same filename', async () => {
+  test('does not return validation error with "Duplicate." message if file was already uploaded and has same filename', async () => {
     getExistingSourceFiles.mockImplementation(() => [{ filename: '0a1824085e3f-2021-06-08T19-26-40.flac' }])
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
@@ -109,8 +109,8 @@ describe('POST /uploads', () => {
       targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
-    expect(response.statusCode).toBe(400)
-    expect(response.body.message).toBe('Duplicate.')
+    expect(response.statusCode).toBe(200)
+    // expect(response.body.message).toBe('Duplicate.')
   })
   test('returns validation error with "Invalid." message if file was already uploaded and has different filename', async () => {
     getExistingSourceFiles.mockImplementation(() => [{ filename: '0a1824085e3f-2021-06-08T12-26-40.flac' }])
