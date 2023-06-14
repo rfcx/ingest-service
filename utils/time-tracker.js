@@ -17,6 +17,7 @@ class TimeTracker {
   }
 
   log (message) {
+    // eslint-disable-next-line no-console
     console.log(`-- [${this.title}]: ${message}: ${(Date.now() - this.currentTimestamp) / 1000}s`)
   }
 
