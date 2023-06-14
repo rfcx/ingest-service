@@ -9,6 +9,7 @@ const { chunks } = require('../../utils/array')
 const { PROMETHEUS_ENABLED, registerHistogram, pushHistogramMetric } = require('../../services/prometheus')
 const path = require('path')
 const moment = require('moment-timezone')
+const TimeTracker = require('../../utils/time-tracker')
 const uploadBucket = process.env.UPLOAD_BUCKET
 const ingestBucket = process.env.INGEST_BUCKET
 const errorBucket = process.env.ERROR_BUCKET
@@ -195,6 +196,7 @@ function combineCorePayloadData (fileData, wavMeta, outputFiles, upload) {
 }
 
 async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
+  let tracker = new TimeTracker('IngestTask')
   let outputFiles
   let streamSourceFileId
   const streamLocalPath = getStreamLocalPath(fileStoragePath)
@@ -205,29 +207,38 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     validateFileFormat(fileExtension)
     await createStreamLocalPath(streamLocalPath)
     console.info('Downloading file from storage')
+    tracker.setPoint()
     await storage.download(fileStoragePath, getFileLocalPath(fileStoragePath))
+    tracker.logAndSetNewPoint('downloaded file')
     console.info('Updating upload status to UPLOADED')
     await db.updateUploadStatus(uploadId, db.status.UPLOADED)
+    tracker.logAndSetNewPoint('updated upload status in Mongo')
 
     const fileData = await audioService.identify(fileLocalPath)
+    tracker.logAndSetNewPoint('identified file with ffmpeg')
     console.info('Audio metadata', JSON.stringify(fileData))
     const upload = await db.getUpload(uploadId)
     console.info('Upload metadata from database ', JSON.stringify(upload))
     validateAudioMeta(upload, fileData, fileExtension)
 
     console.info('Transcoding file')
+    tracker.setPoint()
     const transcodeData = await transcode(fileLocalPath, fileData)
+    tracker.logAndSetNewPoint('transcoded file')
     outputFiles = transcodeData.outputFiles
     setAdditionalFileAttrs(outputFiles, upload)
 
     console.info('Saving data in the Core API')
     const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
+    tracker.setPoint()
     const coreData = await segmentService.createStreamFileData(upload.streamId, corePayload)
+    tracker.logAndSetNewPoint('created data in Core API')
     streamSourceFileId = coreData.streamSourceFileId
 
     setFilesIdAndPath(outputFiles, coreData.streamSegments, upload.streamId)
 
     console.info('Uploading segments')
+    tracker.setPoint()
     let processedSegCount = 0
     for (const chunk of [...chunks(outputFiles, 5)]) {
       await Promise.all(chunk.map((f) => {
@@ -241,19 +252,24 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       processedSegCount += chunk.length
       console.info(`Processed ${processedSegCount} recordings of ${outputFiles.length}`)
     }
+    tracker.logAndSetNewPoint('uploaded al segments to S3')
 
     console.info(`Modifying status to INGESTED (${db.status.INGESTED})`)
     await db.updateUploadStatus(uploadId, db.status.INGESTED)
+    tracker.logAndSetNewPoint('updated upload status in Mongo')
 
     uploadId = null
     if (PROMETHEUS_ENABLED && fileData.sampleCount) {
       console.info('Updating processing metrics')
       const processingValue = (Date.now() - startTimestamp) / fileData.sampleCount * 10000 // we use multiplier because values are far less than 1 in other case
       pushHistogramMetric(fileExtension.substr(1), processingValue)
+      tracker.logAndSetNewPoint('pushed histogram metric')
     }
     console.info('Cleaning up files')
     await storage.deleteObject(uploadBucket, fileStoragePath)
     await dirUtil.removeDirRecursively(streamLocalPath)
+    tracker.logAndSetNewPoint('cleaned up files')
+    tracker = null
   } catch (err) {
     if (loggerIgnoredErrors.includes(err.message)) {
       console.warn(`Warn for upload ${uploadId} ${err.message}`)
