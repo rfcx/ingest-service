@@ -22,7 +22,7 @@ spec:
             cpu: "100m"
           limits:
             memory: "512Mi"
-            cpu: "300m"
+            cpu: "500m"
         envFrom:
           - secretRef:
               name: ingest-service-secrets
