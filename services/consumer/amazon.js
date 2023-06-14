@@ -2,11 +2,13 @@ const { Consumer } = require('sqs-consumer')
 const AWS = require('../../utils/aws')
 const { ingest } = require('../rfcx/ingest')
 const { parseUploadFromFileName } = require('./misc')
+const TimeTracker = require('../../utils/time-tracker')
 
 const consumer = Consumer.create({
   queueUrl: process.env.SQS_INGEST_TRIGGER_QUEUE_URL,
   batchSize: 1, // this is a default value, but set it to 1 just to make sure it won't be changed in future versions of the lib
   handleMessage: async (message) => {
+    let tracker = new TimeTracker('IngestConsumer')
     const files = parseIngestSQSMessage(message)
     for (const file of files) {
       const { fileLocalPath, streamId, uploadId } = parseUploadFromFileName(file.key)
@@ -16,6 +18,8 @@ const consumer = Consumer.create({
         return false
       }
     }
+    tracker.log('processed message')
+    tracker = null
     return true
   },
   sqs: new AWS.SQS()
