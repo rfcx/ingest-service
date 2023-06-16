@@ -24,7 +24,7 @@ spec:
             memory: "512Mi"
             cpu: "300m"
         envFrom:
-          - secretRef:
-              name: ingest-service-secrets
           - configMapRef:
               name: ingest-service-config
+          - secretRef:
+              name: ingest-service-secrets

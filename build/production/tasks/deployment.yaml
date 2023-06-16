@@ -24,8 +24,8 @@ spec:
             memory: "512Mi"
             cpu: "500m"
         envFrom:
-          - secretRef:
-              name: ingest-service-secrets
           - configMapRef:
               name: ingest-service-config
+          - secretRef:
+              name: ingest-service-secrets
       terminationGracePeriodSeconds: 10
