@@ -14,6 +14,8 @@ data:
   INGEST_BUCKET: "rfcx-streams-production"
   ERROR_BUCKET: "rfcx-streams-errors-production"
   MAX_UPLOAD_BYTES: "209715200"
+  NEW_RELIC_APP_NAME: "Ingest Service"
+  NEW_RELIC_LOG_LEVEL: 'info'
   API_HOST: http://core-api-service.production.svc.cluster.local/
   SQS_INGEST_TRIGGER_QUEUE_URL: "https://sqs.eu-west-1.amazonaws.com/887044485231/ingest-service-upload-production"
   AUTHZERO_DOMAIN: "rfcx.eu.auth0.com"

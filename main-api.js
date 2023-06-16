@@ -1,3 +1,7 @@
+// New Relic
+if (process.env.NODE_ENV === 'production') {
+  require('./newrelic')
+}
 require('dotenv').config()
 
 console.info('API: starting')
