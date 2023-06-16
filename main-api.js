@@ -1,4 +1,5 @@
 if (process.env.NODE_ENV === 'production') {
+  console.info('Starting newrelic')
   require('newrelic')
 }
 require('dotenv').config()
