@@ -38,7 +38,7 @@
     "moment-timezone": "0.5.27",
     "mongoose": "^5.10.0",
     "mongoose-long": "^0.3.0",
-    "newrelic": "^10.3.0",
+    "newrelic": "^8.17.1",
     "nuts-serve": "git+https://github.com/rassokhina-e/nuts.git",
     "prom-client": "^13.0.0",
     "querystring": "^0.2.0",
