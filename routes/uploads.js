@@ -64,16 +64,16 @@ router.route('/').post((req, res) => {
       const fileExtension = params.filename.split('.').pop().toLowerCase()
       let { filename, timestamp, stream, sampleRate, targetBitrate, checksum } = params
       if (params.checksum) {
-        const existingStreamSourceFiles = await segmentService.getExistingSourceFiles({ stream, checksum, idToken })
-        if (existingStreamSourceFiles && existingStreamSourceFiles.length) {
-          const sameFile = existingStreamSourceFiles.find(x => x.filename === filename)
-          if (!sameFile) {
-            // TODO: once we are ready to prevent duplicate uploads again, we can use the following lines to return the error message
-            // if (!sameFile || (sameFile && sameFile.availability !== 0)) {
-            //   const message = sameFile ? 'Duplicate.' : 'Invalid.'
-            //   throw new ValidationError(message)
-            // }
-            throw new ValidationError('Invalid.')
+        try {
+          const existingStreamSourceFile = await segmentService.getExistingSourceFile({ stream, timestamp, checksum, idToken })
+          const sameFile = existingStreamSourceFile.filename === filename
+          if (!sameFile || (sameFile && existingStreamSourceFile.availability !== 0)) {
+            const message = sameFile ? 'Duplicate.' : 'Invalid.'
+            throw new ValidationError(message)
+          }
+        } catch (e) {
+          if (e.message !== 'Stream source file not found') {
+            throw e
           }
         }
       }

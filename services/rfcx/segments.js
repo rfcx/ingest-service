@@ -6,10 +6,11 @@ const { DUPLICATE, INGESTED, FAILED } = status
 
 const apiHostName = process.env.API_HOST
 
-function getExistingSourceFiles (opts) {
-  const url = `${apiHostName}streams/${opts.stream}/stream-source-files`
+function getExistingSourceFile (opts) {
+  const url = `${apiHostName}streams/${opts.stream}/stream-source-file`
   const params = {
-    'sha1_checksum[]': opts.checksum
+    sha1_checksum: opts.checksum,
+    start: opts.timestamp.toISOString()
   }
   if (opts.limit) {
     params.limit = opts.limit
@@ -110,7 +111,7 @@ async function deleteStreamSourceFile (id) {
 }
 
 module.exports = {
-  getExistingSourceFiles,
+  getExistingSourceFile,
   createStreamFileData,
   deleteStreamSourceFile
 }
