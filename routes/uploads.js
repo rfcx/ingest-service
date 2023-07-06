@@ -7,6 +7,7 @@ const storage = require(`../services/storage/${platform}`)
 const segmentService = require('../services/rfcx/segments')
 const streamService = require('../services/rfcx/streams')
 const auth0Service = require('../services/auth0')
+const moment = require('moment-timezone')
 const { getSampleRateFromFilename } = require('../services/rfcx/guardian')
 
 /**
@@ -66,7 +67,8 @@ router.route('/').post((req, res) => {
       if (params.checksum) {
         try {
           const existingStreamSourceFile = await segmentService.getExistingSourceFile({ stream, timestamp, checksum, idToken })
-          const sameFile = existingStreamSourceFile.filename === filename
+          const hasSegments = existingStreamSourceFile.segments && existingStreamSourceFile.segments.length
+          const sameFile = hasSegments && Math.abs(moment.utc(existingStreamSourceFile.segments[0].start).valueOf() - timestamp.valueOf()) < 1000
           if (!sameFile || (sameFile && existingStreamSourceFile.availability !== 0)) {
             const message = sameFile ? 'Duplicate.' : 'Invalid.'
             throw new ValidationError(message)

@@ -25,7 +25,7 @@ const route = require('./uploads')
 app.use('/uploads', route)
 
 beforeAll(async () => {
-  muteConsole()
+  muteConsole('warn')
   await startDb()
 })
 beforeEach(async () => {
@@ -111,8 +111,16 @@ describe('POST /uploads', () => {
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(404)
   })
-  test('returns validation error with "Duplicate." message if file was already uploaded and has same filename', async () => {
-    getExistingSourceFile.mockImplementation(() => { return { filename: '0a1824085e3f-2021-06-08T19-26-40.flac' } })
+  test('returns validation error with "Duplicate." message if file was already uploaded and has same timestamp', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+        availability: 1,
+        segments: [
+          { start: '2021-06-08T19:26:40.000Z', availability: 1 }
+        ]
+      }
+    })
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
@@ -125,8 +133,16 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toBe('Duplicate.')
   })
-  test('returns validation error with "Invalid." message if file was already uploaded and has different filename', async () => {
-    getExistingSourceFile.mockImplementation(() => { return { filename: '0a1824085e3f-2021-06-08T12-26-40.flac' } })
+  test('returns validation error with "Invalid." message if file was already uploaded and has a different timestamp', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+        availability: 1,
+        segments: [
+          { start: '2021-06-08T18:26:40.000Z', availability: 1 }
+        ]
+      }
+    })
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
@@ -139,8 +155,84 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toBe('Invalid.')
   })
+  test('returns validation error with "Duplicate." message if file was already uploaded and has same timestamp, but different for 1 ms (Postgres reason)', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+        timestamp: '2021-06-08T19:26:40.000Z',
+        availability: 1,
+        segments: [
+          { start: '2021-06-08T19:26:40.001Z', availability: 1 }
+        ]
+      }
+    })
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe('Duplicate.')
+  })
+  test('returns validation error with "Duplicate" if file was already uploaded, is available and has a different filename', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T12-26-40.flac',
+        timestamp: '2021-06-08T19:26:40.000Z',
+        availability: 1,
+        segments: [
+          { start: '2021-06-08T19:26:40.000Z', availability: 1 }
+        ]
+      }
+    })
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40 COPY 1.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe('Duplicate.')
+  })
+  test('does not return validation error if file was already uploaded, is unavailable and has a different filename', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T12-26-40.flac',
+        timestamp: '2021-06-08T19:26:40.000Z',
+        availability: 0,
+        segments: [
+          { start: '2021-06-08T19:26:40.000Z', availability: 0 }
+        ]
+      }
+    })
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40 COPY 1.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(200)
+  })
   test('does not return validation error message if file was already uploaded but is unavailable', async () => {
-    getExistingSourceFile.mockImplementation(() => { return { filename: '0a1824085e3f-2021-06-08T19-26-40.flac', availability: 0 } })
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+        availability: 0,
+        segments: [
+          { start: '2021-06-08T19:26:40.000Z', availability: 0 }
+        ]
+      }
+    })
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',

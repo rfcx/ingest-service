@@ -7,7 +7,7 @@ const { DUPLICATE, INGESTED, FAILED } = status
 const apiHostName = process.env.API_HOST
 
 function getExistingSourceFile (opts) {
-  const url = `${apiHostName}streams/${opts.stream}/stream-source-file`
+  const url = `${apiHostName}internal/ingest/streams/${opts.stream}/stream-source-file`
   const params = {
     sha1_checksum: opts.checksum,
     start: opts.timestamp.toISOString()
@@ -55,7 +55,7 @@ function transformStreamSegmentsPayload (data) {
 }
 
 async function createStreamFileData (stream, payload) {
-  const url = `${apiHostName}internal/ingest/streams/${stream}/stream-source-files-and-segments`
+  const url = `${apiHostName}internal/ingest/streams/${stream}/stream-source-file-and-segments`
   const data = {
     stream_source_file: transformStreamSourceFilePayload(payload.streamSourceFile),
     stream_segments: transformStreamSegmentsPayload(payload.streamSegments)
