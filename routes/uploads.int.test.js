@@ -11,7 +11,7 @@ const { checkPermission } = require(streamsModulePath)
 
 const segmentsModulePath = '../services/rfcx/segments'
 jest.mock(segmentsModulePath)
-const { getExistingSourceFiles } = require(segmentsModulePath)
+const { getExistingSourceFile } = require(segmentsModulePath)
 
 const { startDb, stopDb, truncateDbModels, expressApp, muteConsole, seedValues } = require('../utils/testing')
 const request = require('supertest')
@@ -19,24 +19,24 @@ const request = require('supertest')
 const app = expressApp()
 const UploadModel = require('../services/db/models/mongoose/upload').Upload
 const { status } = require('../services/db/mongo')
-const { ForbiddenError } = require('@rfcx/http-utils')
+const { ForbiddenError, EmptyResultError } = require('@rfcx/http-utils')
 
 const route = require('./uploads')
 app.use('/uploads', route)
 
 beforeAll(async () => {
-  muteConsole()
+  muteConsole('warn')
   await startDb()
 })
 beforeEach(async () => {
   checkPermission.mockImplementation(() => {})
-  getExistingSourceFiles.mockImplementation(() => [])
+  getExistingSourceFile.mockImplementation(() => { throw new EmptyResultError('Stream source file not found') })
   getSignedUrl.mockImplementation(() => 'http://some.url')
   await truncateDbModels(UploadModel)
 })
 afterEach(async () => {
   checkPermission.mockRestore()
-  getExistingSourceFiles.mockRestore()
+  getExistingSourceFile.mockRestore()
   getSignedUrl.mockRestore()
 })
 afterAll(async () => {
@@ -98,8 +98,8 @@ describe('POST /uploads', () => {
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(403)
   })
-  test('does not return validation error with "Duplicate." message if file was already uploaded and has same filename', async () => {
-    getExistingSourceFiles.mockImplementation(() => [{ filename: '0a1824085e3f-2021-06-08T19-26-40.flac' }])
+  test('returns empty error if stream does not exist', async () => {
+    checkPermission.mockImplementation(() => { throw new EmptyResultError() })
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
@@ -109,11 +109,40 @@ describe('POST /uploads', () => {
       targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
-    expect(response.statusCode).toBe(200)
-    // expect(response.body.message).toBe('Duplicate.')
+    expect(response.statusCode).toBe(404)
   })
-  test('returns validation error with "Invalid." message if file was already uploaded and has different filename', async () => {
-    getExistingSourceFiles.mockImplementation(() => [{ filename: '0a1824085e3f-2021-06-08T12-26-40.flac' }])
+  test('returns validation error with "Duplicate." message if file was already uploaded and has same timestamp', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+        availability: 1,
+        segments: [
+          { start: '2021-06-08T19:26:40.000Z', availability: 1 }
+        ]
+      }
+    })
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe('Duplicate.')
+  })
+  test('returns validation error with "Invalid." message if file was already uploaded and has a different timestamp', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+        availability: 1,
+        segments: [
+          { start: '2021-06-08T18:26:40.000Z', availability: 1 }
+        ]
+      }
+    })
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
@@ -126,8 +155,84 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toBe('Invalid.')
   })
+  test('returns validation error with "Duplicate." message if file was already uploaded and has same timestamp, but different for 1 ms (Postgres reason)', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+        timestamp: '2021-06-08T19:26:40.000Z',
+        availability: 1,
+        segments: [
+          { start: '2021-06-08T19:26:40.001Z', availability: 1 }
+        ]
+      }
+    })
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe('Duplicate.')
+  })
+  test('returns validation error with "Duplicate" if file was already uploaded, is available and has a different filename', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T12-26-40.flac',
+        timestamp: '2021-06-08T19:26:40.000Z',
+        availability: 1,
+        segments: [
+          { start: '2021-06-08T19:26:40.000Z', availability: 1 }
+        ]
+      }
+    })
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40 COPY 1.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe('Duplicate.')
+  })
+  test('does not return validation error if file was already uploaded, is unavailable and has a different filename', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T12-26-40.flac',
+        timestamp: '2021-06-08T19:26:40.000Z',
+        availability: 0,
+        segments: [
+          { start: '2021-06-08T19:26:40.000Z', availability: 0 }
+        ]
+      }
+    })
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40 COPY 1.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(200)
+  })
   test('does not return validation error message if file was already uploaded but is unavailable', async () => {
-    getExistingSourceFiles.mockImplementation(() => [{ filename: '0a1824085e3f-2021-06-08T19-26-40.flac', availability: 0 }])
+    getExistingSourceFile.mockImplementation(() => {
+      return {
+        filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+        availability: 0,
+        segments: [
+          { start: '2021-06-08T19:26:40.000Z', availability: 0 }
+        ]
+      }
+    })
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
@@ -214,7 +319,7 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(200)
     expect(upload.sampleRate).toBeUndefined()
   })
-  test('does not call segmentService.getExistingSourceFiles if checksum is not provided', async () => {
+  test('does not call segmentService.getExistingSourceFile if checksum is not provided', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
@@ -237,7 +342,7 @@ describe('POST /uploads', () => {
     expect(upload.sampleRate).toBe(requestBody.sampleRate)
     expect(upload.targetBitrate).toBe(requestBody.targetBitrate)
     expect(upload.checksum).toBeUndefined()
-    expect(getExistingSourceFiles).toHaveBeenCalledTimes(0)
+    expect(getExistingSourceFile).toHaveBeenCalledTimes(0)
   })
   test('creates two upload documents and returns correct data for each', async () => {
     const requestBody = {

@@ -7,6 +7,7 @@ const storage = require(`../services/storage/${platform}`)
 const segmentService = require('../services/rfcx/segments')
 const streamService = require('../services/rfcx/streams')
 const auth0Service = require('../services/auth0')
+const moment = require('moment-timezone')
 const { getSampleRateFromFilename } = require('../services/rfcx/guardian')
 
 /**
@@ -64,16 +65,17 @@ router.route('/').post((req, res) => {
       const fileExtension = params.filename.split('.').pop().toLowerCase()
       let { filename, timestamp, stream, sampleRate, targetBitrate, checksum } = params
       if (params.checksum) {
-        const existingStreamSourceFiles = await segmentService.getExistingSourceFiles({ stream, checksum, idToken })
-        if (existingStreamSourceFiles && existingStreamSourceFiles.length) {
-          const sameFile = existingStreamSourceFiles.find(x => x.filename === filename)
-          if (!sameFile) {
-            // TODO: once we are ready to prevent duplicate uploads again, we can use the following lines to return the error message
-            // if (!sameFile || (sameFile && sameFile.availability !== 0)) {
-            //   const message = sameFile ? 'Duplicate.' : 'Invalid.'
-            //   throw new ValidationError(message)
-            // }
-            throw new ValidationError('Invalid.')
+        try {
+          const existingStreamSourceFile = await segmentService.getExistingSourceFile({ stream, timestamp, checksum, idToken })
+          const hasSegments = existingStreamSourceFile.segments && existingStreamSourceFile.segments.length
+          const sameFile = hasSegments && Math.abs(moment.utc(existingStreamSourceFile.segments[0].start).valueOf() - timestamp.valueOf()) < 1000
+          if (!sameFile || (sameFile && existingStreamSourceFile.availability !== 0)) {
+            const message = sameFile ? 'Duplicate.' : 'Invalid.'
+            throw new ValidationError(message)
+          }
+        } catch (e) {
+          if (e.message !== 'Stream source file not found') {
+            throw e
           }
         }
       }
