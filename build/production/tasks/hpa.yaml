@@ -9,7 +9,7 @@ spec:
     kind: Deployment
     name: ingest-service-tasks
   minReplicas: 1
-  maxReplicas: 20
+  maxReplicas: 30
   metrics:
   - type: External
     external:
