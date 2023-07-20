@@ -137,6 +137,7 @@ function setFilesIdAndPath (outputFiles, data, streamId) {
     file.guid = dataItem.id
     const ts = moment.utc(file.start)
     file.remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${streamId}/${file.guid}${path.extname(file.path)}`
+    dataItem.remotePath = file.remotePath
   }
 }
 
@@ -198,7 +199,7 @@ function combineCorePayloadData (fileData, wavMeta, outputFiles, upload) {
 async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
   let tracker = new TimeTracker('IngestTask')
   let outputFiles
-  let streamSourceFileId
+  let coreData
   const streamLocalPath = getStreamLocalPath(fileStoragePath)
   try {
     const startTimestamp = Date.now() // is used for processing time calculation
@@ -231,9 +232,8 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     console.info('Saving data in the Core API')
     const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
     tracker.setPoint()
-    const coreData = await segmentService.createStreamFileData(upload.streamId, corePayload)
+    coreData = await segmentService.createStreamFileData(upload.streamId, corePayload)
     tracker.logAndSetNewPoint('created data in Core API')
-    streamSourceFileId = coreData.streamSourceFileId
 
     setFilesIdAndPath(outputFiles, coreData.streamSegments, upload.streamId)
 
@@ -271,6 +271,9 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     tracker.logAndSetNewPoint('cleaned up files')
     tracker = null
   } catch (err) {
+    /**
+     * ERROR HANDLING
+     */
     if (loggerIgnoredErrors.includes(err.message)) {
       console.warn(`Warn for upload ${uploadId} ${err.message}`)
     } else {
@@ -286,11 +289,11 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
         console.info(`Rollback: failed deleting file ${file.remotePath}`)
       }
     }
-    if (streamSourceFileId) {
+    if (coreData) {
       try {
-        await segmentService.deleteStreamSourceFile(streamSourceFileId)
+        await segmentService.deleteStreamSourceFile(streamId, coreData)
       } catch (e) {
-        console.info(`Rollback: failed deleting stream source file ${streamSourceFileId}`)
+        console.info(`Rollback: failed deleting stream source file ${coreData.streamSourceFile.id}`, e)
       }
     }
 

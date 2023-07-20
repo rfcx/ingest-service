@@ -73,7 +73,7 @@ async function createStreamFileData (stream, payload) {
         throw new Error('Stream source file was not created')
       }
       return {
-        streamSourceFileId: response.headers.location.replace('/stream-source-files/', ''),
+        streamSourceFile: response.data.stream_source_file,
         streamSegments: response.data.stream_segments
       }
     })
@@ -98,8 +98,20 @@ async function createStreamFileData (stream, payload) {
     })
 }
 
-async function deleteStreamSourceFile (id) {
-  const url = `${apiHostName}stream-source-files/${id}`
+async function deleteStreamSourceFile (stream, payload) {
+  const url = `${apiHostName}internal/ingest/streams/${stream}/stream-source-file-and-segments`
+  const data = {
+    stream_source_file: {
+      id: payload.streamSourceFile.id
+    },
+    stream_segments: payload.streamSegments.map(s => {
+      return {
+        id: s.id,
+        start: s.start,
+        path: s.remotePath
+      }
+    })
+  }
 
   const token = await auth0Service.getToken()
   const headers = {
@@ -107,7 +119,7 @@ async function deleteStreamSourceFile (id) {
     'Content-Type': 'application/json'
   }
 
-  return axios.delete(url, { headers })
+  return axios.delete(url, { data, headers })
 }
 
 module.exports = {
