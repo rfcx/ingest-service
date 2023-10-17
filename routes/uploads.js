@@ -47,6 +47,9 @@ const { getSampleRateFromFilename } = require('../services/rfcx/guardian')
  *            description: Error while generating upload url
  */
 router.route('/').post((req, res) => {
+  if (`${process.env.CREATION_PAUSED}` === 'true') {
+    return res.status(503).json({ message: 'Server is on maintenance. Creating new uploads is paused. Try again later.' })
+  }
   const idToken = req.headers.authorization
   const userId = req.user.guid || req.user.sub || 'unknown'
   const converter = new Converter(req.body, {})
