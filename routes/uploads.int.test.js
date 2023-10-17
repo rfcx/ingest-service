@@ -402,7 +402,7 @@ describe('POST /uploads', () => {
   test('returns 503 error if uploading is paused', async () => {
     process.env.CREATION_PAUSED = 'true'
     const response = await request(app).post('/uploads').send()
-    expect(response.statusCode).toBe(503)
+    expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual('Server is on maintenance. Creating new uploads is paused. Try again later.')
     const uploads = await UploadModel.find({})
     expect(uploads.length).toBe(0)
