@@ -1,6 +1,8 @@
 process.env.PLATFORM = 'amazon'
 process.env.UPLOAD_BUCKET = 'streams-uploads'
 
+const originalEnv = process.env
+
 const storageModulePath = '../services/storage/amazon'
 jest.mock(storageModulePath)
 const { getSignedUrl } = require(storageModulePath)
@@ -38,6 +40,7 @@ afterEach(async () => {
   checkPermission.mockRestore()
   getExistingSourceFile.mockRestore()
   getSignedUrl.mockRestore()
+  process.env = originalEnv
 })
 afterAll(async () => {
   await stopDb()
@@ -396,6 +399,14 @@ describe('POST /uploads', () => {
     const uploads = await UploadModel.find({})
     expect(uploads.length).toBe(2)
   })
+  test('returns 503 error if uploading is paused', async () => {
+    process.env.CREATION_PAUSED = 'true'
+    const response = await request(app).post('/uploads').send()
+    expect(response.statusCode).toBe(503)
+    expect(response.body.message).toEqual('Server is on maintenance. Creating new uploads is paused. Try again later.')
+    const uploads = await UploadModel.find({})
+    expect(uploads.length).toBe(0)
+  })
 })
 
 describe('GET /uploads/:id', () => {
@@ -477,5 +488,30 @@ describe('GET /uploads/:id', () => {
     const response = await request(app).get(`/uploads/${id}`)
     expect(response.statusCode).toBe(403)
     expect(response.body._id).toBeUndefined()
+  })
+  test('returns correct upload data if uploading is paused', async () => {
+    process.env.CREATION_PAUSED = 'true'
+    const dbUpload = await new UploadModel({
+      streamId: '123456789012',
+      userId: seedValues.primaryUserGuid,
+      status: status.WAITING,
+      timestamp: 1623163658922,
+      originalFilename: '20210608144738922.flac',
+      sampleRate: 12000,
+      targetBitrate: 2921629,
+      checksum: 'b40e6a5687c7ce2557ce48e131cc68c2889bfdc2'
+    }).save()
+    const id = `${dbUpload._id}` // ObjectId is an object, we need to stringify it
+    const response = await request(app).get(`/uploads/${id}`)
+    expect(response.statusCode).toBe(200)
+    expect(response.body._id).toEqual(id)
+    expect(response.body.streamId).toEqual('123456789012')
+    expect(response.body.userId).toEqual(seedValues.primaryUserGuid)
+    expect(response.body.status).toEqual(status.WAITING)
+    expect(response.body.timestamp).toEqual('2021-06-08T14:47:38.922Z')
+    expect(response.body.originalFilename).toEqual('20210608144738922.flac')
+    expect(response.body.sampleRate).toEqual(12000)
+    expect(response.body.targetBitrate).toEqual(2921629)
+    expect(response.body.checksum).toEqual('b40e6a5687c7ce2557ce48e131cc68c2889bfdc2')
   })
 })
