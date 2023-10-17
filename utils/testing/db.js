@@ -3,9 +3,12 @@ const { MongoMemoryServer } = require('mongodb-memory-server')
 const UploadModel = require('../../services/db/models/mongoose/upload').Upload
 const DeploymentInfoModel = require('../../services/db/models/mongoose/deploymentInfo').DeploymentInfo
 
-const mongoServer = new MongoMemoryServer()
+let mongoServer
 
 async function connect () {
+  if (!mongoServer) {
+    mongoServer = await MongoMemoryServer.create()
+  }
   const uri = await mongoServer.getUri()
   const mongooseOpts = {
     useNewUrlParser: true,
