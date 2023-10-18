@@ -5,7 +5,7 @@ const UploadSchema = new mongoose.Schema({
   streamId: String,
   userId: String,
   status: Number,
-  createdAt: { type: Date, default: Date.now, expires: '30d' }, // expires in 30 days
+  createdAt: { type: Date, default: Date.now, expires: '14d' }, // expires in 30 days
   updatedAt: { type: Date, default: Date.now },
   timestamp: Date,
   originalFilename: String,
