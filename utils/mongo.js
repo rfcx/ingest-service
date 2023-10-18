@@ -30,11 +30,11 @@ const connectWithRetry = () => {
     useUnifiedTopology: false,
     autoReconnect: true,
     reconnectTries: 1000,
-    reconnectInterval: 5000
+    reconnectInterval: 10000
   })
     .catch((e) => {
       console.error('Connection to MongoDB failed:', e && e.message ? e.message : '')
-      setTimeout(connectWithRetry, 5000)
+      setTimeout(connectWithRetry, 10000)
     })
 }
 
