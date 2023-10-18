@@ -2,6 +2,8 @@ const mongoose = require('mongoose')
 
 const mongoUri = `mongodb+srv://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@${process.env.MONGO_HOSTNAME}/${process.env.MONGO_DB}?retryWrites=true&w=majority`
 
+console.info('\n\n', mongoUri, '\n\n')
+
 const db = mongoose.connection
 db.on('connecting', function () {
   console.info('Connecting to MongoDB')
