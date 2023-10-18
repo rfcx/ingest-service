@@ -5,7 +5,7 @@ metadata:
   namespace: staging
 data:
   PLATFORM: "amazon"
-  MONGO_HOSTNAME: "nonprod.zsysgju.mongodb.net"
+  MONGO_HOSTNAME: "nonprod.ivkbg2d.mongodb.net"
   MONGO_DB: "rfcx"
   NODE_ENV: "staging"
   PORT: "80"
