@@ -5,7 +5,7 @@ metadata:
   namespace: production
 data:
   PLATFORM: "amazon"
-  MONGO_HOSTNAME: "prod-mongodb.production.svc.cluster.local"
+  MONGO_HOSTNAME: "prod.0fcdg.mongodb.net"
   MONGO_DB: "rfcx"
   NODE_ENV: "production"
   PORT: "80"
