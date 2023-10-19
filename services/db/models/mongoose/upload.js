@@ -4,8 +4,8 @@ require('mongoose-long')(mongoose)
 const UploadSchema = new mongoose.Schema({
   streamId: String,
   userId: String,
-  status: Number,
-  createdAt: { type: Date, default: Date.now, expires: '14d' }, // expires in 30 days
+  status: { type: Number, index: true },
+  createdAt: { type: Date, default: Date.now, expires: '14d' }, // expires in 14 days
   updatedAt: { type: Date, default: Date.now },
   timestamp: Date,
   originalFilename: String,
