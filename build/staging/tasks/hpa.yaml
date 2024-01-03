@@ -1,0 +1,17 @@
+kind: HorizontalPodAutoscaler
+apiVersion: autoscaling/v2beta1
+metadata:
+  name: ingest-service-scaler
+  namespace: staging
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1beta1
+    kind: Deployment
+    name: ingest-service-tasks
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: External
+    external:
+      metricName: sqs-ingest-service-upload-staging-length
+      targetAverageValue: 30
