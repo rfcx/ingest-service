@@ -52,11 +52,11 @@ And these services in `amazon` mode:
 
    In production the API endpoints are run directly:
    ```
-   npm start:api
+   npm run start:api
    ```
    and
    ```
-   npm start:tasks
+   npm run start:tasks
    ```
 
 5. Open [localhost:3030/docs](http://localhost:3030/docs) to test the endpoints.
