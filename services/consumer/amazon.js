@@ -18,9 +18,13 @@ const consumer = Consumer.create({
       const { fileLocalPath, streamId, uploadId } = parseUploadFromFileName(file.key)
       try {
         const fileExtension = file.key.split('.').pop().toLowerCase()
+        // eslint-disable-next-line no-console
         console.log(fileExtension)
+        // eslint-disable-next-line no-console
         console.log(file.key)
+        // eslint-disable-next-line no-console
         console.log(file.size)
+        // eslint-disable-next-line no-console
         console.log(file.size > flacLimitSize)
         if (fileExtension === 'flac' && file.size > flacLimitSize) {
           db.updateUploadStatus(uploadId, db.status.FAILED, `This flac file size is exceeding our limit (${flacLimitSize / 1_000_000}MB)`)
