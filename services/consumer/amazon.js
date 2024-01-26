@@ -19,9 +19,9 @@ const consumer = Consumer.create({
       try {
         const fileExtension = file.bucket.name.split('.').pop().toLowerCase()
         if (fileExtension.toLowerCase() === 'flac' && file.size > flacLimitSize) {
-          db.updateUploadStatus(uploadId, db.status.FAILED, `This flac file size is exceeding our limit (${flacLimitSize/1_000_000}MB)`)
+          db.updateUploadStatus(uploadId, db.status.FAILED, `This flac file size is exceeding our limit (${flacLimitSize / 1_000_000}MB)`)
         } else if (fileExtension.toLowerCase() === 'wav' && file.size > wavLimitSize) {
-          db.updateUploadStatus(uploadId, db.status.FAILED, `This wav file size is exceeding our limit (${wavLimitSize/1_000_000}MB)`)
+          db.updateUploadStatus(uploadId, db.status.FAILED, `This wav file size is exceeding our limit (${wavLimitSize / 1_000_000}MB)`)
         } else {
           await ingest(file.key, fileLocalPath, streamId, uploadId)
         }
