@@ -5,7 +5,7 @@ const { parseUploadFromFileName } = require('./misc')
 const TimeTracker = require('../../utils/time-tracker')
 const db = require('../db/mongo')
 
-const flacLimitSize = 170_000_000
+const flacLimitSize = 150_000_000
 const wavLimitSize = 200_000_000
 
 const consumer = Consumer.create({
