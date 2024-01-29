@@ -213,13 +213,13 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     console.info(`[${uploadId}] Downloading file from storage`)
     tracker.setPoint()
     await storage.download(fileStoragePath, getFileLocalPath(fileStoragePath))
-    tracker.logAndSetNewPoint('downloaded file')
+    tracker.logAndSetNewPoint(`[${uploadId}] downloaded file`)
     console.info(`[${uploadId}] Updating upload status to UPLOADED`)
     await db.updateUploadStatus(uploadId, db.status.UPLOADED)
-    tracker.logAndSetNewPoint('updated upload status in Mongo')
+    tracker.logAndSetNewPoint(`[${uploadId}] updated upload status in Mongo`)
 
     const fileData = await audioService.identify(fileLocalPath)
-    tracker.logAndSetNewPoint('identified file with ffmpeg')
+    tracker.logAndSetNewPoint(`[${uploadId}] identified file with ffmpeg`)
     console.info(`[${uploadId}] Audio metadata`, JSON.stringify(fileData))
     const upload = await db.getUpload(uploadId)
     console.info(`[${uploadId}] Upload metadata from database `, JSON.stringify(upload))
@@ -228,7 +228,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     console.info(`[${uploadId}] Transcoding file`)
     tracker.setPoint()
     const transcodeData = await transcode(fileLocalPath, fileData)
-    tracker.logAndSetNewPoint('transcoded file')
+    tracker.logAndSetNewPoint(`[${uploadId}] transcoded file`)
     outputFiles = transcodeData.outputFiles
     setAdditionalFileAttrs(outputFiles, upload)
 
@@ -236,7 +236,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
     tracker.setPoint()
     coreData = await segmentService.createStreamFileData(upload.streamId, corePayload)
-    tracker.logAndSetNewPoint('created data in Core API')
+    tracker.logAndSetNewPoint(`[${uploadId}] created data in Core API`)
 
     setFilesIdAndPath(outputFiles, coreData.streamSegments, upload.streamId)
 
@@ -255,23 +255,23 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       processedSegCount += chunk.length
       console.info(`[${uploadId}] Processed ${processedSegCount} recordings of ${outputFiles.length}`)
     }
-    tracker.logAndSetNewPoint('uploaded al segments to S3')
+    tracker.logAndSetNewPoint(`[${uploadId}] uploaded al segments to S3`)
 
     console.info(`[${uploadId}] Modifying status to INGESTED (${db.status.INGESTED})`)
     await db.updateUploadStatus(uploadId, db.status.INGESTED)
-    tracker.logAndSetNewPoint('updated upload status in Mongo')
+    tracker.logAndSetNewPoint(`[${uploadId}] updated upload status in Mongo`)
 
     uploadId = null
     if (PROMETHEUS_ENABLED && fileData.sampleCount) {
       console.info(`[${uploadId}] Updating processing metrics`)
       const processingValue = (Date.now() - startTimestamp) / fileData.sampleCount * 10000 // we use multiplier because values are far less than 1 in other case
       pushHistogramMetric(fileExtension.substr(1), processingValue)
-      tracker.logAndSetNewPoint('pushed histogram metric')
+      tracker.logAndSetNewPoint(`[${uploadId}] pushed histogram metric`)
     }
     console.info(`[${uploadId}] Cleaning up files`)
     await storage.deleteObject(uploadBucket, fileStoragePath)
     await dirUtil.removeDirRecursively(streamLocalPath)
-    tracker.logAndSetNewPoint('cleaned up files')
+    tracker.logAndSetNewPoint(`[${uploadId}] cleaned up files`)
     tracker = null
   } catch (err) {
     /**
