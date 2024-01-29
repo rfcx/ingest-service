@@ -79,6 +79,9 @@ function validateAudioMeta (upload, meta, extension) {
   if (isNaN(meta.duration) || meta.duration === 0) {
     throw new IngestionError('Audio duration is zero')
   }
+  if (meta.duration > (60 * 60 * 1)) {
+    throw new IngestionError('Audio duration is more than 1 hour')
+  }
   if (isNaN(meta.sampleCount) || meta.sampleCount === 0) {
     throw new IngestionError('Audio sampleCount is zero')
   }
