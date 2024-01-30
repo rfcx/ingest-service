@@ -127,7 +127,7 @@ function setAdditionalFileAttrs (outputFiles, upload) {
   let totalDurationMs = 0
   const numberOfSplitted = 0
   for (const file of outputFiles) {
-    console.log(++numberOfSplitted)
+    console.log(`${upload._id} segments: ${++numberOfSplitted}`)
     console.log(file.meta)
     const duration = Math.floor(file.meta.duration * 1000)
     const ts = moment.tz(timestamp, 'UTC').add(totalDurationMs, 'milliseconds')
