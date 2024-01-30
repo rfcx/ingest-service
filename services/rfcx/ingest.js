@@ -125,7 +125,7 @@ async function transcode (filePath, fileData) {
 function setAdditionalFileAttrs (outputFiles, upload) {
   const timestamp = moment.tz(upload.timestamp, 'UTC').valueOf()
   let totalDurationMs = 0
-  const numberOfSplitted = 0
+  let numberOfSplitted = 0
   for (const file of outputFiles) {
     console.log(`${upload._id} segments: ${++numberOfSplitted}`)
     console.log(file.meta)
