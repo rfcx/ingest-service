@@ -232,9 +232,9 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     outputFiles = transcodeData.outputFiles
     setAdditionalFileAttrs(outputFiles, upload)
 
-    console.info(`[${uploadId}] Saving data in the Core API`)
     const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
     tracker.setPoint()
+    console.info(`[${uploadId}] Saving data in the Core API`, upload.streamId, corePayload)
     coreData = await segmentService.createStreamFileData(upload.streamId, corePayload)
     tracker.logAndSetNewPoint(`[${uploadId}] created data in Core API`)
 
