@@ -79,6 +79,9 @@ function validateAudioMeta (upload, meta, extension) {
   if (isNaN(meta.duration) || meta.duration === 0) {
     throw new IngestionError('Audio duration is zero')
   }
+  if (meta.duration > (60 * 60 * 1)) {
+    throw new IngestionError('Audio duration is more than 1 hour')
+  }
   if (isNaN(meta.sampleCount) || meta.sampleCount === 0) {
     throw new IngestionError('Audio sampleCount is zero')
   }
@@ -122,7 +125,10 @@ async function transcode (filePath, fileData) {
 function setAdditionalFileAttrs (outputFiles, upload) {
   const timestamp = moment.tz(upload.timestamp, 'UTC').valueOf()
   let totalDurationMs = 0
+  let numberOfSplitted = 0
   for (const file of outputFiles) {
+    console.info(`${upload._id} segments: ${++numberOfSplitted}`)
+    console.info(file.meta)
     const duration = Math.floor(file.meta.duration * 1000)
     const ts = moment.tz(timestamp, 'UTC').add(totalDurationMs, 'milliseconds')
     file.start = ts.toISOString()
@@ -207,37 +213,37 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
 
     validateFileFormat(fileExtension)
     await createStreamLocalPath(streamLocalPath)
-    console.info('Downloading file from storage')
+    console.info(`[${uploadId}] Downloading file from storage`)
     tracker.setPoint()
     await storage.download(fileStoragePath, getFileLocalPath(fileStoragePath))
-    tracker.logAndSetNewPoint('downloaded file')
-    console.info('Updating upload status to UPLOADED')
+    tracker.logAndSetNewPoint(`[${uploadId}] downloaded file`)
+    console.info(`[${uploadId}] Updating upload status to UPLOADED`)
     await db.updateUploadStatus(uploadId, db.status.UPLOADED)
-    tracker.logAndSetNewPoint('updated upload status in Mongo')
+    tracker.logAndSetNewPoint(`[${uploadId}] updated upload status in Mongo`)
 
     const fileData = await audioService.identify(fileLocalPath)
-    tracker.logAndSetNewPoint('identified file with ffmpeg')
-    console.info('Audio metadata', JSON.stringify(fileData))
+    tracker.logAndSetNewPoint(`[${uploadId}] identified file with ffmpeg`)
+    console.info(`[${uploadId}] Audio metadata`, JSON.stringify(fileData))
     const upload = await db.getUpload(uploadId)
-    console.info('Upload metadata from database ', JSON.stringify(upload))
+    console.info(`[${uploadId}] Upload metadata from database `, JSON.stringify(upload))
     validateAudioMeta(upload, fileData, fileExtension)
 
-    console.info('Transcoding file')
+    console.info(`[${uploadId}] Transcoding file`)
     tracker.setPoint()
     const transcodeData = await transcode(fileLocalPath, fileData)
-    tracker.logAndSetNewPoint('transcoded file')
+    tracker.logAndSetNewPoint(`[${uploadId}] transcoded file`)
     outputFiles = transcodeData.outputFiles
     setAdditionalFileAttrs(outputFiles, upload)
 
-    console.info('Saving data in the Core API')
     const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
     tracker.setPoint()
+    console.info(`[${uploadId}] Saving data in the Core API`, upload.streamId, corePayload)
     coreData = await segmentService.createStreamFileData(upload.streamId, corePayload)
-    tracker.logAndSetNewPoint('created data in Core API')
+    tracker.logAndSetNewPoint(`[${uploadId}] created data in Core API`)
 
     setFilesIdAndPath(outputFiles, coreData.streamSegments, upload.streamId)
 
-    console.info('Uploading segments')
+    console.info(`[${uploadId}] Uploading segments`)
     tracker.setPoint()
     let processedSegCount = 0
     for (const chunk of [...chunks(outputFiles, 5)]) {
@@ -250,50 +256,51 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
           })
       }))
       processedSegCount += chunk.length
-      console.info(`Processed ${processedSegCount} recordings of ${outputFiles.length}`)
+      console.info(`[${uploadId}] Processed ${processedSegCount} recordings of ${outputFiles.length}`)
     }
-    tracker.logAndSetNewPoint('uploaded al segments to S3')
+    tracker.logAndSetNewPoint(`[${uploadId}] uploaded al segments to S3`)
 
-    console.info(`Modifying status to INGESTED (${db.status.INGESTED})`)
+    console.info(`[${uploadId}] Modifying status to INGESTED (${db.status.INGESTED})`)
     await db.updateUploadStatus(uploadId, db.status.INGESTED)
-    tracker.logAndSetNewPoint('updated upload status in Mongo')
+    tracker.logAndSetNewPoint(`[${uploadId}] updated upload status in Mongo`)
 
     uploadId = null
     if (PROMETHEUS_ENABLED && fileData.sampleCount) {
-      console.info('Updating processing metrics')
+      console.info(`[${uploadId}] Updating processing metrics`)
       const processingValue = (Date.now() - startTimestamp) / fileData.sampleCount * 10000 // we use multiplier because values are far less than 1 in other case
       pushHistogramMetric(fileExtension.substr(1), processingValue)
-      tracker.logAndSetNewPoint('pushed histogram metric')
+      tracker.logAndSetNewPoint(`[${uploadId}] pushed histogram metric`)
     }
-    console.info('Cleaning up files')
+    console.info(`[${uploadId}] Cleaning up files`)
     await storage.deleteObject(uploadBucket, fileStoragePath)
     await dirUtil.removeDirRecursively(streamLocalPath)
-    tracker.logAndSetNewPoint('cleaned up files')
+    tracker.logAndSetNewPoint(`[${uploadId}] cleaned up files`)
     tracker = null
   } catch (err) {
     /**
      * ERROR HANDLING
      */
     if (loggerIgnoredErrors.includes(err.message)) {
-      console.warn(`Warn for upload ${uploadId} ${err.message}`)
+      console.warn(`[${uploadId}] Warn for upload ${uploadId} ${err.message}`)
     } else {
-      console.error(`Error for upload ${uploadId} ${err.message}`)
+      console.error(`[${uploadId}] Error for upload ${uploadId} ${err.message}`)
     }
     const message = err instanceof IngestionError ? err.message : 'Server failed with processing your file. Please try again later.'
     const status = err instanceof IngestionError ? err.status : db.status.FAILED
     await db.updateUploadStatus(uploadId, status, message)
     for (const file of outputFiles) {
       try {
+        console.info(`[${uploadId}] Rollback: deleting file ${file.remotePath}`)
         await storage.deleteObject(ingestBucket, file.remotePath)
       } catch (e) {
-        console.info(`Rollback: failed deleting file ${file.remotePath}`)
+        console.info(`[${uploadId}] Rollback: failed deleting file ${file.remotePath}`, e)
       }
     }
     if (coreData) {
       try {
         await segmentService.deleteStreamSourceFile(streamId, coreData)
       } catch (e) {
-        console.info(`Rollback: failed deleting stream source file ${coreData.streamSourceFile.id}`, e)
+        console.info(`[${uploadId}] Rollback: failed deleting stream source file ${coreData.streamSourceFile.id}`, e)
       }
     }
 
