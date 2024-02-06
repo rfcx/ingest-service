@@ -3,6 +3,10 @@ const AWS = require('../../utils/aws')
 const { ingest } = require('../rfcx/ingest')
 const { parseUploadFromFileName } = require('./misc')
 const TimeTracker = require('../../utils/time-tracker')
+const db = require('../db/mongo')
+
+const flacLimitSize = 150_000_000
+const wavLimitSize = 200_000_000
 
 const consumer = Consumer.create({
   queueUrl: process.env.SQS_INGEST_TRIGGER_QUEUE_URL,
@@ -13,7 +17,14 @@ const consumer = Consumer.create({
     for (const file of files) {
       const { fileLocalPath, streamId, uploadId } = parseUploadFromFileName(file.key)
       try {
-        await ingest(file.key, fileLocalPath, streamId, uploadId)
+        const fileExtension = file.key.split('.').pop().toLowerCase()
+        if (fileExtension === 'flac' && file.size > flacLimitSize) {
+          db.updateUploadStatus(uploadId, db.status.FAILED, `This flac file size is exceeding our limit (${flacLimitSize / 1_000_000}MB)`)
+        } else if (fileExtension === 'wav' && file.size > wavLimitSize) {
+          db.updateUploadStatus(uploadId, db.status.FAILED, `This wav file size is exceeding our limit (${wavLimitSize / 1_000_000}MB)`)
+        } else {
+          await ingest(file.key, fileLocalPath, streamId, uploadId)
+        }
       } catch (e) {
         return false
       }

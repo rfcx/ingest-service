@@ -1,3 +1,10 @@
+<a name="1.0.10"></a>
+## 1.0.9 (2024-01-xx)
+
+### Features
+* Deny flac and wav files with a specific size to avoid too big file ingestion
+* Deny files with duration more than 1 hour
+
 <a name="1.0.9"></a>
 ## 1.0.9 (2022-07-29)
 
