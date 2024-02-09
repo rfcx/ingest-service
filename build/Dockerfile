@@ -28,11 +28,11 @@ FROM node:20.9.0 as builder
 RUN mkdir /var/app
 ADD . /var/app/
 WORKDIR /var/app
-RUN npm install
+RUN yarn
 
 # -- Target
 
 FROM base as ingest-service
 COPY --from=builder /var/app/ /var/app/
 WORKDIR /var/app
-CMD npm start
+CMD yarn start
