@@ -1,5 +1,11 @@
+<a name="1.1.0"></a>
+## 1.1.0 (2024-02-xx)
+
+### Features
+* Upgrade node to LTS and use yarn
+
 <a name="1.0.10"></a>
-## 1.0.9 (2024-01-xx)
+## 1.0.10 (2024-01-xx)
 
 ### Features
 * Deny flac and wav files with a specific size to avoid too big file ingestion
