@@ -24,7 +24,7 @@ RUN mkdir /tmp/ingest-service
 
 # -- Builder
 
-FROM node:16 as builder
+FROM node:20.9.0 as builder
 RUN mkdir /var/app
 ADD . /var/app/
 WORKDIR /var/app
