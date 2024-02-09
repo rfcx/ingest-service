@@ -5,7 +5,8 @@ API for ingesting files from RFCx Uploader and other clients.
 
 ## Requirements
 
-- Node 10.x.x
+- Node 20.9.0 (can be installed via `nvm` module and `.nvmrc` file)
+- yarn
 - Docker (to run a local MongoDB)
 - [FFmpeg](https://ffmpeg.org) for splitting and identifying audio files
 
@@ -31,32 +32,32 @@ And these services in `amazon` mode:
 
 2. Install dependencies.
    ```
-   npm install
+   yarn
    ```
 
 3. Start MongoDB using Docker.
    ```
-   npm run db-start
+   yarn db-start
    ```
    MongoDB will start on `localhost` with port `27017`, db name `admin`, user `admin-user`, and password `test`.
 
    (When you want to stop MongoDB, use:)
    ```
-   npm run db-stop
+   yarn db-stop
    ```
 
 4. Start the API (with live reloading).
    ```
-   npm run dev
+   yarn dev
    ```
 
    In production the API endpoints are run directly:
    ```
-   npm start:api
+   yarn start:api
    ```
    and
    ```
-   npm start:tasks
+   yarn start:tasks
    ```
 
 5. Open [localhost:3030/docs](http://localhost:3030/docs) to test the endpoints.
@@ -69,7 +70,7 @@ _TODO - How to run the background job (SQS Consumer) and test the triggers from 
 
 ## Lint
 
-The project uses ES Lint. Use `npm run lint` to check for errors or `npm run lint-fix` to attempt to auto-fix the errors.
+The project uses ES Lint. Use `yarn lint` to check for errors or `yarn lint-fix` to attempt to auto-fix the errors.
 
 VS Code support for lint is via the [ES Lint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint).
 
@@ -78,9 +79,9 @@ VS Code support for lint is via the [ES Lint extension](https://marketplace.visu
 
 _TODO - this doesn't look like it works anymore_
 
-The `example` folder contains `upload.js` which can be run as `node upload.js filename.mp3` to perform the client-side steps to upload the file (get a signed url, upload the file to storage, and check the upload status). (Install the dependencies before you start `cd example ; npm i`.)
+The `example` folder contains `upload.js` which can be run as `node upload.js filename.mp3` to perform the client-side steps to upload the file (get a signed url, upload the file to storage, and check the upload status). (Install the dependencies before you start `cd example ; yarn`.)
 
-To test the trigger from storage, use the `npm run shellfb` described above.
+To test the trigger from storage, use the `yarn shellfb` described above.
 
 
 ## Auto-update endpoints

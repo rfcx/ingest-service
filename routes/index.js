@@ -10,10 +10,7 @@ const app = express()
 app.use(bodyParser.urlencoded({ extended: true }))
 app.use(bodyParser.json({ limit: '1mb' }))
 app.use(require('../middleware/cors'))
-
-if (process.env.PLATFORM === 'amazon') {
-  app.use(require('../services/logging/amazon'))
-}
+app.use(require('../middleware/logging'))
 
 app.use('/docs', require('../docs'))
 app.use('/uploads', verifyToken(), require('./uploads'))
