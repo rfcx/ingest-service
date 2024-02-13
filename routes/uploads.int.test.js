@@ -22,6 +22,7 @@ const app = expressApp()
 const UploadModel = require('../services/db/models/mongoose/upload').Upload
 const { status } = require('../services/db/mongo')
 const { ForbiddenError, EmptyResultError } = require('@rfcx/http-utils')
+const moment = require('moment-timezone')
 
 const route = require('./uploads')
 app.use('/uploads', route)
@@ -53,7 +54,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -65,7 +68,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -77,16 +82,121 @@ describe('POST /uploads', () => {
       timestamp: '2021-06-08T19:26:40.000Z',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual('Validation errors: Parameter \'stream\' the parameter is required but was not provided.')
   })
+  test('returns validation error if duration is not set', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      fileSize: 1_000_000
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual('Validation errors: Parameter \'duration\' the parameter is required but was not provided.')
+  })
+  test('returns validation error if fileSize is not set', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 60
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual('Validation errors: Parameter \'fileSize\' the parameter is required but was not provided.')
+  })
+  test('returns validation error if timestamp is future', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: moment.utc().add(1, 'second') /* tomorrow */,
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual(`Future date upload: ${requestBody.timestamp}`)
+  })
+  test('returns validation error if timestamp is past older than year 1971', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: moment('1970-12-31T23:59:59.999Z').utc() /* past */,
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual(`Past date upload: ${requestBody.timestamp}`)
+  })
+  test('returns validation error if duration is more than 1 hour', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 3601,
+      fileSize: 1_000_000
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual('File duration is more than 1 hour')
+  })
+  test('returns validation error if fileSize as flac file more than 150MB', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 3600,
+      fileSize: 150_000_001
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual('File(flac) size is more than 150MB')
+  })
+  test('returns validation error if fileSize as wav file more than 200MB', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.wav',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 3600,
+      fileSize: 200_000_001
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual('File(wav) size is more than 200MB')
+  })
   test('returns validation error if request body is empty', async () => {
     const response = await request(app).post('/uploads')
     expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual('Validation errors: Parameter \'filename\' the parameter is required but was not provided; Parameter \'timestamp\' the parameter is required but was not provided; Parameter \'stream\' the parameter is required but was not provided.')
+    expect(response.body.message).toEqual('Validation errors: Parameter \'filename\' the parameter is required but was not provided; Parameter \'timestamp\' the parameter is required but was not provided; Parameter \'stream\' the parameter is required but was not provided; Parameter \'duration\' the parameter is required but was not provided; Parameter \'fileSize\' the parameter is required but was not provided.')
   })
   test('returns forbidden error if user does not have access to stream', async () => {
     checkPermission.mockImplementation(() => { throw new ForbiddenError() })
@@ -96,7 +206,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(403)
@@ -109,7 +221,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(404)
@@ -130,7 +244,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -152,7 +268,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -175,7 +293,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -198,7 +318,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -221,7 +343,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(200)
@@ -242,7 +366,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(200)
@@ -254,7 +380,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
@@ -278,7 +406,9 @@ describe('POST /uploads', () => {
       timestamp: '2015-01-01T00:04:10.261Z',
       stream: 'p0gccfokn3p9',
       checksum: 'bcd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
@@ -302,7 +432,9 @@ describe('POST /uploads', () => {
       timestamp: '2015-01-01T00:04:10.261Z',
       stream: 'p0gccfokn3p9',
       checksum: 'bcd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
@@ -315,7 +447,9 @@ describe('POST /uploads', () => {
       timestamp: '2015-01-01T00:04:10.261Z',
       stream: 'p0gccfokn3p9',
       checksum: 'bcd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
@@ -328,7 +462,9 @@ describe('POST /uploads', () => {
       timestamp: '2021-06-08T19:26:40.000Z',
       stream: '0a1824085e3f',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ originalFilename: requestBody.filename })
@@ -354,7 +490,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
@@ -378,7 +516,9 @@ describe('POST /uploads', () => {
       stream: 'ed06231a6568',
       checksum: 'e5172bd92b59d520a4ca5b1be29cd6bdc92cc08a',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 60,
+      fileSize: 1_000_000
     }
     const response2 = await request(app).post('/uploads').send(requestBody2)
     const upload2 = await UploadModel.findOne({ checksum: requestBody2.checksum })

@@ -56,11 +56,44 @@ router.route('/').post((req, res) => {
   converter.convert('filename').toString()
   converter.convert('timestamp').toMomentUtc()
   converter.convert('stream').toString()
+  converter.convert('duration').toInt()
+  converter.convert('fileSize').toInt()
   converter.convert('sampleRate').optional().toInt()
   converter.convert('targetBitrate').optional().toInt()
   converter.convert('checksum').optional().toString()
 
   converter.validate()
+    .then(async (params) => {
+      // Cannot upload to the future
+      const isFuture = moment(params.timestamp).isAfter(moment.utc())
+      if (isFuture) {
+        throw new ValidationError(`Future date upload: ${params.timestamp}`)
+      }
+
+      // Cannot upload to the past older than year 1971
+      const isPast = moment(params.timestamp).year() < 1971
+      if (isPast) {
+        throw new ValidationError(`Past date upload: ${params.timestamp}`)
+      }
+
+      // Cannot upload file that duration more than following
+      const durationLimit = 60 * 60 * 1
+      if (params.duration > durationLimit) {
+        throw new ValidationError('File duration is more than 1 hour')
+      }
+
+      // Cannot upload file that size more than following
+      const flacLimitSize = 150_000_000
+      const wavLimitSize = 200_000_000
+      const fileExtension = params.filename.split('.').pop().toLowerCase()
+      if (fileExtension === 'flac' && params.fileSize > flacLimitSize) {
+        throw new ValidationError(`File(flac) size is more than ${flacLimitSize / 1_000_000}MB`)
+      }
+      if (fileExtension === 'wav' && params.fileSize > wavLimitSize) {
+        throw new ValidationError(`File(wav) size is more than ${wavLimitSize / 1_000_000}MB`)
+      }
+      return params
+    })
     .then(async (params) => {
       if (!auth0Service.getRoles(req.user).includes('systemUser')) {
         await streamService.checkPermission('U', params.stream, idToken)
