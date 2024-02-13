@@ -56,8 +56,8 @@ router.route('/').post((req, res) => {
   converter.convert('filename').toString()
   converter.convert('timestamp').toMomentUtc()
   converter.convert('stream').toString()
-  converter.convert('duration').optional().toInt()
-  converter.convert('fileSize').optional().toInt()
+  converter.convert('duration').optional().minimum(1).toInt()
+  converter.convert('fileSize').optional().minimum(1).toInt()
   converter.convert('sampleRate').optional().toInt()
   converter.convert('targetBitrate').optional().toInt()
   converter.convert('checksum').optional().toString()
@@ -65,19 +65,19 @@ router.route('/').post((req, res) => {
   converter.validate()
     .then(async (params) => {
       // Cannot upload to the future
-      const isFuture = moment(params.timestamp).isAfter(moment.utc())
+      const isFuture = params.timestamp.isAfter(moment.utc())
       if (isFuture) {
         throw new ValidationError(`Future date upload: ${params.timestamp}`)
       }
 
       // Cannot upload to the past older than year 1971
-      const isPast = moment(params.timestamp).year() < 1971
+      const isPast = params.timestamp.year() < 1971
       if (isPast) {
         throw new ValidationError(`Past date upload: ${params.timestamp}`)
       }
 
-      // Cannot upload file that duration more than following
-      const durationLimit = 60 * 60 * 1
+      // Cannot upload file that duration more than following (milliseconds)
+      const durationLimit = 1000 * 60 * 60 * 1
       if (params.duration && params.duration > durationLimit) {
         throw new ValidationError('Audio duration is more than 1 hour')
       }
@@ -93,7 +93,7 @@ router.route('/').post((req, res) => {
         throw new ValidationError(`This wav file size is exceeding our limit (${wavLimitSize / 1_000_000}MB)`)
       }
       // Other file extensions, limit size same as flac
-      if (params.fileSize && params.fileSize > flacLimitSize) {
+      if (!['flac', 'wav'].includes(fileExtension) && params.fileSize && params.fileSize > flacLimitSize) {
         throw new ValidationError(`This file size is exceeding our limit (${flacLimitSize / 1_000_000}MB)`)
       }
       return params

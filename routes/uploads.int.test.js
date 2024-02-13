@@ -87,7 +87,7 @@ describe('POST /uploads', () => {
   test('returns validation error if timestamp is future', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
-      timestamp: moment.utc().add(1, 'second') /* tomorrow */,
+      timestamp: moment.utc().add(1, 'day') /* tomorrow */,
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
@@ -118,12 +118,27 @@ describe('POST /uploads', () => {
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
       targetBitrate: 1,
-      duration: 3601,
+      duration: 3601000,
       fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual('Audio duration is more than 1 hour')
+  })
+  test('returns validation error if duration is 0', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 0,
+      fileSize: 1_000_000
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual('Validation errors: Parameter \'duration\' is smaller than the minimum 1.')
   })
   test('returns validation error if fileSize as flac file more than 150MB', async () => {
     const requestBody = {
@@ -133,7 +148,7 @@ describe('POST /uploads', () => {
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
       targetBitrate: 1,
-      duration: 3600,
+      duration: 3600000,
       fileSize: 150_000_001
     }
     const response = await request(app).post('/uploads').send(requestBody)
@@ -148,7 +163,7 @@ describe('POST /uploads', () => {
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
       targetBitrate: 1,
-      duration: 3600,
+      duration: 3600000,
       fileSize: 200_000_001
     }
     const response = await request(app).post('/uploads').send(requestBody)
@@ -163,12 +178,27 @@ describe('POST /uploads', () => {
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
       targetBitrate: 1,
-      duration: 3600,
+      duration: 3600000,
       fileSize: 150_000_001
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual('This file size is exceeding our limit (150MB)')
+  })
+  test('returns validation error if fileSize is 0', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.opus',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 3600000,
+      fileSize: 0
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual('Validation errors: Parameter \'fileSize\' is smaller than the minimum 1.')
   })
   test('returns validation error if request body is empty', async () => {
     const response = await request(app).post('/uploads')
@@ -341,6 +371,110 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
+    expect(response.statusCode).toBe(200)
+    expect(response.body.uploadId).toBeDefined()
+    expect(response.body.url).toBe('http://some.url')
+    expect(response.body.path).toBeDefined()
+    expect(response.body.bucket).toBe('streams-uploads')
+    expect(upload.originalFilename).toBe(requestBody.filename)
+    expect(upload.streamId).toBe(requestBody.stream)
+    expect(upload.userId).toBe(seedValues.primaryUserGuid)
+    expect(upload.status).toBe(status.WAITING)
+    expect(upload.timestamp.toISOString()).toEqual(requestBody.timestamp)
+    expect(upload.sampleRate).toBe(requestBody.sampleRate)
+    expect(upload.targetBitrate).toBe(requestBody.targetBitrate)
+    expect(upload.checksum).toBe(requestBody.checksum)
+  })
+  test('creates upload with duration and returns correct data', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      duration: 2500000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
+    expect(response.statusCode).toBe(200)
+    expect(response.body.uploadId).toBeDefined()
+    expect(response.body.url).toBe('http://some.url')
+    expect(response.body.path).toBeDefined()
+    expect(response.body.bucket).toBe('streams-uploads')
+    expect(upload.originalFilename).toBe(requestBody.filename)
+    expect(upload.streamId).toBe(requestBody.stream)
+    expect(upload.userId).toBe(seedValues.primaryUserGuid)
+    expect(upload.status).toBe(status.WAITING)
+    expect(upload.timestamp.toISOString()).toEqual(requestBody.timestamp)
+    expect(upload.sampleRate).toBe(requestBody.sampleRate)
+    expect(upload.targetBitrate).toBe(requestBody.targetBitrate)
+    expect(upload.checksum).toBe(requestBody.checksum)
+  })
+  test('creates upload with flac file size and returns correct data', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      fileSize: 140_000_000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
+    expect(response.statusCode).toBe(200)
+    expect(response.body.uploadId).toBeDefined()
+    expect(response.body.url).toBe('http://some.url')
+    expect(response.body.path).toBeDefined()
+    expect(response.body.bucket).toBe('streams-uploads')
+    expect(upload.originalFilename).toBe(requestBody.filename)
+    expect(upload.streamId).toBe(requestBody.stream)
+    expect(upload.userId).toBe(seedValues.primaryUserGuid)
+    expect(upload.status).toBe(status.WAITING)
+    expect(upload.timestamp.toISOString()).toEqual(requestBody.timestamp)
+    expect(upload.sampleRate).toBe(requestBody.sampleRate)
+    expect(upload.targetBitrate).toBe(requestBody.targetBitrate)
+    expect(upload.checksum).toBe(requestBody.checksum)
+  })
+  test('creates upload with wav file size and returns correct data', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.wav',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      fileSize: 199_000_000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
+    expect(response.statusCode).toBe(200)
+    expect(response.body.uploadId).toBeDefined()
+    expect(response.body.url).toBe('http://some.url')
+    expect(response.body.path).toBeDefined()
+    expect(response.body.bucket).toBe('streams-uploads')
+    expect(upload.originalFilename).toBe(requestBody.filename)
+    expect(upload.streamId).toBe(requestBody.stream)
+    expect(upload.userId).toBe(seedValues.primaryUserGuid)
+    expect(upload.status).toBe(status.WAITING)
+    expect(upload.timestamp.toISOString()).toEqual(requestBody.timestamp)
+    expect(upload.sampleRate).toBe(requestBody.sampleRate)
+    expect(upload.targetBitrate).toBe(requestBody.targetBitrate)
+    expect(upload.checksum).toBe(requestBody.checksum)
+  })
+  test('creates upload with other extension file size and returns correct data', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.opus',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      fileSize: 144_000_000,
       targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)

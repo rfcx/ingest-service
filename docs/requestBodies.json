@@ -100,8 +100,8 @@
       },
       "duration": {
         "type": "number",
-        "description": "An audio file duration (seconds)",
-        "example": "60"
+        "description": "An audio file duration (milliseconds)",
+        "example": "60000"
       },
       "fileSize": {
         "type": "number",
