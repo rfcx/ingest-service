@@ -3,6 +3,11 @@
 
 ### Features
 * Upgrade node to LTS and use yarn
+* Add `duration`, `fileSize` to `GET /uploads` params.
+* Deny upload with `timestamp` is future
+* Deny upload with `timestamp` is past older than year 1971
+* Deny upload with `duration` is more than 1 hour
+* Deny upload with `fileSize` is more than 150MB for flac and 200MB for wav
 
 <a name="1.0.10"></a>
 ## 1.0.10 (2024-01-xx)
