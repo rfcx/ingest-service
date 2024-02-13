@@ -56,8 +56,8 @@ router.route('/').post((req, res) => {
   converter.convert('filename').toString()
   converter.convert('timestamp').toMomentUtc()
   converter.convert('stream').toString()
-  converter.convert('duration').toInt()
-  converter.convert('fileSize').toInt()
+  converter.convert('duration').optional().toInt()
+  converter.convert('fileSize').optional().toInt()
   converter.convert('sampleRate').optional().toInt()
   converter.convert('targetBitrate').optional().toInt()
   converter.convert('checksum').optional().toString()
@@ -78,19 +78,19 @@ router.route('/').post((req, res) => {
 
       // Cannot upload file that duration more than following
       const durationLimit = 60 * 60 * 1
-      if (params.duration > durationLimit) {
-        throw new ValidationError('File duration is more than 1 hour')
+      if (params.duration && params.duration > durationLimit) {
+        throw new ValidationError('Audio duration is more than 1 hour')
       }
 
       // Cannot upload file that size more than following
       const flacLimitSize = 150_000_000
       const wavLimitSize = 200_000_000
       const fileExtension = params.filename.split('.').pop().toLowerCase()
-      if (fileExtension === 'flac' && params.fileSize > flacLimitSize) {
-        throw new ValidationError(`File(flac) size is more than ${flacLimitSize / 1_000_000}MB`)
+      if (fileExtension === 'flac' && params.fileSize && params.fileSize > flacLimitSize) {
+        throw new ValidationError(`This flac file size is exceeding our limit (${flacLimitSize / 1_000_000}MB)`)
       }
-      if (fileExtension === 'wav' && params.fileSize > wavLimitSize) {
-        throw new ValidationError(`File(wav) size is more than ${wavLimitSize / 1_000_000}MB`)
+      if (fileExtension === 'wav' && params.fileSize && params.fileSize > wavLimitSize) {
+        throw new ValidationError(`This wav file size is exceeding our limit (${wavLimitSize / 1_000_000}MB)`)
       }
       return params
     })

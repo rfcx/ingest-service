@@ -90,34 +90,6 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual('Validation errors: Parameter \'stream\' the parameter is required but was not provided.')
   })
-  test('returns validation error if duration is not set', async () => {
-    const requestBody = {
-      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
-      timestamp: '2021-06-08T19:26:40.000Z',
-      stream: '0a1824085e3f',
-      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
-      sampleRate: 64000,
-      targetBitrate: 1,
-      fileSize: 1_000_000
-    }
-    const response = await request(app).post('/uploads').send(requestBody)
-    expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual('Validation errors: Parameter \'duration\' the parameter is required but was not provided.')
-  })
-  test('returns validation error if fileSize is not set', async () => {
-    const requestBody = {
-      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
-      timestamp: '2021-06-08T19:26:40.000Z',
-      stream: '0a1824085e3f',
-      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
-      sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60
-    }
-    const response = await request(app).post('/uploads').send(requestBody)
-    expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual('Validation errors: Parameter \'fileSize\' the parameter is required but was not provided.')
-  })
   test('returns validation error if timestamp is future', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
@@ -161,7 +133,7 @@ describe('POST /uploads', () => {
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual('File duration is more than 1 hour')
+    expect(response.body.message).toEqual('Audio duration is more than 1 hour')
   })
   test('returns validation error if fileSize as flac file more than 150MB', async () => {
     const requestBody = {
@@ -176,7 +148,7 @@ describe('POST /uploads', () => {
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual('File(flac) size is more than 150MB')
+    expect(response.body.message).toEqual('This flac file size is exceeding our limit (150MB)')
   })
   test('returns validation error if fileSize as wav file more than 200MB', async () => {
     const requestBody = {
@@ -191,12 +163,12 @@ describe('POST /uploads', () => {
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual('File(wav) size is more than 200MB')
+    expect(response.body.message).toEqual('This wav file size is exceeding our limit (200MB)')
   })
   test('returns validation error if request body is empty', async () => {
     const response = await request(app).post('/uploads')
     expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual('Validation errors: Parameter \'filename\' the parameter is required but was not provided; Parameter \'timestamp\' the parameter is required but was not provided; Parameter \'stream\' the parameter is required but was not provided; Parameter \'duration\' the parameter is required but was not provided; Parameter \'fileSize\' the parameter is required but was not provided.')
+    expect(response.body.message).toEqual('Validation errors: Parameter \'filename\' the parameter is required but was not provided; Parameter \'timestamp\' the parameter is required but was not provided; Parameter \'stream\' the parameter is required but was not provided.')
   })
   test('returns forbidden error if user does not have access to stream', async () => {
     checkPermission.mockImplementation(() => { throw new ForbiddenError() })
