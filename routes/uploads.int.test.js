@@ -54,9 +54,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -68,9 +66,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -82,9 +78,7 @@ describe('POST /uploads', () => {
       timestamp: '2021-06-08T19:26:40.000Z',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -97,9 +91,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -112,9 +104,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -178,9 +168,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(403)
@@ -193,9 +181,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(404)
@@ -216,9 +202,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -240,9 +224,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -265,9 +247,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -290,9 +270,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
@@ -315,9 +293,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(200)
@@ -338,9 +314,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(200)
@@ -352,9 +326,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
@@ -378,9 +350,7 @@ describe('POST /uploads', () => {
       timestamp: '2015-01-01T00:04:10.261Z',
       stream: 'p0gccfokn3p9',
       checksum: 'bcd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
@@ -404,9 +374,7 @@ describe('POST /uploads', () => {
       timestamp: '2015-01-01T00:04:10.261Z',
       stream: 'p0gccfokn3p9',
       checksum: 'bcd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
@@ -419,9 +387,7 @@ describe('POST /uploads', () => {
       timestamp: '2015-01-01T00:04:10.261Z',
       stream: 'p0gccfokn3p9',
       checksum: 'bcd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
@@ -434,9 +400,7 @@ describe('POST /uploads', () => {
       timestamp: '2021-06-08T19:26:40.000Z',
       stream: '0a1824085e3f',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ originalFilename: requestBody.filename })
@@ -462,9 +426,7 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
@@ -488,9 +450,7 @@ describe('POST /uploads', () => {
       stream: 'ed06231a6568',
       checksum: 'e5172bd92b59d520a4ca5b1be29cd6bdc92cc08a',
       sampleRate: 64000,
-      targetBitrate: 1,
-      duration: 60,
-      fileSize: 1_000_000
+      targetBitrate: 1
     }
     const response2 = await request(app).post('/uploads').send(requestBody2)
     const upload2 = await UploadModel.findOne({ checksum: requestBody2.checksum })
