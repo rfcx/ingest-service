@@ -155,6 +155,21 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual('This wav file size is exceeding our limit (200MB)')
   })
+  test('returns validation error if fileSize as other extensions file more than 150MB', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.opus',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 3600,
+      fileSize: 150_000_001
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual('This file size is exceeding our limit (150MB)')
+  })
   test('returns validation error if request body is empty', async () => {
     const response = await request(app).post('/uploads')
     expect(response.statusCode).toBe(400)

@@ -92,6 +92,10 @@ router.route('/').post((req, res) => {
       if (fileExtension === 'wav' && params.fileSize && params.fileSize > wavLimitSize) {
         throw new ValidationError(`This wav file size is exceeding our limit (${wavLimitSize / 1_000_000}MB)`)
       }
+      // Other file extensions, limit size same as flac
+      if (params.fileSize && params.fileSize > flacLimitSize) {
+        throw new ValidationError(`This file size is exceeding our limit (${flacLimitSize / 1_000_000}MB)`)
+      }
       return params
     })
     .then(async (params) => {
