@@ -1,4 +1,5 @@
-FROM ubuntu:18.04 as base
+FROM node:20.9.0 as base
+
 RUN apt update \
     && apt install -y \
         curl \
@@ -9,30 +10,25 @@ RUN apt update \
         sox \
         pngcrush \
         imagemagick \
-        python-minimal \
-        software-properties-common \
-        libsox-fmt-all
-RUN add-apt-repository ppa:jonathonf/ffmpeg-4 && \
-    apt install -y  ffmpeg libsox-fmt-all && \
-    mkdir -p /var/app/ && \
-    curl -sL https://deb.nodesource.com/setup_16.x | bash - && \
-    apt update && \
-    apt install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
+        libsox-fmt-all \
+        ffmpeg
+
+ENV SOX_PATH="/usr/bin/sox"
+ENV FFMPEG_PATH="/usr/bin/ffmpeg"
+ENV IMAGEMAGICK_PATH="/usr/bin/convert"
+ENV PNGCRUSH_PATH="/usr/bin/pngcrush"
 ENV CACHE_DIRECTORY="/tmp/ingest-service/"
 RUN mkdir /tmp/ingest-service
 
-# -- Builder
+# -- Application build --
+FROM base as build
 
-FROM node:20.9.0 as builder
-RUN mkdir /var/app
-ADD . /var/app/
-WORKDIR /var/app
-RUN yarn
+# Dependencies
+WORKDIR /app
+COPY package.json yarn.lock /app/
+RUN yarn --production --frozen-lockfile
 
-# -- Target
-
-FROM base as ingest-service
-COPY --from=builder /var/app/ /var/app/
-WORKDIR /var/app
-CMD yarn start
+# Target
+FROM build as ingest-service
+EXPOSE 80
+CMD ["yarn", "start"]
