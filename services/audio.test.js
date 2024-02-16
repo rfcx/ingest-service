@@ -1,11 +1,14 @@
 const audioService = require('./audio')
 const path = require('path')
 const fs = require('fs')
+const { rimraf } = require('rimraf')
 
 describe('Test audio service', () => {
   test('Can identify', async () => {
     const pathFile = path.join(__dirname, '../test/', 'test-5mins-lv8.flac')
+
     const result = await audioService.identify(pathFile)
+
     expect(result.format).toBe('flac')
     expect(result.duration).toBe(299.806032)
     expect(result.sampleCount).toBe(13221446)
@@ -20,19 +23,19 @@ describe('Test audio service', () => {
   })
   test('Can split', async () => {
     const pathFile = path.join(__dirname, '../test/', 'test-5mins-lv8.flac')
-    const destPath = path.join(__dirname, '../test/tmp/')
-    fs.readdirSync(destPath).forEach(f => fs.rmSync(`${destPath}/${f}`))
+    const destDir = path.join(__dirname, '../test/tmp/')
+    await rimraf(destDir + '*', { glob: true })
 
-    await audioService.split(pathFile, destPath, 60)
+    await audioService.split(pathFile, destDir, 60)
 
-    const splittedFiles = fs.readdirSync(destPath)
+    const splittedFiles = fs.readdirSync(destDir)
     expect(splittedFiles.length).toBe(5)
   })
   test('Can convert', async () => {
     const pathFile = path.join(__dirname, '../test/', 'test-5mins-lv8.flac')
     const destDir = path.join(__dirname, '../test/tmp/')
     const destPath = path.join(destDir, 'test-5mins-lv8.wav')
-    fs.readdirSync(destDir).forEach(f => fs.rmSync(`${destDir}/${f}`))
+    await rimraf(destDir + '*', { glob: true })
 
     await audioService.convert(pathFile, destPath)
 

@@ -204,8 +204,8 @@ function combineCorePayloadData (fileData, wavMeta, outputFiles, upload) {
 
 async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
   let tracker = new TimeTracker('IngestTask')
-  let outputFiles
-  let coreData
+  let outputFiles = []
+  let coreData = {}
   const streamLocalPath = getStreamLocalPath(fileStoragePath)
   try {
     const startTimestamp = Date.now() // is used for processing time calculation
