@@ -24,6 +24,9 @@ describe('Test audio service', () => {
   test('Can split', async () => {
     const pathFile = path.join(__dirname, '../test/', 'test-5mins-lv8.flac')
     const destDir = path.join(__dirname, '../test/tmp/')
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir)
+    }
     await rimraf(destDir + '*', { glob: true })
 
     await audioService.split(pathFile, destDir, 60)
@@ -34,6 +37,9 @@ describe('Test audio service', () => {
   test('Can convert', async () => {
     const pathFile = path.join(__dirname, '../test/', 'test-5mins-lv8.flac')
     const destDir = path.join(__dirname, '../test/tmp/')
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir)
+    }
     const destPath = path.join(destDir, 'test-5mins-lv8.wav')
     await rimraf(destDir + '*', { glob: true })
 

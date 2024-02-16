@@ -83,6 +83,9 @@ describe('Test ingest service', () => {
     const fileName = 'test-5mins-lv8.flac'
     const pathFile = path.join(__dirname, '../../test/', fileName)
     const tempDirPath = path.join(__dirname, '../../test/tmp/')
+    if (!fs.existsSync(tempDirPath)) {
+      fs.mkdirSync(tempDirPath)
+    }
     const tempFilePath = tempDirPath + fileName
     process.env.CACHE_DIRECTORY = tempDirPath
     // remove all remaining temp files
@@ -103,6 +106,9 @@ describe('Test ingest service', () => {
     const fileName = 'test-1min-lv8.flac'
     const pathFile = path.join(__dirname, '../../test/', fileName)
     const tempDirPath = path.join(__dirname, '../../test/tmp/')
+    if (!fs.existsSync(tempDirPath)) {
+      fs.mkdirSync(tempDirPath)
+    }
     const tempFilePath = tempDirPath + fileName
     process.env.CACHE_DIRECTORY = tempDirPath
     // remove all remaining temp files
@@ -123,6 +129,9 @@ describe('Test ingest service', () => {
     const fileName = 'test-abcmin-lv8.flac'
     const pathFile = path.join(__dirname, '../../test/', fileName)
     const tempDirPath = path.join(__dirname, '../../test/tmp/')
+    if (!fs.existsSync(tempDirPath)) {
+      fs.mkdirSync(tempDirPath)
+    }
     const tempFilePath = tempDirPath + fileName
     process.env.CACHE_DIRECTORY = tempDirPath
     // remove all remaining temp files
@@ -144,6 +153,9 @@ describe('Test ingest service', () => {
     const fileName = 'test-5mins-lv8.flac'
     const pathFile = path.join(__dirname, '../../test/', fileName)
     const tempDirPath = path.join(__dirname, '../../test/tmp/')
+    if (!fs.existsSync(tempDirPath)) {
+      fs.mkdirSync(tempDirPath)
+    }
     const tempFilePath = tempDirPath + fileName
     process.env.CACHE_DIRECTORY = tempDirPath
     // remove all remaining temp files
