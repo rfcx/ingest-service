@@ -4,7 +4,6 @@ const path = require('path')
 const fs = require('fs')
 const platform = process.env.PLATFORM || 'amazon'
 const storage = require(`../storage/${platform}`)
-const db = require('../db/mongo')
 const segmentService = require('../rfcx/segments')
 const { status } = require('../../services/db/mongo')
 const { rimraf } = require('rimraf')
@@ -12,6 +11,7 @@ const { rimraf } = require('rimraf')
 const originalEnv = process.env
 
 const { startDb, stopDb, truncateDbModels, muteConsole, seedValues } = require('../../utils/testing')
+const { IngestionError } = require('../../utils/errors')
 
 const UploadModel = require('../../services/db/models/mongoose/upload').Upload
 
@@ -138,5 +138,27 @@ describe('Test ingest service', () => {
     const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
     expect(newUpload.status).toBe(status.FAILED)
     expect(newUpload.failureMessage).toBe('Server failed with processing your file. Please try again later.')
+  })
+
+  test('Duplicate error', async () => {
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempDirPath = path.join(__dirname, '../../test/tmp/')
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    // remove all remaining temp files
+    await rimraf(tempDirPath + '*', { glob: true })
+    // copy test file to tmp dir
+    fs.copyFile(pathFile, tempFilePath, (err) => {
+      console.info(err)
+    })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    jest.spyOn(segmentService, 'createStreamFileData').mockRejectedValue(new IngestionError('Duplicate file. Matching sha1 signature already ingested.', status.DUPLICATE))
+
+    await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+
+    const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    expect(newUpload.status).toBe(status.DUPLICATE)
+    expect(newUpload.failureMessage).toBe('Duplicate file. Matching sha1 signature already ingested.')
   })
 })
