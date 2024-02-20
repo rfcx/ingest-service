@@ -11,10 +11,12 @@ RUN apt update \
         imagemagick \
         libsox-fmt-all \
         ffmpeg \
-        libssl-dev
+        wget
 
 RUN apt update \
     && apt install -y git
+RUN wget http://ports.ubuntu.com/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_arm64.deb
+RUN dpkg -i libssl1.1_1.1.1f-1ubuntu2_arm64.deb
 
 RUN mkdir -p /var/app/
 RUN rm -rf /var/lib/apt/lists/*
