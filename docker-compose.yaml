@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  app:
+    image: ingest-service
+    ports:
+      - "80:80"
+    build:
+      context: .
+      dockerfile: ./build/Dockerfile
+      target: ingest-service
+    command: "tail -f /dev/null"

@@ -32,4 +32,4 @@ jobs:
         run: yarn lint
 
       - name: "Test: Jest"
-        run: yarn jest
+        run: docker-compose run app yarn test

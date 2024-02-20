@@ -17,11 +17,17 @@ const UploadModel = require('../../services/db/models/mongoose/upload').Upload
 
 const UPLOAD = { id: 1, originalFilename: '0a1824085e3f-2021-06-08T19-26-40.flac', timestamp: '2021-06-08T19:26:40.000Z', streamId: '0a1824085e3f', checksum: 'c0cdd1156b69c8255ff83b9eb0ba6412cced8411', sampleRate: 48000, targetBitrate: 1, duration: 250000 }
 
+const tempDirPath = path.join(__dirname, '../../test/tmp/')
+
 beforeAll(async () => {
   muteConsole('warn')
   await startDb()
 })
 beforeEach(async () => {
+  if (!fs.existsSync(tempDirPath)) {
+    fs.mkdirSync(tempDirPath)
+  }
+
   await truncateDbModels(UploadModel)
   await UploadModel(UPLOAD).save()
   jest.spyOn(storage, 'download').mockReturnValue('')
@@ -73,6 +79,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   process.env = originalEnv
+  await rimraf(tempDirPath + '*', { glob: true })
 })
 afterAll(async () => {
   await stopDb()
@@ -82,14 +89,8 @@ describe('Test ingest service', () => {
   test('Can ingest audio', async () => {
     const fileName = 'test-5mins-lv8.flac'
     const pathFile = path.join(__dirname, '../../test/', fileName)
-    const tempDirPath = path.join(__dirname, '../../test/tmp/')
-    if (!fs.existsSync(tempDirPath)) {
-      fs.mkdirSync(tempDirPath)
-    }
     const tempFilePath = tempDirPath + fileName
     process.env.CACHE_DIRECTORY = tempDirPath
-    // remove all remaining temp files
-    await rimraf(tempDirPath + '*', { glob: true })
     // copy test file to tmp dir
     fs.copyFile(pathFile, tempFilePath, (err) => {
       console.info(err)
@@ -105,14 +106,8 @@ describe('Test ingest service', () => {
   test('Checksum error', async () => {
     const fileName = 'test-1min-lv8.flac'
     const pathFile = path.join(__dirname, '../../test/', fileName)
-    const tempDirPath = path.join(__dirname, '../../test/tmp/')
-    if (!fs.existsSync(tempDirPath)) {
-      fs.mkdirSync(tempDirPath)
-    }
     const tempFilePath = tempDirPath + fileName
     process.env.CACHE_DIRECTORY = tempDirPath
-    // remove all remaining temp files
-    await rimraf(tempDirPath + '*', { glob: true })
     // copy test file to tmp dir
     fs.copyFile(pathFile, tempFilePath, (err) => {
       console.info(err)
@@ -128,14 +123,8 @@ describe('Test ingest service', () => {
   test('Not found error', async () => {
     const fileName = 'test-abcmin-lv8.flac'
     const pathFile = path.join(__dirname, '../../test/', fileName)
-    const tempDirPath = path.join(__dirname, '../../test/tmp/')
-    if (!fs.existsSync(tempDirPath)) {
-      fs.mkdirSync(tempDirPath)
-    }
     const tempFilePath = tempDirPath + fileName
     process.env.CACHE_DIRECTORY = tempDirPath
-    // remove all remaining temp files
-    await rimraf(tempDirPath + '*', { glob: true })
     // copy test file to tmp dir
     fs.copyFile(pathFile, tempFilePath, (err) => {
       console.info(err)
@@ -152,14 +141,8 @@ describe('Test ingest service', () => {
   test('Duplicate error', async () => {
     const fileName = 'test-5mins-lv8.flac'
     const pathFile = path.join(__dirname, '../../test/', fileName)
-    const tempDirPath = path.join(__dirname, '../../test/tmp/')
-    if (!fs.existsSync(tempDirPath)) {
-      fs.mkdirSync(tempDirPath)
-    }
     const tempFilePath = tempDirPath + fileName
     process.env.CACHE_DIRECTORY = tempDirPath
-    // remove all remaining temp files
-    await rimraf(tempDirPath + '*', { glob: true })
     // copy test file to tmp dir
     fs.copyFile(pathFile, tempFilePath, (err) => {
       console.info(err)
