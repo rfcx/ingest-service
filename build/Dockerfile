@@ -1,4 +1,4 @@
-FROM ubuntu:20.04 as base
+FROM ubuntu:22.04 as base
 RUN apt update \
     && apt install -y \
         curl \
@@ -10,7 +10,8 @@ RUN apt update \
         pngcrush \
         imagemagick \
         libsox-fmt-all \
-        ffmpeg
+        ffmpeg \
+        libssl3
 
 RUN apt update \
     && apt install -y git
