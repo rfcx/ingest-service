@@ -10,7 +10,8 @@ RUN apt update \
         pngcrush \
         imagemagick \
         libsox-fmt-all \
-        ffmpeg
+        ffmpeg \
+        libssl-dev
 
 RUN apt update \
     && apt install -y git
