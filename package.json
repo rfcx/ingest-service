@@ -15,7 +15,7 @@
   },
   "main": "index.js",
   "engines": {
-    "node": "20.9.0"
+    "node": "16"
   },
   "dependencies": {
     "@google-cloud/pubsub": "^2.3.0",

@@ -12,24 +12,24 @@ jobs:
       - name: "Setup: Node.js"
         uses: actions/setup-node@v1
         with:
-          node-version: "20.9.0"
+          node-version: "16.x"
 
       - name: "Setup: Git checkout"
         uses: actions/checkout@v2
 
       - name: "Setup: Copy cached dependencies"
         uses: actions/cache@v2
-        id: yarn-cache
+        id: npm-cache
         with:
           path: "**/node_modules"
-          key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/package-lock.json') }}
 
       - name: "Setup: Install dependencies"
-        if: steps.yarn-cache.outputs.cache-hit != 'true'
-        run: yarn
+        if: steps.npm-cache.outputs.cache-hit != 'true'
+        run: npm ci
 
       - name: "Test: Lint"
-        run: yarn lint
+        run: npm run lint
 
       - name: "Test: Jest"
-        run: yarn jest
+        run: npm run jest

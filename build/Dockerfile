@@ -24,15 +24,15 @@ RUN mkdir /tmp/ingest-service
 
 # -- Builder
 
-FROM node:20.9.0 as builder
+FROM node:16 as builder
 RUN mkdir /var/app
 ADD . /var/app/
 WORKDIR /var/app
-RUN yarn
+RUN npm install
 
 # -- Target
 
 FROM base as ingest-service
 COPY --from=builder /var/app/ /var/app/
 WORKDIR /var/app
-CMD yarn start
+CMD npm start
