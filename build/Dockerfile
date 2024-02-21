@@ -1,10 +1,14 @@
 FROM node:20.9.0 as base
 
-RUN apt update && apt install -y sox libsox-fmt-mp3 pngcrush imagemagick ffmpeg
+RUN apt update && apt install -y sox libsox-fmt-mp3 pngcrush imagemagick ffmpeg wget
 
 WORKDIR /tmp
 RUN rm -rf /var/lib/apt/lists/* && \
     rm -rf /tmp/*
+
+
+RUN wget http://ftp.us.debian.org/debian/pool/main/o/openssl/libssl1.1_1.1.1w-0+deb11u1_amd64.deb
+RUN dpkg -i libssl1.1_1.1.1w-0+deb11u1_amd64.deb
 
 # RUN ln -s /usr/lib/aarch64-linux-gnu/libssl.so.3 /usr/lib/aarch64-linux-gnu/libssl.so.10
 # RUN ln -s /usr/lib/aarch64-linux-gnu/libcrypto.so.3 /usr/lib/aarch64-linux-gnu/libcrypto.so.10
