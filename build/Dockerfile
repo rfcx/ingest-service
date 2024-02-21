@@ -21,5 +21,5 @@ FROM base as ingest-service
 # Dependencies
 WORKDIR /app
 ADD . /app/
-RUN yarn --production --frozen-lockfile
+RUN yarn --frozen-lockfile
 CMD yarn start
