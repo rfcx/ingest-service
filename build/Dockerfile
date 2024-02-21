@@ -23,7 +23,7 @@ ENV CACHE_DIRECTORY="/tmp/ingest-service/"
 FROM base as ingest-service
 
 # Dependencies
-WORKDIR /app
-ADD . /app/
+ADD . /var/app/
+WORKDIR /var/app
 RUN yarn --frozen-lockfile
 CMD yarn start
