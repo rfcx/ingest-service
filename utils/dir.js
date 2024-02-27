@@ -1,5 +1,5 @@
 const fs = require('fs')
-const rimraf = require('rimraf')
+const { rimraf } = require('rimraf')
 
 function ensureDirExists (dirPath) {
   return new Promise((resolve, reject) => {
@@ -16,13 +16,9 @@ function ensureDirExists (dirPath) {
 
 function removeDirRecursively (path) {
   return new Promise((resolve, reject) => {
-    rimraf(path, (err) => {
-      if (err) {
-        reject(err)
-      } else {
-        resolve()
-      }
-    })
+    rimraf(path)
+      .then(() => resolve())
+      .catch(err => reject(err))
   })
 }
 
