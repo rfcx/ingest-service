@@ -14,7 +14,7 @@ spec:
           dimensions:
             - name: QueueName
               value: "ingest-service-upload-production"
-        period: 60
+        period: 30
         stat: Average
         unit: Count
       returnData: true
