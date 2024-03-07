@@ -14,4 +14,4 @@ spec:
   - type: External
     external:
       metricName: sqs-ingest-service-upload-production-length
-      targetAverageValue: 15
+      targetAverageValue: 60
