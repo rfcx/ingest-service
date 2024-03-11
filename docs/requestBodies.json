@@ -98,6 +98,16 @@
         "description": "A stream id",
         "example": "xu82jDgX49"
       },
+      "duration": {
+        "type": "number",
+        "description": "An audio file duration (milliseconds)",
+        "example": "60000"
+      },
+      "fileSize": {
+        "type": "number",
+        "description": "An audio file size (bytes)",
+        "example": "15000000"
+      },
       "sampleRate": {
         "type": "number",
         "description": "File's sample rate",

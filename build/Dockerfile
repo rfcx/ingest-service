@@ -1,4 +1,7 @@
-FROM ubuntu:18.04 as base
+# Need Ubuntu as base for testing
+# mongodb-memory-server requires to install mongodb archive
+# mongodb archive is available for Ubuntu ARM64 but Debian ARM64
+FROM ubuntu:22.04 as base
 RUN apt update \
     && apt install -y \
         curl \
@@ -9,30 +12,38 @@ RUN apt update \
         sox \
         pngcrush \
         imagemagick \
-        python-minimal \
-        software-properties-common \
-        libsox-fmt-all
-RUN add-apt-repository ppa:jonathonf/ffmpeg-4 && \
-    apt install -y  ffmpeg libsox-fmt-all && \
-    mkdir -p /var/app/ && \
-    curl -sL https://deb.nodesource.com/setup_16.x | bash - && \
-    apt update && \
-    apt install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
+        libsox-fmt-all \
+        ffmpeg \
+        libssl3
+
+RUN apt update \
+    && apt install -y git
+
+RUN mkdir -p /var/app/
+RUN rm -rf /var/lib/apt/lists/*
+
+ENV SOX_PATH="/usr/bin/sox"
+ENV FFMPEG_PATH="/usr/bin/ffmpeg"
+ENV IMAGEMAGICK_PATH="/usr/bin/convert"
+ENV PNGCRUSH_PATH="/usr/bin/pngcrush"
 ENV CACHE_DIRECTORY="/tmp/ingest-service/"
 RUN mkdir /tmp/ingest-service
 
-# -- Builder
-
-FROM node:16 as builder
-RUN mkdir /var/app
-ADD . /var/app/
-WORKDIR /var/app
-RUN npm install
+# -- Install NVM
+ENV NVM_DIR /usr/local/nvm
+ENV NODE_VERSION v20.9.0
+# We use NVM for node installation since we have to specify the LTS version
+# We can directly install from nodesource but it will be 20.x which it will keep updating if available
+RUN mkdir -p /usr/local/nvm && apt-get update && echo "y" | apt-get install curl
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+RUN /bin/bash -c "source $NVM_DIR/nvm.sh && nvm install $NODE_VERSION && nvm use --delete-prefix $NODE_VERSION"
+ENV NODE_PATH $NVM_DIR/versions/node/$NODE_VERSION/bin
+ENV PATH $NODE_PATH:$PATH
+RUN npm install -g yarn
 
 # -- Target
-
 FROM base as ingest-service
-COPY --from=builder /var/app/ /var/app/
+ADD . /var/app/
 WORKDIR /var/app
-CMD npm start
+RUN yarn --frozen-lockfile
+CMD yarn start

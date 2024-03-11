@@ -125,7 +125,10 @@ async function transcode (filePath, fileData) {
 function setAdditionalFileAttrs (outputFiles, upload) {
   const timestamp = moment.tz(upload.timestamp, 'UTC').valueOf()
   let totalDurationMs = 0
+  let numberOfSplitted = 0
   for (const file of outputFiles) {
+    console.info(`${upload._id} segments: ${++numberOfSplitted}`)
+    console.info(file.meta)
     const duration = Math.floor(file.meta.duration * 1000)
     const ts = moment.tz(timestamp, 'UTC').add(totalDurationMs, 'milliseconds')
     file.start = ts.toISOString()
@@ -201,8 +204,8 @@ function combineCorePayloadData (fileData, wavMeta, outputFiles, upload) {
 
 async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
   let tracker = new TimeTracker('IngestTask')
-  let outputFiles
-  let coreData
+  let outputFiles = []
+  let coreData = {}
   const streamLocalPath = getStreamLocalPath(fileStoragePath)
   try {
     const startTimestamp = Date.now() // is used for processing time calculation
