@@ -1,5 +1,5 @@
 const router = require('express').Router()
-const mongoose = require('../utils/mongo')
+const db = require('../services/db/mongo')
 
 /**
  * @swagger
@@ -12,14 +12,18 @@ const mongoose = require('../utils/mongo')
  *          - health-check
  *        responses:
  *          200:
- *            description: A value of health check
- *            content:
- *              text/plain:
- *                example: health_check{backend="mongo"} 1
+ *            description: Successful health check
+ *          500:
+ *            description: Failed health check
  */
 router.route('/').get((req, res) => {
-  const mongoMetricStatus = mongoose && mongoose.readyState === 1 ? 1 : 0
-  res.type('text/plain').send(`health_check{backend="mongo"} ${mongoMetricStatus}`)
+  db.getOrCreateHealthCheck()
+    .then(() => {
+      res.sendStatus(200)
+    })
+    .catch(() => {
+      res.sendStatus(500)
+    })
 })
 
 module.exports = router

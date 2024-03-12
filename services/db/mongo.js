@@ -1,5 +1,6 @@
 const UploadModel = require('./models/mongoose/upload').Upload
 const DeploymentInfoModel = require('./models/mongoose/deploymentInfo').DeploymentInfo
+const HealthCheckModel = require('./models/mongoose/healthcheck').HealthCheck
 const { EmptyResultError } = require('@rfcx/http-utils')
 const moment = require('moment-timezone')
 const { CastError } = require('mongoose')
@@ -127,6 +128,16 @@ function updateDeploymentInfo (opts) {
     })
 }
 
+function getOrCreateHealthCheck () {
+  return HealthCheckModel.findOneAndUpdate(
+    { event: 'check' },
+    { event: 'check' },
+    {
+      new: true,
+      upsert: true
+    })
+}
+
 module.exports = {
   generateUpload,
   getUpload,
@@ -136,5 +147,6 @@ module.exports = {
   updateUploadStatus,
   saveDeploymentInfo,
   updateDeploymentInfo,
+  getOrCreateHealthCheck,
   status
 }

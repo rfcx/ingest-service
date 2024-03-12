@@ -10,13 +10,8 @@ async function connect () {
     mongoServer = await MongoMemoryServer.create()
   }
   const uri = await mongoServer.getUri()
-  const mongooseOpts = {
-    useNewUrlParser: true,
-    useCreateIndex: true,
-    useUnifiedTopology: true,
-    useFindAndModify: false
-  }
-  await mongoose.connect(uri, mongooseOpts)
+  mongoose.set('strictQuery', false)
+  await mongoose.connect(uri)
 }
 
 async function disconnect () {
@@ -30,7 +25,7 @@ async function truncate (models = [UploadModel, DeploymentInfoModel]) {
     models = [models]
   }
   for (const model of models) {
-    await model.remove({})
+    await model.deleteMany()
   }
 }
 

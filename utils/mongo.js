@@ -21,14 +21,10 @@ db.on('reconnectFailed', function () {
 
 const connectWithRetry = () => {
   console.info('Establishing connection to MongoDB')
+  mongoose.set('strictQuery', false)
   mongoose.connect(mongoUri, {
     user: process.env.MONGO_USERNAME,
-    pass: process.env.MONGO_PASSWORD,
-    useNewUrlParser: true,
-    useUnifiedTopology: false,
-    autoReconnect: true,
-    reconnectTries: 1000,
-    reconnectInterval: 10000
+    pass: process.env.MONGO_PASSWORD
   })
     .catch((e) => {
       console.error('Connection to MongoDB failed:', e && e.message ? e.message : '')
