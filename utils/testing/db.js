@@ -11,11 +11,10 @@ async function connect () {
   }
   const uri = await mongoServer.getUri()
   const mongooseOpts = {
-    useNewUrlParser: true,
     useCreateIndex: true,
-    useUnifiedTopology: true,
     useFindAndModify: false
   }
+  mongoose.set('strictQuery', false)
   await mongoose.connect(uri, mongooseOpts)
 }
 
