@@ -286,8 +286,10 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     await db.updateUploadStatus(uploadId, status, message)
     for (const file of outputFiles) {
       try {
-        console.info(`[${uploadId}] Rollback: deleting file ${file.remotePath}`)
-        await storage.deleteObject(ingestBucket, file.remotePath)
+        if (file.remotePath) {
+          console.info(`[${uploadId}] Rollback: deleting file ${file.remotePath}`)
+          await storage.deleteObject(ingestBucket, file.remotePath)
+        }
       } catch (e) {
         console.info(`[${uploadId}] Rollback: failed deleting file ${file.remotePath}`, e)
       }
