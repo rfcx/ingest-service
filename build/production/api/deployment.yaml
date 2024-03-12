@@ -16,6 +16,15 @@ spec:
       - name: ingest-service-api
         image: 887044485231.dkr.ecr.eu-west-1.amazonaws.com/ingest-service:latest
         args: ["yarn", "start:api"]
+        readinessProbe:
+          httpGet:
+            path: /health-check
+            port: 80
+          initialDelaySeconds: 5
+          timeoutSeconds: 2
+          periodSeconds: 15
+          successThreshold: 1
+          failureThreshold: 1
         resources:
           requests:
             memory: "128Mi"
