@@ -16,7 +16,7 @@ const { IngestionError } = require('../../utils/errors')
 
 const UploadModel = require('../../services/db/models/mongoose/upload').Upload
 
-const UPLOAD = { id: mongoose.Types.ObjectId(), originalFilename: '0a1824085e3f-2021-06-08T19-26-40.flac', timestamp: '2021-06-08T19:26:40.000Z', streamId: '0a1824085e3f', checksum: 'c0cdd1156b69c8255ff83b9eb0ba6412cced8411', sampleRate: 48000, targetBitrate: 1, duration: 250000 }
+const UPLOAD = { id: new mongoose.Types.ObjectId(), originalFilename: '0a1824085e3f-2021-06-08T19-26-40.flac', timestamp: '2021-06-08T19:26:40.000Z', streamId: '0a1824085e3f', checksum: 'c0cdd1156b69c8255ff83b9eb0ba6412cced8411', sampleRate: 48000, targetBitrate: 1, duration: 250000 }
 
 const tempDirPath = path.join(__dirname, '../../test/tmp/')
 
