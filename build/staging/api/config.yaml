@@ -22,6 +22,6 @@ data:
   ARBIMON_ENABLED: "true"
   ARBIMON_HOST: "https://staging-arbimon.rfcx.org/"
   AUTOUPDATE_ENABLED: "true"
-  AUTOUPDATE_GITHUB_REPO: "rfcx/ingest-app"
+  AUTOUPDATE_GITHUB_REPO: "rfcx/arbimon-uploader"
   PROMETHEUS_ENABLED: "true"
   DEVICE_API_HOST: "https://staging-device-api.rfcx.org/"

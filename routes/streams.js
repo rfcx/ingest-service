@@ -110,8 +110,8 @@ router.route('/').post((req, res) => {
   const idToken = req.headers.authorization
   const converter = new Converter(req.body, {})
   converter.convert('name').toString()
-  converter.convert('latitude').toFloat().minimum(-90).maximum(90)
-  converter.convert('longitude').toFloat().minimum(-180).maximum(180)
+  converter.convert('latitude').optional().toFloat().minimum(-90).maximum(90)
+  converter.convert('longitude').optional().toFloat().minimum(-180).maximum(180)
   converter.convert('altitude').optional().toFloat()
   converter.convert('description').optional().toString()
   converter.convert('is_public').optional().toBoolean().default(false)
