@@ -23,7 +23,8 @@ const loggerIgnoredErrors = [
   'Duplicate file. Matching sha1 signature already ingested.',
   'This file was already ingested.',
   'File extension is not supported',
-  'Stream source file was not created'
+  'Stream source file was not created',
+  'Cannot create source file with provided data'
 ]
 
 if (PROMETHEUS_ENABLED) {
