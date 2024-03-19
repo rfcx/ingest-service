@@ -261,7 +261,6 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     await db.updateUploadStatus(uploadId, db.status.INGESTED)
     tracker.logAndSetNewPoint(`[${uploadId}] updated upload status in Mongo`)
 
-    uploadId = null
     if (PROMETHEUS_ENABLED && fileData.sampleCount) {
       console.info(`[${uploadId}] Updating processing metrics`)
       const processingValue = (Date.now() - startTimestamp) / fileData.sampleCount * 10000 // we use multiplier because values are far less than 1 in other case
