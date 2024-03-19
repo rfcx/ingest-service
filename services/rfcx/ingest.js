@@ -24,7 +24,8 @@ const loggerIgnoredErrors = [
   /This file was already ingested\./g,
   /File extension is not supported/g,
   /Stream source file was not created/g,
-  /Cannot create source file with provided data/g
+  /Cannot create source file with provided data/g,
+  /There is another file with the same timestamp in the stream/g
 ]
 
 if (PROMETHEUS_ENABLED) {
