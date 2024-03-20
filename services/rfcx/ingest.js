@@ -20,12 +20,12 @@ const extensionsRequiringConvToWav = ['.flac']
 
 const { IngestionError } = require('../../utils/errors')
 const loggerIgnoredErrors = [
-  /Duplicate file\. Matching sha1 signature already ingested\./g,
-  /This file was already ingested\./g,
-  /File extension is not supported/g,
-  /Stream source file was not created/g,
-  /Cannot create source file with provided data/g,
-  /There is another file with the same timestamp in the stream/g
+  /Duplicate file\. Matching sha1 signature already ingested\./,
+  /This file was already ingested\./,
+  /File extension is not supported/,
+  /Stream source file was not created/,
+  /Cannot create source file with provided data/,
+  /There is another file with the same timestamp in the stream/
 ]
 
 if (PROMETHEUS_ENABLED) {
