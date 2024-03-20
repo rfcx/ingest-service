@@ -275,6 +275,8 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     tracker = null
   } catch (err) {
     console.error('\n', err, '\n')
+    console.error('\n', err.message, '\n')
+    console.error('\n', loggerIgnoredErrors.some((r) => { return r.test(err.message) }), '\n')
     /**
      * ERROR HANDLING
      */
