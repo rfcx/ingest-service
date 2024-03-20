@@ -274,6 +274,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     tracker.logAndSetNewPoint(`[${uploadId}] cleaned up files`)
     tracker = null
   } catch (err) {
+    console.error('\n', err, '\n')
     /**
      * ERROR HANDLING
      */
