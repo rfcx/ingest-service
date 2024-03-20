@@ -274,14 +274,14 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     tracker.logAndSetNewPoint(`[${uploadId}] cleaned up files`)
     tracker = null
   } catch (err) {
-    console.error('\n', err, '\n')
-    console.error('\n', err.message, '\n')
-    console.error('\n', loggerIgnoredErrors.some((r) => { return r.test(err.message) }), '\n')
+    console.error('\n', uploadId, err, '\n')
+    console.error('\n', uploadId, err.message, '\n')
+    console.error('\n', uploadId, loggerIgnoredErrors.some((r) => { return r.test(err.message) }), '\n')
     /**
      * ERROR HANDLING
      */
     if (loggerIgnoredErrors.some((r) => { return r.test(err.message) })) {
-      console.warn(`[${uploadId}] Warn for upload ${uploadId} ${err.message}`)
+      console.info(`[${uploadId}] Warn for upload ${uploadId} ${err.message}`)
     } else {
       console.error(`[${uploadId}] Error for upload ${uploadId} ${err.message}`)
     }
