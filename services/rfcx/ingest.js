@@ -6,6 +6,7 @@ const audioService = require('../audio')
 const dirUtil = require('../../utils/dir')
 const segmentService = require('../rfcx/segments')
 const { chunks } = require('../../utils/array')
+const { getKeyByValue } = require('../../utils/obj')
 const { PROMETHEUS_ENABLED, registerHistogram, pushHistogramMetric } = require('../../services/prometheus')
 const path = require('path')
 const moment = require('moment-timezone')
@@ -33,6 +34,9 @@ if (PROMETHEUS_ENABLED) {
   supportedExtensions.forEach((ext) => {
     const name = ext.substr(1)
     registerHistogram(name, `Processing metric for ${name} format.`)
+  })
+  Object.keys(db.status).forEach((s) => {
+    registerHistogram(s, `${s} upload status.`)
   })
 }
 
@@ -285,6 +289,9 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     const message = err instanceof IngestionError ? err.message : 'Server failed with processing your file. Please try again later.'
     const status = err instanceof IngestionError ? err.status : db.status.FAILED
     await db.updateUploadStatus(uploadId, status, message)
+    if (PROMETHEUS_ENABLED) {
+      pushHistogramMetric(getKeyByValue(db.status, status), 1)
+    }
     for (const file of outputFiles) {
       try {
         if (file.remotePath) {
