@@ -14,8 +14,8 @@ if (PROMETHEUS_ENABLED) {
 
   const histograms = {}
 
-  function registerHistogram (name, help) { // eslint-disable-line no-inner-declarations
-    histograms[name] = new Histogram(registerName, name, help)
+  function registerHistogram (name, help, buckets) { // eslint-disable-line no-inner-declarations
+    histograms[name] = new Histogram(registerName, name, help, buckets)
   }
 
   function pushHistogramMetric (histogramName, value) { // eslint-disable-line no-inner-declarations

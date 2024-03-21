@@ -36,7 +36,7 @@ if (PROMETHEUS_ENABLED) {
     registerHistogram(name, `Processing metric for ${name} format.`)
   })
   Object.keys(db.status).forEach((s) => {
-    registerHistogram(s, `${s} upload status.`)
+    registerHistogram(s, `${s} upload status.`, [1, 2, 3, 4, 5, 10, 50, 100, 250, 500, 1000, 2000])
   })
 }
 
