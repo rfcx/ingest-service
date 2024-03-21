@@ -83,6 +83,8 @@ async function createStreamFileData (stream, payload) {
         let status
         switch (message) {
           case 'Duplicate file. Matching sha1 signature already ingested.':
+          case 'Cannot create source file with provided data.':
+          case 'There is another file with the same timestamp in the stream.':
             status = DUPLICATE
             break
           case 'This file was already ingested.':
