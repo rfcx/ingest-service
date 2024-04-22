@@ -1,4 +1,4 @@
-const axios = require('axios')
+const axios = require('../../utils/axios')
 const { matchAxiosErrorToRfcx } = require('../../utils/errors')
 
 const apiHostName = process.env.API_HOST

@@ -1,4 +1,4 @@
-const axios = require('axios')
+const axios = require('../utils/axios')
 const fs = require('fs')
 
 const apiUrl = 'https://us-central1-rfcx-ingest-dev.cloudfunctions.net/api'

@@ -1,4 +1,4 @@
-const axios = require('axios')
+const axios = require('../../utils/axios')
 const qs = require('querystring')
 const errors = require('../../utils/error-messages')
 

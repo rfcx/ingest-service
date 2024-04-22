@@ -1,4 +1,4 @@
-const axios = require('axios')
+const axios = require('../../utils/axios')
 const auth0Service = require('../auth0')
 const { matchAxiosErrorToRfcx, IngestionError } = require('../../utils/errors')
 const { status } = require('../db/mongo')
