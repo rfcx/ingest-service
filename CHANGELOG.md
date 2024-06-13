@@ -1,3 +1,9 @@
+<a name="1.1.1"></a>
+## 1.1.1 (2024-06-xx)
+
+### Bug Fixes
+* Not include very small segments to Core API
+
 <a name="1.1.0"></a>
 ## 1.1.0 (2024-02-xx)
 
