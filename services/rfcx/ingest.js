@@ -177,7 +177,7 @@ function combineSourceFileData (fileData, wavMeta, upload) {
  * @param {*} upload
  */
 function combineSegmentsData (outputFiles, upload) {
-  return outputFiles.map((file) => {
+  const combinedData = outputFiles.map((file) => {
     return {
       id: file.guid,
       stream: upload.streamId,
@@ -188,6 +188,14 @@ function combineSegmentsData (outputFiles, upload) {
       fileSize: file.meta.size
     }
   })
+  /*
+  * There is a very rare case that the segment is very small, 0.0000x second.
+  * With this small segment, the sample count will be null so we have to exclude it
+  */
+  if (!combinedData[combinedData.length - 1].sampleCount) {
+    combinedData.pop()
+  }
+  return combinedData
 }
 
 /**
