@@ -86,6 +86,13 @@ function split (sourceFile, destinationPath, maxDuration) {
             }
           } catch (e) { reject(e) }
         })
+        /*
+        * There is a very rare case that the segment is very small, 0.0000x second.
+        * With this small segment, the sample count will be null so we have to exclude it
+        */
+        if (!outputFiles[outputFiles.length - 1].meta.sampleCount) {
+          outputFiles.pop()
+        }
         resolve(Promise.all(outputFiles))
       })
       .run()
