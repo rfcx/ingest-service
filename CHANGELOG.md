@@ -1,3 +1,9 @@
+<a name="1.1.2"></a>
+## 1.1.2 (2024-09-11)
+
+### Features
+* Allow audio file that long 1 hour and 1 second for devices that record 1 hour cycle but get very small extra second
+
 <a name="1.1.1"></a>
 ## 1.1.1 (2024-06-xx)
 

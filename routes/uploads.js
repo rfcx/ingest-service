@@ -77,7 +77,7 @@ router.route('/').post((req, res) => {
       }
 
       // Cannot upload file that duration more than following (milliseconds)
-      const durationLimit = 1000 * 60 * 60 * 1
+      const durationLimit = (1000 * 60 * 60 * 1) + 1000 // Add 1 second for a file with 1 hour
       if (params.duration && params.duration > durationLimit) {
         throw new ValidationError('Audio duration is more than 1 hour')
       }

@@ -118,7 +118,7 @@ describe('POST /uploads', () => {
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
       targetBitrate: 1,
-      duration: 3601000,
+      duration: 3_601_001,
       fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
