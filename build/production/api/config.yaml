@@ -28,3 +28,4 @@ data:
   PROMETHEUS_ENABLED: "true"
   DEVICE_API_HOST: "https://device-api.rfcx.org/"
   TIME_TRACKER_ENABLED: "true"
+  CREATION_PAUSED: "false"

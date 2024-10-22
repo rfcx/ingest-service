@@ -25,3 +25,4 @@ data:
   AUTOUPDATE_GITHUB_REPO: "rfcx/arbimon-uploader"
   PROMETHEUS_ENABLED: "true"
   DEVICE_API_HOST: "https://staging-device-api.rfcx.org/"
+  CREATION_PAUSED: "false"
