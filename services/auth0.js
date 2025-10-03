@@ -40,14 +40,17 @@ function getRoles (user) {
   if (user[rfcxAppMetaUrl] && user[rfcxAppMetaUrl].authorization && user[rfcxAppMetaUrl].authorization.roles) {
     return user[rfcxAppMetaUrl].authorization.roles
   }
-  if (user.scope) {
-    if (typeof user.scope === 'string') {
+const roleURL = 'https://rfcx.org/roles';
+  if (user[roleURL]) {
+    if (typeof user[roleURL] === 'string') {
       try {
-        const parsedScrope = JSON.parse(user.scope)
-        if (parsedScrope.roles) { return parsedScrope.roles }
-      } catch (e) { }
-    } else {
-      if (user.scope.roles) { return user.scope.roles }
+        let parsedScope = JSON.parse(user[roleURL]);
+        if (parsedScope) { return parsedScope; }
+      }
+      catch (e) { }
+    }
+    else {
+      if (user[roleURL]) { return user[roleURL]; }
     }
   }
   return []
