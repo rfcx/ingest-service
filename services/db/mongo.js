@@ -9,13 +9,15 @@ const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 
 const statusNumbers = Object.values(status)
 
 function generateUpload (opts) {
-  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum } = opts
+  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum, projectId, duration } = opts
 
   const upload = new UploadModel({
     streamId,
     userId,
     status: status.WAITING,
     timestamp,
+    projectId,
+    duration,
     originalFilename,
     sampleRate,
     targetBitrate,
@@ -34,6 +36,26 @@ function generateUpload (opts) {
         throw Error('Can not create upload.')
       }
     })
+}
+
+function getPendingProjectDuration (projectId) {
+  if (!projectId) return Promise.resolve(0)
+
+  return UploadModel.aggregate([
+    {
+      $match: {
+        projectId,
+        status: { $in: [status.WAITING, status.UPLOADED] },
+        duration: { $gt: 0 }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalDuration: { $sum: '$duration' }
+      }
+    }
+  ]).then(results => results[0]?.totalDuration ?? 0)
 }
 
 function getUpload (id) {
@@ -140,6 +162,7 @@ function getOrCreateHealthCheck () {
 
 module.exports = {
   generateUpload,
+  getPendingProjectDuration,
   getUpload,
   getUploadDuplicateCount,
   getUploadFailedCount,

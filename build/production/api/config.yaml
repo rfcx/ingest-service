@@ -27,5 +27,6 @@ data:
   AUTOUPDATE_GITHUB_REPO: "rfcx/arbimon-uploader"
   PROMETHEUS_ENABLED: "true"
   DEVICE_API_HOST: "https://device-api.rfcx.org/"
+  ARBIMON_HOST: "https://arbimon.rfcx.org/"
   TIME_TRACKER_ENABLED: "true"
   CREATION_PAUSED: "false"
