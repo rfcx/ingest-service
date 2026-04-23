@@ -28,7 +28,7 @@ async function assertProjectUploadWithinLimit (idToken, streamId, durationMs) {
   if (!projectId) { return null }
 
   const summary = await arbimonService.getProjectUploadLimitSummary(idToken, projectId)
-  if (summary.entitlementState === 'inactive' || summary.viewOnlyEffective) {
+  if (summary.isLocked) {
     throw new ValidationError('Project is view-only and cannot accept uploads.')
   }
   if (summary.recordingMinutesLimit === null) {

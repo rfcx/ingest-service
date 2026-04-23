@@ -556,8 +556,7 @@ describe('POST /uploads', () => {
     getProjectUploadLimitSummary.mockImplementation(async () => ({
       recordingMinutesCount: 100,
       recordingMinutesLimit: 40000,
-      entitlementState: 'active',
-      viewOnlyEffective: true
+      isLocked: true
     }))
 
     const requestBody = {
