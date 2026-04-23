@@ -12,20 +12,20 @@ const moment = require('moment-timezone')
 const { getSampleRateFromFilename } = require('../services/rfcx/guardian')
 
 function getProjectIdFromStream (stream) {
-  if (!stream) return null
-  if (typeof stream.project === 'string') return stream.project
-  if (typeof stream.project_id === 'string') return stream.project_id
-  if (typeof stream.projectId === 'string') return stream.projectId
-  if (stream.project && typeof stream.project.id === 'string') return stream.project.id
+  if (!stream) { return null }
+  if (typeof stream.project === 'string') { return stream.project }
+  if (typeof stream.project_id === 'string') { return stream.project_id }
+  if (typeof stream.projectId === 'string') { return stream.projectId }
+  if (stream.project && typeof stream.project.id === 'string') { return stream.project.id }
   return null
 }
 
 async function assertProjectUploadWithinLimit (idToken, streamId, durationMs) {
-  if (!durationMs || durationMs <= 0) return null
+  if (!durationMs || durationMs <= 0) { return null }
 
   const streamResponse = await streamService.get({ id: streamId, idToken })
   const projectId = getProjectIdFromStream(streamResponse?.data)
-  if (!projectId) return null
+  if (!projectId) { return null }
 
   const summary = await arbimonService.getProjectUploadLimitSummary(idToken, projectId)
   if (summary.entitlementState === 'inactive' || summary.viewOnlyEffective) {

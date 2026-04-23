@@ -39,7 +39,7 @@ function generateUpload (opts) {
 }
 
 function getPendingProjectDuration (projectId) {
-  if (!projectId) return Promise.resolve(0)
+  if (!projectId) { return Promise.resolve(0) }
 
   return UploadModel.aggregate([
     {
