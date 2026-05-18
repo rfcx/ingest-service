@@ -3,9 +3,17 @@ const fs = require('fs')
 
 const uploadBucket = process.env.UPLOAD_BUCKET
 
-const s3Client = new AWS.S3({
+// rfcx-local fork: support an S3-compatible endpoint (MinIO, B2, R2,
+// in-cluster s3-cache, etc.) when AWS_S3_ENDPOINT is set. With it unset,
+// behavior is bit-identical to upstream: vanilla AWS S3.
+const _s3Config = {
   signatureVersion: 'v4'
-})
+}
+if (process.env.AWS_S3_ENDPOINT) {
+  _s3Config.endpoint = process.env.AWS_S3_ENDPOINT
+  _s3Config.s3ForcePathStyle = process.env.AWS_S3_FORCE_PATH_STYLE === 'true'
+}
+const s3Client = new AWS.S3(_s3Config)
 
 function getSignedUrl (filePath, contentType) {
   const params = {
