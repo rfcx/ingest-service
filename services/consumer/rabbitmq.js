@@ -1,4 +1,4 @@
-const { MessageQueue } = require('@rfcx/message-queue')
+const amqplib = require('amqplib')
 const { ingest } = require('../rfcx/ingest')
 const { parseUploadFromFileName } = require('./misc')
 const TimeTracker = require('../../utils/time-tracker')
@@ -8,11 +8,10 @@ const flacLimitSize = 150_000_000
 const wavLimitSize = 200_000_000
 
 const queueName = process.env.RABBITMQ_INGEST_TRIGGER_QUEUE || 'ingest-service-upload-production'
-
-const mq = new MessageQueue('rabbitmq')
+const url = process.env.RABBITMQ_URL || process.env.AMQP_URL
 
 // Same S3-event payload shape that SQS receives from AWS S3 event notifications;
-// this lets the s3-cache publisher and AWS S3 both feed compatible bodies.
+// this lets an s3-cache/s3-writer publisher and AWS S3 both feed compatible bodies.
 //   { Records: [ { eventName: "ObjectCreated:Put",
 //                  s3: { bucket: { name, arn }, object: { key, size } } } ] }
 function parseIngestRecords (body) {
@@ -51,9 +50,8 @@ async function handleMessage (body) {
         await ingest(file.key, fileLocalPath, streamId, uploadId)
       }
     } catch (e) {
-      // returning false nacks the message; @rfcx/message-queue rabbitmq
-      // adapter routes nack-no-requeue → DLX, matching SQS-without-redrive
-      // semantics.
+      // returning false nacks the message; nack-no-requeue routes to DLX
+      // (matching SQS-without-redrive semantics).
       return false
     }
   }
@@ -62,8 +60,62 @@ async function handleMessage (body) {
   return true
 }
 
-function start () {
-  mq.subscribe(queueName, handleMessage)
+// Direct amqplib consumer.
+//
+// We do NOT call assertQueue here. The queue topology
+// (durable, x-queue-type=quorum, x-dead-letter-exchange=dlx,
+// x-dead-letter-routing-key, x-delivery-limit) is owned by
+// the rfcx-local platform via platform/rabbitmq/definitions.json
+// and applied at cluster bootstrap. Calling assertQueue with
+// a different argument set causes PRECONDITION_FAILED.
+//
+// Instead, we use checkQueue (passive declare): it fails if
+// the queue does not exist, but does not conflict with the
+// existing arguments. The publisher side has the same rule.
+async function start () {
+  if (!url) {
+    throw new Error('RABBITMQ_URL (or AMQP_URL) env var must be set when INGEST_CONSUMER_TYPE=rabbitmq')
+  }
+  const connection = await amqplib.connect(url)
+  connection.on('error', (err) => {
+    console.error('Ingest RabbitMQ connection error', err && err.message)
+  })
+  connection.on('close', () => {
+    console.error('Ingest RabbitMQ connection closed; exiting so kubernetes can restart us')
+    process.exit(1)
+  })
+  const channel = await connection.createChannel()
+  channel.on('error', (err) => {
+    console.error('Ingest RabbitMQ channel error', err && err.message)
+  })
+  channel.on('close', () => {
+    console.error('Ingest RabbitMQ channel closed; exiting so kubernetes can restart us')
+    process.exit(1)
+  })
+  await channel.checkQueue(queueName) // passive; fails if not pre-declared
+  await channel.prefetch(1)
+  await channel.consume(queueName, async (msg) => {
+    if (msg === null) { return } // consumer cancelled by server
+    let body
+    try {
+      body = JSON.parse(msg.content.toString('utf8'))
+    } catch (e) {
+      console.error('Ingest RabbitMQ: bad JSON, nacking:', e && e.message)
+      channel.nack(msg, false, false)
+      return
+    }
+    try {
+      const result = await handleMessage(body)
+      if (result === false) {
+        channel.nack(msg, false, false)
+      } else {
+        channel.ack(msg)
+      }
+    } catch (e) {
+      console.error('Ingest RabbitMQ: handler threw, nacking:', e && e.message)
+      channel.nack(msg, false, false)
+    }
+  })
   console.info(`Ingest RabbitMQ consumer subscribed to queue "${queueName}"`)
 }
 
