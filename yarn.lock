@@ -955,14 +955,6 @@
   dependencies:
     moment-timezone "0.5.31"
 
-"@rfcx/message-queue@github:rfcx/message-queue#1.1.0":
-  version "1.1.0"
-  resolved "https://codeload.github.com/rfcx/message-queue/tar.gz/9e94964bc761ae4ca144fbb5da73bb3812bbbe06"
-  dependencies:
-    amqplib "^0.10.4"
-    aws-sdk "^2.988.0"
-    sqs-consumer "^5.6.0"
-
 "@rfcx/prometheus-metrics@^1.0.3":
   version "1.0.3"
   resolved "https://registry.yarnpkg.com/@rfcx/prometheus-metrics/-/prometheus-metrics-1.0.3.tgz#c28728e0f5d9edaef6762b6c03bd52257062b6c8"
@@ -1297,7 +1289,7 @@ alter@~0.2.0:
   dependencies:
     stable "~0.1.3"
 
-amqplib@^0.10.4:
+amqplib@^0.10.9:
   version "0.10.9"
   resolved "https://registry.yarnpkg.com/amqplib/-/amqplib-0.10.9.tgz#5b744c21d624f9307d0399e4d339b7354675831c"
   integrity sha512-jwSftI4QjS3mizvnSnOrPGYiUnm1vI2OP1iXeOUz5pb74Ua0nbf6nPyyTzuiCLEE3fMpaJORXh2K/TQ08H5xGA==
@@ -1566,22 +1558,6 @@ aws-sdk@^2.1271.0, aws-sdk@^2.574.0:
   version "2.1554.0"
   resolved "https://registry.yarnpkg.com/aws-sdk/-/aws-sdk-2.1554.0.tgz#69ab8735261ef09a146b53147424d49f806b9ef9"
   integrity sha512-MmCfg80CKCOFeC8K6UMSmDLPPGVesAglOzmO2IMEugHt10UsK2szOa+C31IHO2PEnjhn+l4WoVlaBAN/YQX+tQ==
-  dependencies:
-    buffer "4.9.2"
-    events "1.1.1"
-    ieee754 "1.1.13"
-    jmespath "0.16.0"
-    querystring "0.2.0"
-    sax "1.2.1"
-    url "0.10.3"
-    util "^0.12.4"
-    uuid "8.0.0"
-    xml2js "0.6.2"
-
-aws-sdk@^2.988.0:
-  version "2.1693.0"
-  resolved "https://registry.yarnpkg.com/aws-sdk/-/aws-sdk-2.1693.0.tgz#fda38671af3dc5fa8117e9aa09cf6ce37e34010e"
-  integrity sha512-cJmb8xEnVLT+R6fBS5sn/EFJiX7tUnDaPtOPZ1vFbOJtd0fnZn/Ky2XGgsvvoeliWeH7mL3TWSX5zXXGSQV6gQ==
   dependencies:
     buffer "4.9.2"
     events "1.1.1"
@@ -6751,7 +6727,7 @@ sprintf-js@~1.0.2:
   resolved "https://registry.yarnpkg.com/sprintf-js/-/sprintf-js-1.0.3.tgz#04e6926f662895354f3dd015203633b857297e2c"
   integrity sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==
 
-sqs-consumer@^5.4.0, sqs-consumer@^5.6.0:
+sqs-consumer@^5.4.0:
   version "5.8.0"
   resolved "https://registry.yarnpkg.com/sqs-consumer/-/sqs-consumer-5.8.0.tgz#eb2796bf17e4f703dd93e534bf949f15e7b1fef9"
   integrity sha512-pJReMEtDM9/xzQTffb7dxMD5MKagBfOW65m+ITsbpNk0oZmJ38tTC4LPmj0/7ZcKSOqi2LrpA1b0qGYOwxlHJg==
