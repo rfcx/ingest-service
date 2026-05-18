@@ -6,9 +6,44 @@ const db = require('../services/db/mongo')
 const storage = require(`../services/storage/${platform}`)
 const segmentService = require('../services/rfcx/segments')
 const streamService = require('../services/rfcx/streams')
+const arbimonService = require('../services/rfcx/arbimon')
 const auth0Service = require('../services/auth0')
 const moment = require('moment-timezone')
 const { getSampleRateFromFilename } = require('../services/rfcx/guardian')
+
+function getProjectIdFromStream (stream) {
+  if (!stream) { return null }
+  if (typeof stream.project === 'string') { return stream.project }
+  if (typeof stream.project_id === 'string') { return stream.project_id }
+  if (typeof stream.projectId === 'string') { return stream.projectId }
+  if (stream.project && typeof stream.project.id === 'string') { return stream.project.id }
+  return null
+}
+
+async function assertProjectUploadWithinLimit (idToken, streamId, durationMs) {
+  if (!durationMs || durationMs <= 0) { return null }
+
+  const streamResponse = await streamService.get({ id: streamId, idToken })
+  const projectId = getProjectIdFromStream(streamResponse?.data)
+  if (!projectId) { return null }
+
+  const summary = await arbimonService.getProjectUploadLimitSummary(idToken, projectId)
+  if (summary.isLocked) {
+    throw new ValidationError('Project is view-only and cannot accept uploads.')
+  }
+  if (summary.recordingMinutesLimit === null) {
+    return { projectId, summary }
+  }
+
+  const pendingDurationMs = await db.getPendingProjectDuration(projectId)
+  const totalMinutes = Number(summary.recordingMinutesCount || 0) + ((Number(pendingDurationMs || 0) + durationMs) / 60000)
+
+  if (totalMinutes > Number(summary.recordingMinutesLimit) + 1e-9) {
+    throw new ValidationError('Project recording-minute limit exceeded.')
+  }
+
+  return { projectId, summary }
+}
 
 /**
  * @swagger
@@ -102,6 +137,7 @@ router.route('/').post((req, res) => {
       if (!auth0Service.getRoles(req.user).includes('systemUser')) {
         await streamService.checkPermission('U', params.stream, idToken)
       }
+      const uploadProject = await assertProjectUploadWithinLimit(idToken, params.stream, params.duration)
       const fileExtension = params.filename.split('.').pop().toLowerCase()
       let { filename, timestamp, stream, sampleRate, targetBitrate, checksum } = params
       if (params.checksum) {
@@ -128,6 +164,8 @@ router.route('/').post((req, res) => {
       const upload = await db.generateUpload({
         streamId: stream,
         userId,
+        projectId: uploadProject?.projectId,
+        duration: params.duration,
         timestamp: timestamp.toISOString(),
         originalFilename: filename,
         fileExtension,

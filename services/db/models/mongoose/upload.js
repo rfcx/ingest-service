@@ -8,6 +8,8 @@ const UploadSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now, expires: '14d' }, // expires in 14 days
   updatedAt: { type: Date, default: Date.now },
   timestamp: Date,
+  projectId: String,
+  duration: Number,
   originalFilename: String,
   failureMessage: String,
   sampleRate: Number,

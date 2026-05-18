@@ -9,7 +9,11 @@ const { getSignedUrl } = require(storageModulePath)
 
 const streamsModulePath = '../services/rfcx/streams'
 jest.mock(streamsModulePath)
-const { checkPermission } = require(streamsModulePath)
+const { checkPermission, get: getStream } = require(streamsModulePath)
+
+const arbimonModulePath = '../services/rfcx/arbimon'
+jest.mock(arbimonModulePath)
+const { getProjectUploadLimitSummary } = require(arbimonModulePath)
 
 const segmentsModulePath = '../services/rfcx/segments'
 jest.mock(segmentsModulePath)
@@ -33,12 +37,19 @@ beforeAll(async () => {
 })
 beforeEach(async () => {
   checkPermission.mockImplementation(() => {})
+  getStream.mockImplementation(async () => ({ data: { id: '0a1824085e3f', project: 'goQioqL49' } }))
+  getProjectUploadLimitSummary.mockImplementation(async () => ({
+    recordingMinutesCount: 100,
+    recordingMinutesLimit: 40000
+  }))
   getExistingSourceFile.mockImplementation(() => { throw new EmptyResultError('Stream source file not found') })
   getSignedUrl.mockImplementation(() => 'http://some.url')
   await truncateDbModels(UploadModel)
 })
 afterEach(async () => {
   checkPermission.mockRestore()
+  getStream.mockRestore()
+  getProjectUploadLimitSummary.mockRestore()
   getExistingSourceFile.mockRestore()
   getSignedUrl.mockRestore()
   process.env = originalEnv
@@ -410,6 +421,8 @@ describe('POST /uploads', () => {
     expect(upload.streamId).toBe(requestBody.stream)
     expect(upload.userId).toBe(seedValues.primaryUserGuid)
     expect(upload.status).toBe(status.WAITING)
+    expect(upload.projectId).toBe('goQioqL49')
+    expect(upload.duration).toBe(requestBody.duration)
     expect(upload.timestamp.toISOString()).toEqual(requestBody.timestamp)
     expect(upload.sampleRate).toBe(requestBody.sampleRate)
     expect(upload.targetBitrate).toBe(requestBody.targetBitrate)
@@ -516,6 +529,82 @@ describe('POST /uploads', () => {
     expect(upload.sampleRate).toBe(24000)
     expect(upload.targetBitrate).toBe(requestBody.targetBitrate)
     expect(upload.checksum).toBe(requestBody.checksum)
+  })
+  test('returns validation error if project recording-minute limit would be exceeded', async () => {
+    getProjectUploadLimitSummary.mockImplementation(async () => ({
+      recordingMinutesCount: 39990,
+      recordingMinutesLimit: 40000
+    }))
+
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'limit-checksum-1',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 660000
+    }
+
+    const response = await request(app).post('/uploads').send(requestBody)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe('Project recording-minute limit exceeded.')
+  })
+
+  test('returns validation error if project is view-only', async () => {
+    getProjectUploadLimitSummary.mockImplementation(async () => ({
+      recordingMinutesCount: 100,
+      recordingMinutesLimit: 40000,
+      isLocked: true
+    }))
+
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'view-only-checksum-1',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 600000
+    }
+
+    const response = await request(app).post('/uploads').send(requestBody)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe('Project is view-only and cannot accept uploads.')
+  })
+
+  test('counts pending uploads toward the project recording-minute limit', async () => {
+    getProjectUploadLimitSummary.mockImplementation(async () => ({
+      recordingMinutesCount: 39980,
+      recordingMinutesLimit: 40000
+    }))
+
+    await new UploadModel({
+      streamId: '0a1824085e3f',
+      projectId: 'goQioqL49',
+      userId: seedValues.primaryUserGuid,
+      status: status.WAITING,
+      duration: 900000,
+      timestamp: 1623163658922,
+      originalFilename: 'existing-pending.flac'
+    }).save()
+
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-27-40.flac',
+      timestamp: '2021-06-08T19:27:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'limit-checksum-2',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 600000
+    }
+
+    const response = await request(app).post('/uploads').send(requestBody)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe('Project recording-minute limit exceeded.')
   })
   test('saves sample rate from the filename only for opus format', async () => {
     const requestBody = {
