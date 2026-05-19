@@ -4,6 +4,8 @@ if (process.env.NODE_ENV === 'production') {
 }
 require('dotenv').config()
 
+require('./utils/process-handlers').installProcessHandlers('ingest-service-api')
+
 console.info('API: starting')
 require('./utils/mongo')
 const api = require('./routes')
