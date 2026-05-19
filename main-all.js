@@ -3,6 +3,8 @@ if (process.env.NODE_ENV === 'production') {
 }
 require('dotenv').config()
 
+require('./utils/process-handlers').installProcessHandlers('ingest-service-all')
+
 console.info('API and Tasks: starting')
 
 const api = require('./routes')
