@@ -311,11 +311,22 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       }
     }
 
-    if (!loggerIgnoredErrors.includes(message)) {
-      await storage.copy(`${uploadBucket}/${fileStoragePath}`, errorBucket, fileStoragePath)
-      // create error log text file in the same bucket
-      const storageErrorFilePath = fileStoragePath.replace(path.extname(fileStoragePath), '.txt')
-      await storage.createFromData(errorBucket, storageErrorFilePath, `message: ${err.message}\n\nstack: ${err.stack}`)
+    // Optionally copy the failed upload + a .txt error log into a
+    // dedicated error bucket so ops can inspect failures. Disabled by
+    // default in v2 to avoid cross-provider server-side copy issues
+    // (the upload bucket may live on a different provider than the
+    // error bucket, in which case AWS-SDK CopyObject silently fails).
+    // Set ERROR_BUCKET_ENABLED=true to re-enable on environments
+    // where both buckets share a provider (e.g. AWS-prod legacy).
+    if (process.env.ERROR_BUCKET_ENABLED === 'true' && errorBucket && !loggerIgnoredErrors.includes(message)) {
+      try {
+        await storage.copy(`${uploadBucket}/${fileStoragePath}`, errorBucket, fileStoragePath)
+        // create error log text file in the same bucket
+        const storageErrorFilePath = fileStoragePath.replace(path.extname(fileStoragePath), '.txt')
+        await storage.createFromData(errorBucket, storageErrorFilePath, `message: ${err.message}\n\nstack: ${err.stack}`)
+      } catch (errOnErrorCopy) {
+        console.warn(`[${uploadId}] Failed to archive error blob to ${errorBucket}: ${errOnErrorCopy.message}`)
+      }
     }
 
     await storage.deleteObject(uploadBucket, fileStoragePath)

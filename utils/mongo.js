@@ -1,6 +1,13 @@
 const mongoose = require('mongoose')
 
-const mongoUri = `mongodb+srv://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@${process.env.MONGO_HOSTNAME}/${process.env.MONGO_DB}?retryWrites=true&w=majority`
+// rfcx-local fork: support plain mongodb:// when MONGO_PROTOCOL=mongodb is set.
+// Default (unset or 'mongodb+srv') is bit-identical to upstream: Atlas-style SRV+TLS URI.
+// When MONGO_PROTOCOL=mongodb is set, build a plain mongodb:// URI including the port
+// (Atlas does not use a port; local mongo does). MONGO_PORT defaults to 27017.
+const protocol = process.env.MONGO_PROTOCOL || 'mongodb+srv'
+const mongoUri = protocol === 'mongodb'
+  ? `mongodb://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@${process.env.MONGO_HOSTNAME}:${process.env.MONGO_PORT || 27017}/${process.env.MONGO_DB}?retryWrites=true&w=majority&authSource=${process.env.MONGO_AUTH_SOURCE || process.env.MONGO_DB}`
+  : `mongodb+srv://${process.env.MONGO_USERNAME}:${process.env.MONGO_PASSWORD}@${process.env.MONGO_HOSTNAME}/${process.env.MONGO_DB}?retryWrites=true&w=majority`
 
 const db = mongoose.connection
 db.on('connecting', function () {
