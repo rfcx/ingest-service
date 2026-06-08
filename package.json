@@ -23,6 +23,7 @@
     "@mongoosejs/double": "^0.2.0",
     "@rfcx/http-utils": "^1.0.12",
     "@rfcx/prometheus-metrics": "^1.0.3",
+    "@rfcx/s3-storage-client": "github:rfcx/s3-storage-client#1.0.0",
     "amqplib": "^0.10.9",
     "aws-sdk": "^2.574.0",
     "axios": "^1.6.5",

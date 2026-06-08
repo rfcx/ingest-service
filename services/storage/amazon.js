@@ -1,36 +1,30 @@
-const AWS = require('../../utils/aws')
+require('../../utils/aws') // applies AWS.config.update() global creds/region
 const fs = require('fs')
+// Shared endpoint-aware S3 client factory. Routes through the in-cluster
+// s3-proxy (s3-reader/s3-writer chain) when an endpoint is set; vanilla AWS
+// otherwise. Centralized in @rfcx/s3-storage-client so endpoint/path-style
+// wiring is identical across all RFCx services. NOTE: when no credential
+// override is passed, the package omits creds and the client inherits the
+// SDK-global creds set by utils/aws.js (AWS_ACCESS_KEY_ID etc.) -- same as
+// the previous behavior.
+const { createS3Client } = require('@rfcx/s3-storage-client')
 
 const uploadBucket = process.env.UPLOAD_BUCKET
 
-// Build a configured AWS.S3 client. When an endpoint is set, the
-// client is wired for S3-compatible storage (MinIO, B2, R2, the
-// in-cluster s3-proxy/s3-writer, etc.); when unset, it talks to
-// vanilla AWS S3 with the global SDK config.
-//
-// Optional per-bucket credentials let the caller override the
-// global AWS_ACCESS_KEY_ID / AWS_SECRET_KEY / AWS_REGION_ID with a
-// scoped set of credentials. Useful when the upload bucket lives on
-// a different provider (e.g. Cloudflare R2) than the segment-write
-// bucket (e.g. B2 via the local s3-writer).
+// Build a configured AWS.S3 client (endpoint-aware via the shared package).
+// Optional per-bucket credentials override the global creds -- used when the
+// upload bucket lives on a different provider (e.g. Cloudflare R2) than the
+// segment-write bucket (e.g. B2 via the local s3-writer). signatureVersion v4
+// is preserved via `extra`.
 function buildS3Client ({ endpoint, forcePathStyle, accessKeyId, secretAccessKey, region }) {
-  const config = {
-    signatureVersion: 'v4'
-  }
-  if (endpoint) {
-    config.endpoint = endpoint
-    config.s3ForcePathStyle = forcePathStyle === 'true' || forcePathStyle === true
-  }
-  // When any credential override is supplied, use it instead of the
-  // SDK-global creds. Otherwise (all undefined), the client picks up
-  // AWS_ACCESS_KEY_ID / AWS_SECRET_KEY / AWS_REGION_ID via
-  // AWS.config.update() in utils/aws.js.
-  if (accessKeyId || secretAccessKey || region) {
-    if (accessKeyId) { config.accessKeyId = accessKeyId }
-    if (secretAccessKey) { config.secretAccessKey = secretAccessKey }
-    if (region) { config.region = region }
-  }
-  return new AWS.S3(config)
+  return createS3Client({
+    endpoint,
+    forcePathStyle: forcePathStyle === undefined ? undefined : (forcePathStyle === 'true' || forcePathStyle === true),
+    accessKeyId,
+    secretAccessKey,
+    region,
+    extra: { signatureVersion: 'v4' }
+  })
 }
 
 // Default client. Used for everything unless overridden below.
