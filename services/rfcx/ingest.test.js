@@ -132,7 +132,13 @@ describe('Test ingest service', () => {
     })
     const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
 
-    await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    // An unexpected (non-IngestionError) failure records FAILED status AND
+    // re-throws so the consumer nacks the message to the DLQ (transient /
+    // unexpected outcomes are inspectable / redrivable). Handled-terminal
+    // IngestionErrors (duplicate/checksum/etc.) resolve instead (ACK-drop).
+    await expect(
+      ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    ).rejects.toThrow()
 
     const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
     expect(newUpload.status).toBe(status.FAILED)
@@ -156,5 +162,36 @@ describe('Test ingest service', () => {
     const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
     expect(newUpload.status).toBe(status.DUPLICATE)
     expect(newUpload.failureMessage).toBe('Duplicate file. Matching sha1 signature already ingested.')
+  })
+
+  test('Duplicate is ACK-dropped (ingest resolves with handled-terminal outcome)', async () => {
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    jest.spyOn(segmentService, 'createStreamFileData').mockRejectedValue(new IngestionError('Duplicate file. Matching sha1 signature already ingested.', status.DUPLICATE))
+
+    // Must RESOLVE (so the consumer ACKs and does not dead-letter it).
+    const result = await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    expect(result).toBeDefined()
+    expect(result.outcome).toBe('handled-terminal')
+    expect(result.status).toBe(status.DUPLICATE)
+  })
+
+  test('Handled-terminal resolves even if trailing cleanup fails', async () => {
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    jest.spyOn(segmentService, 'createStreamFileData').mockRejectedValue(new IngestionError('Duplicate file. Matching sha1 signature already ingested.', status.DUPLICATE))
+    // Simulate the source object already deleted by a prior re-drive.
+    jest.spyOn(storage, 'deleteObject').mockRejectedValue(new Error('NoSuchKey'))
+
+    const result = await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    expect(result.outcome).toBe('handled-terminal')
   })
 })

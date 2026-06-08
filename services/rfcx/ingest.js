@@ -309,6 +309,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     await dirUtil.removeDirRecursively(streamLocalPath)
     tracker.logAndSetNewPoint(`[${uploadId}] cleaned up files`)
     tracker = null
+    return { outcome: 'ingested', uploadId }
   } catch (err) {
     /**
      * ERROR HANDLING
@@ -320,6 +321,15 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     }
     const message = err instanceof IngestionError ? err.message : 'Server failed with processing your file. Please try again later.'
     const status = err instanceof IngestionError ? err.status : db.status.FAILED
+    // A "handled terminal" outcome is one we have fully recorded against
+    // the upload (status written below) and that re-processing will never
+    // resolve: duplicates, already-ingested, checksum mismatch, unsupported
+    // format, and size/duration validation failures. These are NOT message
+    // failures — the consumer should ACK-drop them, not dead-letter them.
+    // Anything else (transient: network/storage/Core 5xx, etc.) is re-thrown
+    // so the consumer nacks-no-requeue to the DLQ for inspection/redrive.
+    const handledTerminalStatuses = [db.status.INGESTED, db.status.DUPLICATE, db.status.CHECKSUM, db.status.FAILED]
+    const isHandledTerminal = err instanceof IngestionError && handledTerminalStatuses.includes(status)
     await db.updateUploadStatus(uploadId, status, message)
     if (PROMETHEUS_ENABLED) {
       pushHistogramMetric(getKeyByValue(db.status, status), 1)
@@ -360,8 +370,29 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       }
     }
 
-    await storage.deleteObject(uploadBucket, fileStoragePath)
-    await dirUtil.removeDirRecursively(streamLocalPath)
+    // Cleanup is best-effort: a re-drive may have already deleted the
+    // source object (the DELETE fans out through s3-writer), or the local
+    // dir may not exist. A cleanup failure must NOT turn a handled-terminal
+    // outcome into a message nack -> DLQ, so guard it.
+    try {
+      await storage.deleteObject(uploadBucket, fileStoragePath)
+    } catch (e) {
+      console.info(`[${uploadId}] Cleanup: failed deleting source upload ${fileStoragePath}: ${e.message}`)
+    }
+    try {
+      await dirUtil.removeDirRecursively(streamLocalPath)
+    } catch (e) {
+      console.info(`[${uploadId}] Cleanup: failed removing local dir ${streamLocalPath}: ${e.message}`)
+    }
+
+    if (isHandledTerminal) {
+      // Fully recorded + non-retryable: signal success so the consumer
+      // ACK-drops the message instead of dead-lettering it.
+      return { outcome: 'handled-terminal', status, message, uploadId }
+    }
+    // Transient / unexpected failure: re-throw so the consumer nacks the
+    // message (nack-no-requeue -> DLQ).
+    throw err
   }
 }
 

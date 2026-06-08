@@ -47,11 +47,19 @@ async function handleMessage (body) {
       } else if (fileExtension === 'wav' && file.size > wavLimitSize) {
         db.updateUploadStatus(uploadId, db.status.FAILED, `This wav file size is exceeding our limit (${wavLimitSize / 1_000_000}MB)`)
       } else {
+        // ingest() RESOLVES for both success and "handled terminal"
+        // outcomes (duplicate / already-ingested / checksum mismatch /
+        // unsupported / size) — those are fully recorded against the
+        // upload and re-processing will never resolve them, so we ACK-drop
+        // them rather than flooding the DLQ. It only THROWS on transient /
+        // unexpected failures, which we nack-no-requeue to the DLX below.
         await ingest(file.key, fileLocalPath, streamId, uploadId)
       }
     } catch (e) {
       // returning false nacks the message; nack-no-requeue routes to DLX
-      // (matching SQS-without-redrive semantics).
+      // (matching SQS-without-redrive semantics). Reserved for transient /
+      // unexpected failures worth inspecting/redriving.
+      console.error(`[${uploadId}] Nacking message to DLQ: ${e && e.message}`)
       return false
     }
   }
