@@ -194,4 +194,31 @@ describe('Test ingest service', () => {
     const result = await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
     expect(result.outcome).toBe('handled-terminal')
   })
+
+  test('Pre-transcode dedup ACK-drops (coreData empty => no rollback crash)', async () => {
+    // Regression: the pre-transcode dedup path throws DUPLICATE BEFORE
+    // createStreamFileData runs, leaving coreData = {} (truthy). The catch
+    // must NOT attempt the Core rollback (coreData.streamSourceFile.id is
+    // undefined) — doing so threw out of the catch and nacked the message.
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    // Pre-transcode dedup returns a genuine already-ingested match.
+    const ts = new Date(UPLOAD.timestamp).toISOString()
+    jest.spyOn(segmentService, 'findIngestedDuplicate').mockResolvedValue({
+      id: 'existing-source-file-id',
+      availability: 1,
+      segments: [{ start: ts }]
+    })
+    const createSpy = jest.spyOn(segmentService, 'createStreamFileData')
+
+    const result = await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    // Resolved (ACK-drop), transcode/Core-create skipped, no nack/crash.
+    expect(result.outcome).toBe('handled-terminal')
+    expect(result.status).toBe(status.DUPLICATE)
+    expect(createSpy).not.toHaveBeenCalled()
+  })
 })

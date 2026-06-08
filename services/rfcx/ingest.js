@@ -344,11 +344,17 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
         console.info(`[${uploadId}] Rollback: failed deleting file ${file.remotePath}`, e)
       }
     }
-    if (coreData) {
+    // Only roll back Core data if we actually created it. coreData starts
+    // as {} (truthy), and the pre-transcode dedup path throws BEFORE
+    // createStreamFileData runs, so guard on streamSourceFile.id — otherwise
+    // both the delete call and its own error-log line dereference undefined
+    // and throw out of the catch, turning a handled-terminal duplicate into
+    // a nack -> DLQ.
+    if (coreData && coreData.streamSourceFile && coreData.streamSourceFile.id) {
       try {
         await segmentService.deleteStreamSourceFile(streamId, coreData)
       } catch (e) {
-        console.info(`[${uploadId}] Rollback: failed deleting stream source file ${coreData.streamSourceFile.id}`, e)
+        console.info(`[${uploadId}] Rollback: failed deleting stream source file ${coreData.streamSourceFile.id}: ${e && e.message}`)
       }
     }
 
