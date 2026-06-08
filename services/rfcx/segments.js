@@ -44,27 +44,24 @@ async function findIngestedDuplicate (stream, checksum, timestamp) {
   if (!checksum) {
     return null
   }
-  const url = `${apiHostName}internal/ingest/streams/${stream}/stream-source-file`
-  const token = await auth0Service.getToken()
-  const params = {
-    sha1_checksum: checksum,
-    start: (timestamp && timestamp.toISOString) ? timestamp.toISOString() : timestamp
-  }
-  const headers = {
-    Authorization: `Bearer ${token.access_token}`,
-    'Content-Type': 'application/json'
-  }
+  // Entire body (incl. token fetch) is guarded: this is a best-effort
+  // optimization, so ANY failure (auth, network, not-found) must return
+  // null and never block ingestion. The authoritative post-transcode
+  // createStreamFileData dedup is the real guarantee.
   try {
+    const url = `${apiHostName}internal/ingest/streams/${stream}/stream-source-file`
+    const token = await auth0Service.getToken()
+    const params = {
+      sha1_checksum: checksum,
+      start: (timestamp && timestamp.toISOString) ? timestamp.toISOString() : timestamp
+    }
+    const headers = {
+      Authorization: `Bearer ${token.access_token}`,
+      'Content-Type': 'application/json'
+    }
     const response = await axios.get(url, { headers, params })
     return response && response.data ? response.data : null
   } catch (e) {
-    const rfcxErr = matchAxiosErrorToRfcx(e)
-    // "Stream source file not found" => genuinely not a duplicate.
-    if (rfcxErr && /not found/i.test(rfcxErr.message || '')) {
-      return null
-    }
-    // Any other error: don't block ingestion on a flaky pre-check; let the
-    // authoritative post-transcode createStreamFileData dedup catch it.
     return null
   }
 }
