@@ -232,6 +232,37 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     console.info(`[${uploadId}] Upload metadata from database `, JSON.stringify(upload))
     validateAudioMeta(upload, fileData, fileExtension)
 
+    // Pre-transcode duplicate check (optimization). The original-file sha1
+    // (fileData.checksum) is known here, before the expensive transcode +
+    // 60-segment upload. If Core already has a stream source file with this
+    // sha1 at this timestamp, the file was already ingested -> skip straight
+    // to the duplicate outcome (the catch block marks status + deletes the
+    // R2 source + acks). This is a perf optimization only; the authoritative
+    // dedup remains the post-transcode createStreamFileData call below, which
+    // also guards the concurrent-worker race (two workers may both pass this
+    // pre-check before either has created the source file).
+    // Apply the SAME duplicate test as the upload API's pre-upload check
+    // (routes/uploads.js): an existing source file matched by sha1 + start,
+    // that already has segments whose first segment start equals this
+    // timestamp (within 1s) and is available (availability !== 0), is a
+    // genuine already-ingested duplicate. (availability === 0 means the
+    // existing file was deleted/unavailable, so a re-ingest is allowed --
+    // we must NOT skip in that case.) Only skip the transcode on a true dup;
+    // the post-transcode createStreamFileData call remains authoritative.
+    const existingSrc = await segmentService.findIngestedDuplicate(
+      upload.streamId, fileData.checksum, moment.tz(upload.timestamp, 'UTC')
+    )
+    if (existingSrc && existingSrc.id) {
+      const ts = moment.tz(upload.timestamp, 'UTC').valueOf()
+      const hasSegments = existingSrc.segments && existingSrc.segments.length
+      const sameFile = hasSegments && Math.abs(moment.utc(existingSrc.segments[0].start).valueOf() - ts) < 1000
+      if (sameFile && existingSrc.availability !== 0) {
+        console.info(`[${uploadId}] Pre-transcode dedup: sha1 already ingested (source_file ${existingSrc.id}); skipping transcode`)
+        throw new IngestionError('Duplicate file. Matching sha1 signature already ingested.', db.status.DUPLICATE)
+      }
+    }
+    tracker.logAndSetNewPoint(`[${uploadId}] pre-transcode dedup check`)
+
     console.info(`[${uploadId}] Transcoding file`)
     tracker.setPoint()
     const transcodeData = await transcode(fileLocalPath, fileData)

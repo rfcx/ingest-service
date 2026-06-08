@@ -26,6 +26,46 @@ function getExistingSourceFile (opts) {
     .catch(e => { throw matchAxiosErrorToRfcx(e) })
 }
 
+/**
+ * Pre-transcode duplicate check. Looks up an existing stream source file by
+ * (stream, sha1_checksum, start-timestamp) in Core. Unlike getExistingSourceFile
+ * this fetches its own auth token (like createStreamFileData) so the task
+ * consumer can call it directly after ffmpeg-identify and BEFORE transcoding,
+ * to skip the expensive transcode + segment-upload when the original file was
+ * already ingested. Returns the existing source file object on a match, or
+ * null if not found. Non-404 errors propagate (caller decides; we let the
+ * authoritative post-transcode createStreamFileData check be the backstop).
+ *
+ * @param {string} stream     stream id
+ * @param {string} checksum   sha1 of the ORIGINAL file (fileData.checksum)
+ * @param {Date|moment} timestamp  upload timestamp
+ */
+async function findIngestedDuplicate (stream, checksum, timestamp) {
+  if (!checksum) {
+    return null
+  }
+  // Entire body (incl. token fetch) is guarded: this is a best-effort
+  // optimization, so ANY failure (auth, network, not-found) must return
+  // null and never block ingestion. The authoritative post-transcode
+  // createStreamFileData dedup is the real guarantee.
+  try {
+    const url = `${apiHostName}internal/ingest/streams/${stream}/stream-source-file`
+    const token = await auth0Service.getToken()
+    const params = {
+      sha1_checksum: checksum,
+      start: (timestamp && timestamp.toISOString) ? timestamp.toISOString() : timestamp
+    }
+    const headers = {
+      Authorization: `Bearer ${token.access_token}`,
+      'Content-Type': 'application/json'
+    }
+    const response = await axios.get(url, { headers, params })
+    return response && response.data ? response.data : null
+  } catch (e) {
+    return null
+  }
+}
+
 function transformStreamSourceFilePayload (data) {
   return {
     filename: data.filename,
@@ -126,6 +166,7 @@ async function deleteStreamSourceFile (stream, payload) {
 
 module.exports = {
   getExistingSourceFile,
+  findIngestedDuplicate,
   createStreamFileData,
   deleteStreamSourceFile
 }
