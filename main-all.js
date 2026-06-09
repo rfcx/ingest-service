@@ -16,7 +16,12 @@ async function main () {
   })
 
   const ingestConsumer = require('./services/consumer/amazon')
-  ingestConsumer.start()
+  // Safety net: exit (so k8s restarts) rather than leaving the pod
+  // running-but-not-consuming if the consumer fails to start.
+  await ingestConsumer.start()
 }
 
-main()
+main().catch((e) => {
+  console.error('ingest-service-all main() failed; exiting for restart', e && e.message)
+  process.exit(1)
+})

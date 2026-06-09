@@ -80,28 +80,57 @@ async function handleMessage (body) {
 // Instead, we use checkQueue (passive declare): it fails if
 // the queue does not exist, but does not conflict with the
 // existing arguments. The publisher side has the same rule.
-async function start () {
-  if (!url) {
-    throw new Error('RABBITMQ_URL (or AMQP_URL) env var must be set when INGEST_CONSUMER_TYPE=rabbitmq')
+// Reconnect tuning (env-overridable). Backoff grows linearly per attempt up
+// to a cap, so a brief RabbitMQ blip recovers in seconds while a longer outage
+// doesn't hammer the broker.
+const RECONNECT_BASE_MS = parseInt(process.env.RABBITMQ_RECONNECT_BASE_MS || '2000', 10)
+const RECONNECT_MAX_MS = parseInt(process.env.RABBITMQ_RECONNECT_MAX_MS || '30000', 10)
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// Establish ONE connection + channel + consumer. Resolves once the consumer is
+// subscribed; rejects if any step fails (so connectWithRetry can retry). On a
+// LATER drop (connection/channel 'close' after we were subscribed) we trigger a
+// fresh reconnect loop instead of process.exit(1): a RabbitMQ restart otherwise
+// crash-loops the whole consumer fleet AND (the bug this fixes) the INITIAL
+// connect failure used to become an unhandled rejection that left the pod up
+// but silently NOT consuming (looked healthy, queue stalled at 0 consumers).
+async function connectOnce () {
+  let reconnecting = false
+  const scheduleReconnect = (why) => {
+    if (reconnecting) { return }
+    reconnecting = true
+    console.error(`Ingest RabbitMQ ${why}; reconnecting...`)
+    // Detach from the current (dead) connection and start a fresh retry loop.
+    connectWithRetry().catch((e) => {
+      console.error('Ingest RabbitMQ reconnect loop failed fatally; exiting', e && e.message)
+      process.exit(1)
+    })
   }
+
   const connection = await amqplib.connect(url)
   connection.on('error', (err) => {
     console.error('Ingest RabbitMQ connection error', err && err.message)
   })
-  connection.on('close', () => {
-    console.error('Ingest RabbitMQ connection closed; exiting so kubernetes can restart us')
-    process.exit(1)
-  })
-  const channel = await connection.createChannel()
-  channel.on('error', (err) => {
-    console.error('Ingest RabbitMQ channel error', err && err.message)
-  })
-  channel.on('close', () => {
-    console.error('Ingest RabbitMQ channel closed; exiting so kubernetes can restart us')
-    process.exit(1)
-  })
-  await channel.checkQueue(queueName) // passive; fails if not pre-declared
-  await channel.prefetch(1)
+  connection.on('close', () => scheduleReconnect('connection closed'))
+  let channel
+  try {
+    channel = await connection.createChannel()
+    channel.on('error', (err) => {
+      console.error('Ingest RabbitMQ channel error', err && err.message)
+    })
+    channel.on('close', () => scheduleReconnect('channel closed'))
+    await channel.checkQueue(queueName) // passive; fails if not pre-declared
+    await channel.prefetch(1)
+  } catch (e) {
+    // Channel/queue setup failed on an otherwise-open connection: close it so we
+    // don't leak connections across retries (the 'close' handler is suppressed
+    // by re-throwing before any successful subscribe, so connectWithRetry owns
+    // the retry). Guard close() since it can itself throw if already dead.
+    reconnecting = true // prevent the close handler from double-scheduling
+    try { await connection.close() } catch (_) { /* already closing/closed */ }
+    throw e
+  }
   await channel.consume(queueName, async (msg) => {
     if (msg === null) { return } // consumer cancelled by server
     let body
@@ -125,6 +154,34 @@ async function start () {
     }
   })
   console.info(`Ingest RabbitMQ consumer subscribed to queue "${queueName}"`)
+}
+
+// Retry connectOnce() with capped linear backoff until it succeeds. This is the
+// core of the fix: neither the initial connect nor a later drop can leave the
+// pod running-but-not-consuming. (Liveness is still bounded by the fatal exit
+// in scheduleReconnect's catch, which only fires if the retry loop itself
+// throws synchronously — connectWithRetry never resolves-as-failed otherwise.)
+async function connectWithRetry () {
+  let attempt = 0
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      await connectOnce()
+      return
+    } catch (e) {
+      attempt += 1
+      const delay = Math.min(RECONNECT_BASE_MS * attempt, RECONNECT_MAX_MS)
+      console.error(`Ingest RabbitMQ connect attempt ${attempt} failed (${e && e.message}); retrying in ${delay}ms`)
+      await sleep(delay)
+    }
+  }
+}
+
+async function start () {
+  if (!url) {
+    throw new Error('RABBITMQ_URL (or AMQP_URL) env var must be set when INGEST_CONSUMER_TYPE=rabbitmq')
+  }
+  await connectWithRetry()
 }
 
 module.exports = { start }
