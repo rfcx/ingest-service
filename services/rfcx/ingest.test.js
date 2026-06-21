@@ -81,6 +81,12 @@ beforeEach(async () => {
 afterEach(async () => {
   process.env = originalEnv
   await rimraf(tempDirPath + '*', { glob: true })
+  // Restore all spies between tests. Otherwise per-test spies (e.g.
+  // jest.spyOn(segmentService,'createStreamFileData')) accumulate call counts
+  // across tests on top of the beforeEach spies, so assertions like
+  // expect(createSpy).not.toHaveBeenCalled() see leaked calls from earlier
+  // tests and fail depending on suite order (the CI flakiness root cause).
+  jest.restoreAllMocks()
 })
 afterAll(async () => {
   await stopDb()

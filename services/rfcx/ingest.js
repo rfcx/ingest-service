@@ -376,15 +376,27 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       }
     }
 
-    // Cleanup is best-effort: a re-drive may have already deleted the
-    // source object (the DELETE fans out through s3-writer), or the local
-    // dir may not exist. A cleanup failure must NOT turn a handled-terminal
-    // outcome into a message nack -> DLQ, so guard it.
-    try {
-      await storage.deleteObject(uploadBucket, fileStoragePath)
-    } catch (e) {
-      console.info(`[${uploadId}] Cleanup: failed deleting source upload ${fileStoragePath}: ${e.message}`)
+    // Source-object cleanup: ONLY delete the original upload from the upload
+    // bucket on a handled-terminal outcome (duplicate / already-ingested /
+    // checksum / unsupported / size). On a TRANSIENT failure the message is
+    // nacked to the DLQ for retry/redrive, and the redrive re-reads this very
+    // object from the upload bucket -- deleting it here would make every retry
+    // fail with ENOENT and silently lose the recording. (Data-loss incident
+    // 2026-06-21: transient failures during a maintenance window deleted the
+    // source, stranding uploads whose DLQ retry could then never succeed.)
+    // Best-effort either way: a cleanup failure must NOT turn a handled-terminal
+    // outcome into a nack -> DLQ.
+    if (isHandledTerminal) {
+      try {
+        await storage.deleteObject(uploadBucket, fileStoragePath)
+      } catch (e) {
+        console.info(`[${uploadId}] Cleanup: failed deleting source upload ${fileStoragePath}: ${e.message}`)
+      }
+    } else {
+      console.info(`[${uploadId}] Cleanup: preserving source upload ${fileStoragePath} for DLQ redrive (transient failure)`)
     }
+    // Local scratch dir is always safe to remove (re-created from the upload
+    // object on redrive).
     try {
       await dirUtil.removeDirRecursively(streamLocalPath)
     } catch (e) {
