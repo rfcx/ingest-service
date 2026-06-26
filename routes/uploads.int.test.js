@@ -121,7 +121,7 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual(`Past date upload: ${requestBody.timestamp}`)
   })
-  test('returns validation error if duration is more than 1 hour', async () => {
+  test('returns validation error if duration is more than 24 hours', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
@@ -129,12 +129,12 @@ describe('POST /uploads', () => {
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
       targetBitrate: 1,
-      duration: 3_601_001,
+      duration: (24 * 60 * 60 * 1000) + (60 * 1000) + 1001, // > 24h + 1min grace
       fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual('Audio duration is more than 1 hour')
+    expect(response.body.message).toEqual('Audio duration is more than 24 hours')
   })
   test('returns validation error if duration is 0', async () => {
     const requestBody = {
@@ -151,7 +151,7 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual('Validation errors: Parameter \'duration\' is smaller than the minimum 1.')
   })
-  test('returns validation error if fileSize as flac file more than 150MB', async () => {
+  test('returns validation error if fileSize as flac file more than 1GB', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
@@ -160,12 +160,13 @@ describe('POST /uploads', () => {
       sampleRate: 64000,
       targetBitrate: 1,
       duration: 3600000,
-      fileSize: 150_000_001
+      fileSize: 1_073_741_825
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual('This flac file size is exceeding our limit (150MB)')
+    expect(response.body.message).toEqual('This flac file size is exceeding our limit (1073.741824MB)')
   })
+
   test('returns validation error if fileSize as wav file more than 200MB', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.wav',
@@ -382,7 +383,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 3600000,
+      fileSize: 500_000_000 // > old 150MB cap, < new 1GB FLAC cap
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })

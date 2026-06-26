@@ -5,8 +5,7 @@ const { parseUploadFromFileName } = require('./misc')
 const TimeTracker = require('../../utils/time-tracker')
 const db = require('../db/mongo')
 
-const flacLimitSize = 150_000_000
-const wavLimitSize = 200_000_000
+const { flacLimitSize, wavLimitSize } = require('../../utils/limits')
 
 const consumer = Consumer.create({
   queueUrl: process.env.SQS_INGEST_TRIGGER_QUEUE_URL,

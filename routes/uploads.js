@@ -10,6 +10,7 @@ const arbimonService = require('../services/rfcx/arbimon')
 const auth0Service = require('../services/auth0')
 const moment = require('moment-timezone')
 const { getSampleRateFromFilename } = require('../services/rfcx/guardian')
+const { maxDurationWithGraceSeconds, maxDurationHoursDisplay, flacLimitSize, wavLimitSize, otherLimitSize } = require('../utils/limits')
 
 function getProjectIdFromStream (stream) {
   if (!stream) { return null }
@@ -111,15 +112,14 @@ router.route('/').post((req, res) => {
         throw new ValidationError(`Past date upload: ${params.timestamp}`)
       }
 
-      // Cannot upload file that duration more than following (milliseconds)
-      const durationLimit = (1000 * 60 * 60 * 1) + 1000 // Add 1 second for a file with 1 hour
+      // Cannot upload file that duration more than the configured max (milliseconds)
+      const durationLimit = maxDurationWithGraceSeconds * 1000
       if (params.duration && params.duration > durationLimit) {
-        throw new ValidationError('Audio duration is more than 1 hour')
+        throw new ValidationError(`Audio duration is more than ${maxDurationHoursDisplay} hours`)
       }
 
-      // Cannot upload file that size more than following
-      const flacLimitSize = 150_000_000
-      const wavLimitSize = 200_000_000
+      // Cannot upload file that size more than the per-extension limit.
+      // FLAC may be large (already compressed); WAV/other stay tightly bounded.
       const fileExtension = params.filename.split('.').pop().toLowerCase()
       if (fileExtension === 'flac' && params.fileSize && params.fileSize > flacLimitSize) {
         throw new ValidationError(`This flac file size is exceeding our limit (${flacLimitSize / 1_000_000}MB)`)
@@ -127,9 +127,9 @@ router.route('/').post((req, res) => {
       if (fileExtension === 'wav' && params.fileSize && params.fileSize > wavLimitSize) {
         throw new ValidationError(`This wav file size is exceeding our limit (${wavLimitSize / 1_000_000}MB)`)
       }
-      // Other file extensions, limit size same as flac
-      if (!['flac', 'wav'].includes(fileExtension) && params.fileSize && params.fileSize > flacLimitSize) {
-        throw new ValidationError(`This file size is exceeding our limit (${flacLimitSize / 1_000_000}MB)`)
+      // Other file extensions (e.g. opus)
+      if (!['flac', 'wav'].includes(fileExtension) && params.fileSize && params.fileSize > otherLimitSize) {
+        throw new ValidationError(`This file size is exceeding our limit (${otherLimitSize / 1_000_000}MB)`)
       }
       return params
     })
