@@ -4,8 +4,7 @@ const { parseUploadFromFileName } = require('./misc')
 const TimeTracker = require('../../utils/time-tracker')
 const db = require('../db/mongo')
 
-const flacLimitSize = 150_000_000
-const wavLimitSize = 200_000_000
+const { flacLimitSize, wavLimitSize } = require('../../utils/limits')
 
 const queueName = process.env.RABBITMQ_INGEST_TRIGGER_QUEUE || 'ingest-service-upload-production'
 const url = process.env.RABBITMQ_URL || process.env.AMQP_URL
