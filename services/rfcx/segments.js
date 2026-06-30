@@ -118,7 +118,22 @@ async function createStreamFileData (stream, payload) {
       }
     })
     .catch((err) => {
-      if (err.response && err.response.data && err.response.data.message) {
+      // Only map a Core response to a TERMINAL IngestionError when it is a
+      // genuinely non-retryable client error (HTTP 4xx). Core signals the
+      // terminal cases as ValidationError (400) / ForbiddenError (403):
+      // duplicate, already-ingested, same-timestamp. A 5xx (or any error with
+      // no response, e.g. a network blip) is TRANSIENT and MUST be re-thrown
+      // raw so ingest.js classifies it as non-terminal -> preserve the source
+      // upload + nack to the DLQ for redrive. Previously this switch keyed
+      // ONLY on the response message with `default: FAILED`, so a Core 500
+      // (body message 'Failed creating stream source file and segments')
+      // became IngestionError(FAILED) -> handled-terminal -> the consumer
+      // ack-dropped the message AND deleted the R2 source = silent data loss.
+      // That destroyed 115 originals during the 2026-06-30 MariaDB-failover
+      // sql_mode incident (core-api 500 on every legacy recordings INSERT).
+      const statusCode = err.response && err.response.status
+      const isClientError = typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500
+      if (isClientError && err.response.data && err.response.data.message) {
         const message = err.response.data.message
         let status
         switch (message) {
@@ -131,10 +146,14 @@ async function createStreamFileData (stream, payload) {
             status = INGESTED
             break
           default:
+            // An unrecognized 4xx is still a non-retryable client error;
+            // record it terminally rather than redriving forever.
             status = FAILED
         }
         throw new IngestionError(message, status)
       } else {
+        // 5xx / no-response / unknown => transient. Re-throw raw so ingest.js
+        // preserves the source upload and nacks the message to the DLQ.
         throw err
       }
     })
