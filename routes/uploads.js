@@ -4,6 +4,7 @@ const { Converter, ValidationError, httpErrorHandler, EmptyResultError, Forbidde
 const platform = process.env.PLATFORM || 'amazon'
 const db = require('../services/db/mongo')
 const storage = require(`../services/storage/${platform}`)
+const uploadTargets = require('../services/uploads/upload-targets')
 const segmentService = require('../services/rfcx/segments')
 const streamService = require('../services/rfcx/streams')
 const arbimonService = require('../services/rfcx/arbimon')
@@ -161,6 +162,14 @@ router.route('/').post((req, res) => {
           sampleRate = gSampleRate
         }
       }
+      const uploadTarget = await uploadTargets.selectUploadTarget({
+        streamId: stream,
+        userId,
+        projectId: uploadProject?.projectId,
+        duration: params.duration,
+        fileExtension,
+        timestamp: timestamp.toISOString()
+      })
       const upload = await db.generateUpload({
         streamId: stream,
         userId,
@@ -171,15 +180,17 @@ router.route('/').post((req, res) => {
         fileExtension,
         sampleRate,
         targetBitrate,
-        checksum
+        checksum,
+        uploadTarget
       })
       const uploadId = upload.id
-      const url = await storage.getSignedUrl(upload.path, 'audio/' + fileExtension)
+      const url = await storage.getSignedUrl(upload.path, 'audio/' + fileExtension, upload.uploadSource)
       res.json({
         uploadId,
         url,
         path: upload.path,
-        bucket: process.env.UPLOAD_BUCKET
+        bucket: upload.uploadSource?.bucket || process.env.UPLOAD_BUCKET,
+        uploadTargetId: upload.uploadSource?.targetId
       })
     })
     .catch(httpErrorHandler(req, res, 'Failed creating an upload.'))
