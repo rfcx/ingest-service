@@ -237,8 +237,8 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     // (fileData.checksum) is known here, before the expensive transcode +
     // 60-segment upload. If Core already has a stream source file with this
     // sha1 at this timestamp, the file was already ingested -> skip straight
-    // to the duplicate outcome (the catch block marks status + deletes the
-    // R2 source + acks). This is a perf optimization only; the authoritative
+    // to the duplicate outcome (the catch block marks status, preserves the
+    // R2 source for lifecycle expiry, and acks). This is a perf optimization only; the authoritative
     // dedup remains the post-transcode createStreamFileData call below, which
     // also guards the concurrent-worker race (two workers may both pass this
     // pre-check before either has created the source file).
@@ -305,10 +305,12 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       pushHistogramMetric(fileExtension.substr(1), processingValue)
       tracker.logAndSetNewPoint(`[${uploadId}] pushed histogram metric`)
     }
-    console.info(`[${uploadId}] Cleaning up files`)
-    await storage.deleteObject(uploadBucket, fileStoragePath)
+    console.info(`[${uploadId}] Cleaning up local files`)
+    // Do not explicitly delete the original upload object from uploadBucket.
+    // It remains available for duplicate/stale deliveries and operator DLQ
+    // redrive, and is reaped by the Cloudflare R2 lifecycle rule instead.
     await dirUtil.removeDirRecursively(streamLocalPath)
-    tracker.logAndSetNewPoint(`[${uploadId}] cleaned up files`)
+    tracker.logAndSetNewPoint(`[${uploadId}] cleaned up local files`)
     tracker = null
     return { outcome: 'ingested', uploadId }
   } catch (err) {
@@ -377,27 +379,15 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       }
     }
 
-    // Source-object cleanup: ONLY delete the original upload from the upload
-    // bucket on a handled-terminal outcome (duplicate / already-ingested /
-    // checksum / unsupported / size). On a TRANSIENT failure the message is
-    // nacked to the DLQ for retry/redrive, and the redrive re-reads this very
-    // object from the upload bucket -- deleting it here would make every retry
-    // fail with ENOENT and silently lose the recording. (Data-loss incident
-    // 2026-06-21: transient failures during a maintenance window deleted the
-    // source, stranding uploads whose DLQ retry could then never succeed.)
-    // Best-effort either way: a cleanup failure must NOT turn a handled-terminal
-    // outcome into a nack -> DLQ.
-    if (isHandledTerminal) {
-      try {
-        await storage.deleteObject(uploadBucket, fileStoragePath)
-      } catch (e) {
-        console.info(`[${uploadId}] Cleanup: failed deleting source upload ${fileStoragePath}: ${e.message}`)
-      }
-    } else {
-      console.info(`[${uploadId}] Cleanup: preserving source upload ${fileStoragePath} for DLQ redrive (transient failure)`)
-    }
+    // Do not explicitly delete the original upload from uploadBucket on either
+    // handled-terminal or transient outcomes. The upload object is intentionally
+    // kept for duplicate/stale deliveries and operator DLQ redrive, then reaped
+    // by the Cloudflare R2 lifecycle rule. This avoids races where a successful
+    // or terminal delivery deletes the source before a later duplicate/stale
+    // message can be ACK-dropped cleanly.
+    console.info(`[${uploadId}] Cleanup: preserving source upload ${fileStoragePath} for lifecycle expiry`)
     // Local scratch dir is always safe to remove (re-created from the upload
-    // object on redrive).
+    // object on redrive if needed).
     try {
       await dirUtil.removeDirRecursively(streamLocalPath)
     } catch (e) {
