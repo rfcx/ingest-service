@@ -14,6 +14,7 @@ const TimeTracker = require('../../utils/time-tracker')
 const uploadBucket = process.env.UPLOAD_BUCKET
 const ingestBucket = process.env.INGEST_BUCKET
 const errorBucket = process.env.ERROR_BUCKET
+const uploadTargets = require('../uploads/upload-targets')
 
 const supportedExtensions = ['.wav', '.flac', '.opus']
 const losslessExtensions = ['.wav', '.flac']
@@ -211,16 +212,21 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
   let tracker = new TimeTracker('IngestTask')
   let outputFiles = []
   let coreData = {}
+  let upload = null
+  let uploadSource = null
   const streamLocalPath = getStreamLocalPath(fileStoragePath)
   try {
     const startTimestamp = Date.now() // is used for processing time calculation
     const fileExtension = path.extname(fileStoragePath).toLowerCase()
 
     validateFileFormat(fileExtension)
+    upload = await db.getUpload(uploadId)
+    uploadSource = uploadTargets.sourceFromUpload(upload, fileStoragePath)
+    console.info(`[${uploadId}] Upload metadata from database `, JSON.stringify(upload))
     await createStreamLocalPath(streamLocalPath)
     console.info(`[${uploadId}] Downloading file from storage`)
     tracker.setPoint()
-    await storage.download(fileStoragePath, getFileLocalPath(fileStoragePath))
+    await storage.download(fileStoragePath, getFileLocalPath(fileStoragePath), uploadSource)
     tracker.logAndSetNewPoint(`[${uploadId}] downloaded file`)
     console.info(`[${uploadId}] Updating upload status to UPLOADED`)
     await db.updateUploadStatus(uploadId, db.status.UPLOADED)
@@ -229,8 +235,6 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     const fileData = await audioService.identify(fileLocalPath)
     tracker.logAndSetNewPoint(`[${uploadId}] identified file with ffmpeg`)
     console.info(`[${uploadId}] Audio metadata`, JSON.stringify(fileData))
-    const upload = await db.getUpload(uploadId)
-    console.info(`[${uploadId}] Upload metadata from database `, JSON.stringify(upload))
     validateAudioMeta(upload, fileData, fileExtension)
 
     // Pre-transcode duplicate check (optimization). The original-file sha1
@@ -370,7 +374,9 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     // where both buckets share a provider (e.g. AWS-prod legacy).
     if (process.env.ERROR_BUCKET_ENABLED === 'true' && errorBucket && !loggerIgnoredErrors.includes(message)) {
       try {
-        await storage.copy(`${uploadBucket}/${fileStoragePath}`, errorBucket, fileStoragePath)
+        const sourceBucket = uploadSource?.bucket || uploadBucket
+        const sourceKey = uploadSource?.key || fileStoragePath
+        await storage.copy(`${sourceBucket}/${sourceKey}`, errorBucket, fileStoragePath)
         // create error log text file in the same bucket
         const storageErrorFilePath = fileStoragePath.replace(path.extname(fileStoragePath), '.txt')
         await storage.createFromData(errorBucket, storageErrorFilePath, `message: ${err.message}\n\nstack: ${err.stack}`)

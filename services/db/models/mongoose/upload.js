@@ -15,6 +15,16 @@ const UploadSchema = new mongoose.Schema({
   sampleRate: Number,
   targetBitrate: Number,
   checksum: String,
+  uploadSource: {
+    targetId: String,
+    targetVersion: Number,
+    provider: String,
+    bucket: String,
+    key: String,
+    endpoint: String,
+    region: String,
+    forcePathStyle: Boolean
+  },
   uploadSourceDeletedAt: Date,
   uploadSourceCleanupMessage: String
 })

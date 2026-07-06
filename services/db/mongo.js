@@ -4,12 +4,13 @@ const HealthCheckModel = require('./models/mongoose/healthcheck').HealthCheck
 const { EmptyResultError } = require('@rfcx/http-utils')
 const moment = require('moment-timezone')
 const { CastError } = require('mongoose')
+const uploadTargets = require('../uploads/upload-targets')
 
 const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31, CHECKSUM: 32 }
 const statusNumbers = Object.values(status)
 
 function generateUpload (opts) {
-  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum, projectId, duration } = opts
+  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum, projectId, duration, uploadTarget } = opts
 
   const upload = new UploadModel({
     streamId,
@@ -24,13 +25,19 @@ function generateUpload (opts) {
     checksum
   })
 
+  const id = upload._id
+  const path = `${streamId}/${id}.${fileExtension}`
+  if (uploadTarget) {
+    upload.uploadSource = uploadTargets.sourceForKey(uploadTarget, path)
+  }
+
   return upload.save()
     .then((data) => {
       if (data && data._id) {
-        const id = data._id
         return {
           id,
-          path: `${streamId}/${id}.${fileExtension}`
+          path,
+          uploadSource: data.uploadSource
         }
       } else {
         throw Error('Can not create upload.')

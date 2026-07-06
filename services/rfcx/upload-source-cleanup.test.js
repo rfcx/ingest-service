@@ -57,6 +57,11 @@ describe('upload source cleanup', () => {
     expect(uploadSourceKey(upload)).toBe(`stream123/${upload._id}.wav`)
   })
 
+  test('uses persisted upload source key when present', async () => {
+    const upload = await uploadDoc({ uploadSource: { bucket: 'r2-locale-a', key: 'custom/source.flac' } })
+    expect(uploadSourceKey(upload)).toBe('custom/source.flac')
+  })
+
   test('dry-run scans eligible ingested uploads without deleting or marking', async () => {
     const upload = await uploadDoc()
     const counts = await runUploadSourceCleanup({ dryRun: true, ageHours: 24, batchSize: 10, statuses: [status.INGESTED], coreVerify: true })
@@ -76,6 +81,16 @@ describe('upload source cleanup', () => {
     expect(storage.deleteObject).toHaveBeenCalledWith('rfcx-ingest-production', `stream123/${upload._id}.wav`)
     const after = await UploadModel.findById(upload._id)
     expect(after.uploadSourceDeletedAt).toBeTruthy()
+  })
+
+  test('deletes from persisted upload source when present', async () => {
+    const upload = await uploadDoc({ uploadSource: { bucket: 'r2-locale-a', key: 'custom/source.flac' } })
+    const counts = await runUploadSourceCleanup({ dryRun: false, ageHours: 24, batchSize: 10, statuses: [status.INGESTED], coreVerify: true })
+
+    expect(counts.deleted).toBe(1)
+    expect(storage.deleteObject).toHaveBeenCalledWith('r2-locale-a', 'custom/source.flac')
+    const after = await UploadModel.findById(upload._id)
+    expect(after.uploadSourceCleanupMessage).toBe('deleted r2-locale-a/custom/source.flac')
   })
 
   test('does not delete failed or recently updated uploads', async () => {

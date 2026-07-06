@@ -25,11 +25,18 @@ function parseStatuses (value) {
 }
 
 function uploadSourceKey (upload) {
+  if (upload.uploadSource && upload.uploadSource.key) {
+    return upload.uploadSource.key
+  }
   const ext = path.extname(upload.originalFilename || '').replace(/^\./, '').toLowerCase()
   if (!ext) {
     return null
   }
   return `${upload.streamId}/${upload._id}.${ext}`
+}
+
+function uploadSourceBucket (upload) {
+  return upload.uploadSource?.bucket || getUploadBucket()
 }
 
 function isNotFoundError (err) {
@@ -91,31 +98,34 @@ async function cleanupUpload (upload, config) {
     }
   }
 
+  const bucket = uploadSourceBucket(upload)
+  if (!bucket) {
+    console.warn(`[upload-source-cleanup] skip upload=${upload._id} key=${key} reason=missing-bucket`)
+    return 'skippedMissingBucket'
+  }
+
   if (config.dryRun) {
-    console.info(`[upload-source-cleanup] dry-run delete bucket=${getUploadBucket()} key=${key} upload=${upload._id}`)
+    console.info(`[upload-source-cleanup] dry-run delete bucket=${bucket} key=${key} upload=${upload._id}`)
     return 'dryRun'
   }
 
   try {
-    await storage.deleteObject(getUploadBucket(), key)
-    await markDeleted(upload, `deleted ${getUploadBucket()}/${key}`)
-    console.info(`[upload-source-cleanup] deleted bucket=${getUploadBucket()} key=${key} upload=${upload._id}`)
+    await storage.deleteObject(bucket, key)
+    await markDeleted(upload, `deleted ${bucket}/${key}`)
+    console.info(`[upload-source-cleanup] deleted bucket=${bucket} key=${key} upload=${upload._id}`)
     return 'deleted'
   } catch (err) {
     if (isNotFoundError(err)) {
-      await markDeleted(upload, `already missing ${getUploadBucket()}/${key}`)
-      console.info(`[upload-source-cleanup] already-missing bucket=${getUploadBucket()} key=${key} upload=${upload._id}`)
+      await markDeleted(upload, `already missing ${bucket}/${key}`)
+      console.info(`[upload-source-cleanup] already-missing bucket=${bucket} key=${key} upload=${upload._id}`)
       return 'alreadyMissing'
     }
-    console.error(`[upload-source-cleanup] error upload=${upload._id} key=${key} ${err && err.message}`)
+    console.error(`[upload-source-cleanup] error upload=${upload._id} bucket=${bucket} key=${key} ${err && err.message}`)
     return 'error'
   }
 }
 
 async function runUploadSourceCleanup (config = buildConfig()) {
-  if (!getUploadBucket()) {
-    throw new Error('UPLOAD_BUCKET is required')
-  }
   const candidates = await findCandidates(config)
   const counts = {
     scanned: candidates.length,
@@ -123,6 +133,7 @@ async function runUploadSourceCleanup (config = buildConfig()) {
     deleted: 0,
     alreadyMissing: 0,
     skippedMissingExtension: 0,
+    skippedMissingBucket: 0,
     skippedCoreUnconfirmed: 0,
     error: 0
   }

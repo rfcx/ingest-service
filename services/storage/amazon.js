@@ -11,6 +11,25 @@ const { createS3Client } = require('@rfcx/s3-storage-client')
 
 const uploadBucket = process.env.UPLOAD_BUCKET
 
+function uploadClientForSource (source) {
+  if (!source || !source.bucket) { return uploadClient }
+  const envForcePathStyle = process.env.UPLOAD_S3_FORCE_PATH_STYLE === undefined ? undefined : process.env.UPLOAD_S3_FORCE_PATH_STYLE === 'true'
+  if (
+    source.endpoint === process.env.UPLOAD_S3_ENDPOINT &&
+    source.forcePathStyle === envForcePathStyle &&
+    source.region === process.env.UPLOAD_S3_REGION_ID
+  ) {
+    return uploadClient
+  }
+  return buildS3Client({
+    endpoint: source.endpoint,
+    forcePathStyle: source.forcePathStyle,
+    accessKeyId: process.env.UPLOAD_S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.UPLOAD_S3_SECRET_KEY,
+    region: source.region
+  })
+}
+
 // Build a configured AWS.S3 client (endpoint-aware via the shared package).
 // Optional per-bucket credentials override the global creds -- used when the
 // upload bucket lives on a different provider (e.g. Cloudflare R2) than the
@@ -64,15 +83,16 @@ function clientFor (bucket) {
   return defaultClient
 }
 
-function getSignedUrl (filePath, contentType) {
+function getSignedUrl (filePath, contentType, source) {
   const params = {
-    Bucket: uploadBucket,
-    Key: filePath,
+    Bucket: source?.bucket || uploadBucket,
+    Key: source?.key || filePath,
     Expires: 60 * 60 * 24, // 24 hours
     ContentType: contentType
   }
+  const client = uploadClientForSource(source)
   return (new Promise((resolve, reject) => {
-    uploadClient.getSignedUrl('putObject', params, (err, data) => {
+    client.getSignedUrl('putObject', params, (err, data) => {
       if (err) {
         reject(err)
       } else {
@@ -82,18 +102,21 @@ function getSignedUrl (filePath, contentType) {
   }))
 }
 
-function download (remotePath, localPath) {
+function download (remotePath, localPath, source) {
+  const bucket = source?.bucket || uploadBucket
+  const key = source?.key || remotePath
+  const client = uploadClientForSource(source)
   return new Promise((resolve, reject) => {
     try {
-      uploadClient.headObject({
-        Bucket: uploadBucket,
-        Key: remotePath
+      client.headObject({
+        Bucket: bucket,
+        Key: key
       }, (headErr, data) => {
         if (headErr) { reject(headErr) }
         const tempWriteStream = fs.createWriteStream(localPath)
-        const tempReadStream = uploadClient.getObject({
-          Bucket: uploadBucket,
-          Key: remotePath
+        const tempReadStream = client.getObject({
+          Bucket: bucket,
+          Key: key
         })
           .createReadStream()
 

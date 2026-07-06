@@ -26,6 +26,7 @@ beforeAll(async () => {
   await startDb()
 })
 beforeEach(async () => {
+  process.env = { ...originalEnv, UPLOAD_BUCKET: 'streams-uploads' }
   if (!fs.existsSync(tempDirPath)) {
     fs.mkdirSync(tempDirPath)
   }
@@ -128,6 +129,7 @@ describe('Test ingest service', () => {
 
     const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
     expect(newUpload.status).toBe(status.INGESTED)
+    expect(storage.download).toHaveBeenCalledWith(`${UPLOAD.streamId}/${fileName}`, path.join(tempDirPath, UPLOAD.streamId, fileName), expect.objectContaining({ bucket: 'streams-uploads', key: `${UPLOAD.streamId}/${fileName}` }))
     expect(storage.deleteObject).not.toHaveBeenCalled()
   })
 
