@@ -4,6 +4,7 @@ const path = require('path')
 const fs = require('fs')
 const platform = process.env.PLATFORM || 'amazon'
 const storage = require(`../storage/${platform}`)
+const audioService = require('../audio')
 const segmentService = require('../rfcx/segments')
 const { status } = require('../../services/db/mongo')
 const { rimraf } = require('rimraf')
@@ -36,6 +37,25 @@ beforeEach(async () => {
   jest.spyOn(storage, 'deleteObject').mockReturnValue('')
   jest.spyOn(storage, 'copy').mockReturnValue('')
   jest.spyOn(storage, 'createFromData').mockReturnValue('')
+  jest.spyOn(audioService, 'convert').mockResolvedValue({
+    meta: {
+      duration: 299.806032,
+      sampleCount: 13221446,
+      sampleRate: 48000,
+      bitRate: 1,
+      codec: 'pcm_s16le',
+      size: 6672949,
+      checksum: UPLOAD.checksum
+    }
+  })
+  jest.spyOn(audioService, 'split').mockResolvedValue([0, 1, 2, 3, 4].map((idx) => ({
+    path: `${tempDirPath}segment-${idx}.wav`,
+    meta: {
+      duration: 60,
+      sampleCount: 2880000,
+      size: 1024 + idx
+    }
+  })))
   jest.spyOn(segmentService, 'createStreamFileData').mockReturnValue({
     streamSourceFile: {
       id: 'e52edb98-e482-41e3-b9fb-95de76d1f7e2',
@@ -108,6 +128,7 @@ describe('Test ingest service', () => {
 
     const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
     expect(newUpload.status).toBe(status.INGESTED)
+    expect(storage.deleteObject).not.toHaveBeenCalled()
   })
 
   test('Checksum error', async () => {
@@ -184,9 +205,10 @@ describe('Test ingest service', () => {
     expect(result).toBeDefined()
     expect(result.outcome).toBe('handled-terminal')
     expect(result.status).toBe(status.DUPLICATE)
+    expect(storage.deleteObject).not.toHaveBeenCalled()
   })
 
-  test('Handled-terminal resolves even if trailing cleanup fails', async () => {
+  test('Handled-terminal preserves source upload for lifecycle expiry', async () => {
     const fileName = 'test-5mins-lv8.flac'
     const pathFile = path.join(__dirname, '../../test/', fileName)
     const tempFilePath = tempDirPath + fileName
@@ -194,11 +216,10 @@ describe('Test ingest service', () => {
     fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
     const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
     jest.spyOn(segmentService, 'createStreamFileData').mockRejectedValue(new IngestionError('Duplicate file. Matching sha1 signature already ingested.', status.DUPLICATE))
-    // Simulate the source object already deleted by a prior re-drive.
-    jest.spyOn(storage, 'deleteObject').mockRejectedValue(new Error('NoSuchKey'))
 
     const result = await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
     expect(result.outcome).toBe('handled-terminal')
+    expect(storage.deleteObject).not.toHaveBeenCalled()
   })
 
   test('Pre-transcode dedup ACK-drops (coreData empty => no rollback crash)', async () => {
