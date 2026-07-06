@@ -1,6 +1,12 @@
+const registry = require('./upload-target-registry')
+
 function parseBool (value) {
   if (value === undefined || value === null || value === '') { return undefined }
   return value === true || value === 'true'
+}
+
+function registryMode () {
+  return (process.env.UPLOAD_TARGET_REGISTRY_MODE || 'env').toLowerCase()
 }
 
 function legacyUploadTarget () {
@@ -19,12 +25,45 @@ function legacyUploadTarget () {
   }
 }
 
-async function selectUploadTarget (_context = {}) {
-  // Phase 1 compatibility shim: all uploads still use the legacy env-backed
-  // target. A future implementation should replace this with a Postgres-backed
-  // registry lookup, optionally cached/projected in Redis, while preserving the
-  // returned target shape.
-  return legacyUploadTarget()
+function targetsEquivalent (a, b) {
+  return a && b &&
+    a.id === b.id &&
+    Number(a.version || 1) === Number(b.version || 1) &&
+    a.provider === b.provider &&
+    a.bucket === b.bucket &&
+    (a.endpoint || undefined) === (b.endpoint || undefined) &&
+    (a.region || undefined) === (b.region || undefined) &&
+    a.forcePathStyle === b.forcePathStyle
+}
+
+async function selectUploadTarget (context = {}) {
+  const mode = registryMode()
+  const legacy = legacyUploadTarget()
+
+  if (mode === 'env' || mode === 'off' || mode === 'disabled') {
+    return legacy
+  }
+
+  try {
+    const selected = await registry.selectRegistryUploadTarget(context)
+
+    if (mode === 'shadow') {
+      if (!targetsEquivalent(legacy, selected)) {
+        console.warn('[upload-targets] registry shadow mismatch', JSON.stringify({ legacy, selected }))
+      }
+      return legacy
+    }
+
+    if (mode === 'active') {
+      return selected
+    }
+
+    console.warn(`[upload-targets] unknown UPLOAD_TARGET_REGISTRY_MODE=${mode}; falling back to env target`)
+    return legacy
+  } catch (err) {
+    console.error('[upload-targets] registry lookup failed; falling back to env target', err && err.message)
+    return legacy
+  }
 }
 
 function sourceForKey (target, key) {
@@ -61,5 +100,7 @@ module.exports = {
   selectUploadTarget,
   sourceForKey,
   sourceFromUpload,
-  legacyUploadTarget
+  legacyUploadTarget,
+  registryMode,
+  targetsEquivalent
 }

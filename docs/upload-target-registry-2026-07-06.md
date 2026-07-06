@@ -74,11 +74,15 @@ The uploader app can keep using `uploadId`, `url`, `path`, and `bucket` as befor
 
 If ingest has to archive an invalid source file, it copies from the recorded source bucket/key instead of blindly using `UPLOAD_BUCKET`.
 
-## Future Postgres registry
+## Postgres registry
 
 Postgres should be the source of truth. Redis can be a fast projection/cache, not the canonical store.
 
-Suggested initial tables:
+The initial DDL is checked in at:
+
+- `db/upload-target-registry.sql`
+
+Initial tables:
 
 ```sql
 create table upload_targets (
@@ -125,6 +129,25 @@ Possible keys:
 
 Projection should include an etag/version. API pods can cache in memory briefly and refresh on version changes.
 
+## Runtime modes
+
+`UPLOAD_TARGET_REGISTRY_MODE` controls lookup behavior:
+
+- unset / `env`: current behavior, always use env-backed `UPLOAD_BUCKET` target.
+- `shadow`: query Postgres registry and compare it to the env target, but still return the env target. Registry failures log and fall back to env.
+- `active`: return the Postgres-selected target. Do not enable until shadow mode has run cleanly with exactly one env-equivalent enabled target.
+
+Postgres connection envs are explicit and optional:
+
+- `UPLOAD_TARGET_REGISTRY_POSTGRES_HOSTNAME` (fallback `POSTGRES_HOSTNAME`)
+- `UPLOAD_TARGET_REGISTRY_POSTGRES_PORT` (fallback `POSTGRES_PORT`, default `5432`)
+- `UPLOAD_TARGET_REGISTRY_POSTGRES_DB` (fallback `POSTGRES_DB`, default `core`)
+- `UPLOAD_TARGET_REGISTRY_POSTGRES_USERNAME` (fallback `POSTGRES_USERNAME`)
+- `UPLOAD_TARGET_REGISTRY_POSTGRES_PASSWORD` (fallback `POSTGRES_PASSWORD`)
+- `UPLOAD_TARGET_REGISTRY_POSTGRES_SSL_ENABLED` (fallback `POSTGRES_SSL_ENABLED`)
+
+For rfcx-local LAN/admin access, the Patroni service is reachable at `192.168.2.85:15432`, but in-cluster pods should use `postgres.data.svc.cluster.local:5432`.
+
 ## Rollout gates
 
 ### Gate A, compatibility code only
@@ -143,10 +166,13 @@ Projection should include an etag/version. API pods can cache in memory briefly 
 
 ### Gate C, registry read path
 
-- Add Postgres tables and seed one target matching current `UPLOAD_BUCKET`.
-- Add registry loader behind a feature flag, for example `UPLOAD_TARGET_REGISTRY_MODE=shadow`.
+- Apply `db/upload-target-registry.sql` to the selected Postgres database.
+- Seed one enabled target matching current `UPLOAD_BUCKET`/`UPLOAD_S3_*` values, with `id='legacy-env-upload-bucket'`, `version=1`, `provider='s3-compatible'`, `bucket='rfcx-ingest-production'`, `region='auto'`, `force_path_style=true`, and a `secret_ref` pointing to the existing Kubernetes secret/env source, not raw credentials.
+- Configure registry Postgres connection envs on `ingest-service-api` only.
+- Set `UPLOAD_TARGET_REGISTRY_MODE=shadow` on `ingest-service-api`.
 - Shadow mode compares registry-selected target with env target but still returns env target.
-- Emit metrics/logs for mismatches and registry/cache failures.
+- Watch logs for `[upload-targets] registry shadow mismatch` or `registry lookup failed`.
+- Keep tasks in env mode unless/until they also need registry lookup. Tasks already read immutable `uploadSource` from Mongo.
 
 ### Gate D, registry active, single target
 
