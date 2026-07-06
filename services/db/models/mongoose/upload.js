@@ -14,7 +14,9 @@ const UploadSchema = new mongoose.Schema({
   failureMessage: String,
   sampleRate: Number,
   targetBitrate: Number,
-  checksum: String
+  checksum: String,
+  uploadSourceDeletedAt: Date,
+  uploadSourceCleanupMessage: String
 })
 
 const Upload = mongoose.model('StreamUpload', UploadSchema)
