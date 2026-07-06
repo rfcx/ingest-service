@@ -43,6 +43,7 @@
     "mongoose-long": "0.8.0",
     "newrelic": "^11.9.0",
     "nuts-serve": "git+https://github.com/rassokhina-e/nuts.git",
+    "pg": "^8.12.0",
     "prom-client": "^15.0.0",
     "querystring": "^0.2.1",
     "rimraf": "^5.0.5",
