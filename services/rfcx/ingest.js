@@ -365,23 +365,25 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       }
     }
 
-    // Optionally copy the failed upload + a .txt error log into a
-    // dedicated error bucket so ops can inspect failures. Disabled by
-    // default in v2 to avoid cross-provider server-side copy issues
-    // (the upload bucket may live on a different provider than the
-    // error bucket, in which case AWS-SDK CopyObject silently fails).
-    // Set ERROR_BUCKET_ENABLED=true to re-enable on environments
-    // where both buckets share a provider (e.g. AWS-prod legacy).
-    if (process.env.ERROR_BUCKET_ENABLED === 'true' && errorBucket && !loggerIgnoredErrors.includes(message)) {
+    // Optionally archive the failed upload + a .txt error log into a dedicated
+    // error bucket so ops can inspect failures. When the upload source has its
+    // own provider/endpoint (e.g. Cloudflare R2) we stream source -> destination
+    // instead of using S3 server-side CopyObject, because cross-provider copy is
+    // not portable.
+    const configuredErrorBucket = process.env.ERROR_BUCKET || errorBucket
+    if (process.env.ERROR_BUCKET_ENABLED === 'true' && configuredErrorBucket && !loggerIgnoredErrors.some((r) => r.test(message))) {
       try {
-        const sourceBucket = uploadSource?.bucket || uploadBucket
-        const sourceKey = uploadSource?.key || fileStoragePath
-        await storage.copy(`${sourceBucket}/${sourceKey}`, errorBucket, fileStoragePath)
+        if (uploadSource && uploadSource.bucket) {
+          await storage.copyFromSource(uploadSource, configuredErrorBucket, fileStoragePath)
+        } else {
+          const sourceBucket = uploadBucket
+          await storage.copy(`${sourceBucket}/${fileStoragePath}`, configuredErrorBucket, fileStoragePath)
+        }
         // create error log text file in the same bucket
         const storageErrorFilePath = fileStoragePath.replace(path.extname(fileStoragePath), '.txt')
-        await storage.createFromData(errorBucket, storageErrorFilePath, `message: ${err.message}\n\nstack: ${err.stack}`)
+        await storage.createFromData(configuredErrorBucket, storageErrorFilePath, `message: ${err.message}\n\nstack: ${err.stack}`)
       } catch (errOnErrorCopy) {
-        console.warn(`[${uploadId}] Failed to archive error blob to ${errorBucket}: ${errOnErrorCopy.message}`)
+        console.warn(`[${uploadId}] Failed to archive error blob to ${configuredErrorBucket}: ${errOnErrorCopy.message}`)
       }
     }
 

@@ -156,6 +156,15 @@ function createFromData (Bucket, remotePath, data) {
   return clientFor(Bucket).putObject(opts).promise()
 }
 
+function copyFromSource (source, Bucket, Key, ContentType) {
+  const sourceBucket = source?.bucket || uploadBucket
+  const sourceKey = source?.key || Key
+  const sourceClient = uploadClientForSource(source)
+  const readStream = sourceClient.getObject({ Bucket: sourceBucket, Key: sourceKey }).createReadStream()
+  const opts = { Bucket, Key, Body: readStream, ContentType }
+  return clientFor(Bucket).upload(opts).promise()
+}
+
 /**
  * Copies a file on S3.
  *
@@ -185,6 +194,7 @@ module.exports = {
   download,
   upload,
   createFromData,
+  copyFromSource,
   copy,
   deleteObject
 }

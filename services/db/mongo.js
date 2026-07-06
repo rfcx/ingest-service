@@ -89,6 +89,8 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
       upload.updatedAt = moment().tz('UTC').toDate()
       if (failureMessage != null) {
         upload.failureMessage = failureMessage
+      } else if ([status.UPLOADED, status.INGESTED].includes(statusNumber)) {
+        upload.failureMessage = undefined
       }
       return upload.save()
     })

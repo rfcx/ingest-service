@@ -36,6 +36,7 @@ beforeEach(async () => {
   jest.spyOn(storage, 'download').mockReturnValue('')
   jest.spyOn(storage, 'upload').mockReturnValue(Promise.resolve({ ETag: true }))
   jest.spyOn(storage, 'deleteObject').mockReturnValue('')
+  jest.spyOn(storage, 'copyFromSource').mockReturnValue(Promise.resolve({ ETag: true }))
   jest.spyOn(storage, 'copy').mockReturnValue('')
   jest.spyOn(storage, 'createFromData').mockReturnValue('')
   jest.spyOn(audioService, 'convert').mockResolvedValue({
@@ -124,11 +125,14 @@ describe('Test ingest service', () => {
       console.info(err)
     })
     const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    upload.failureMessage = 'previous transient failure'
+    await upload.save()
 
     await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
 
     const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
     expect(newUpload.status).toBe(status.INGESTED)
+    expect(newUpload.failureMessage).toBeUndefined()
     expect(storage.download).toHaveBeenCalledWith(`${UPLOAD.streamId}/${fileName}`, path.join(tempDirPath, UPLOAD.streamId, fileName), expect.objectContaining({ bucket: 'streams-uploads', key: `${UPLOAD.streamId}/${fileName}` }))
     expect(storage.deleteObject).not.toHaveBeenCalled()
   })
@@ -191,6 +195,35 @@ describe('Test ingest service', () => {
     const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
     expect(newUpload.status).toBe(status.DUPLICATE)
     expect(newUpload.failureMessage).toBe('Duplicate file. Matching sha1 signature already ingested.')
+  })
+
+  test('Error archive streams from recorded upload source', async () => {
+    const fileName = 'test-1min-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    process.env.ERROR_BUCKET_ENABLED = 'true'
+    process.env.ERROR_BUCKET = 'rfcx-streams-errors-production'
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    upload.uploadSource = {
+      targetId: 'legacy-env-upload-bucket',
+      targetVersion: 1,
+      provider: 's3-compatible',
+      bucket: 'rfcx-ingest-production',
+      key: `${UPLOAD.streamId}/${fileName}`,
+      endpoint: 'https://example.r2.cloudflarestorage.com',
+      region: 'auto',
+      forcePathStyle: true
+    }
+    await upload.save()
+
+    const result = await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+
+    expect(result.outcome).toBe('handled-terminal')
+    expect(result.status).toBe(status.CHECKSUM)
+    expect(storage.copyFromSource).toHaveBeenCalledWith(expect.objectContaining({ bucket: 'rfcx-ingest-production', key: `${UPLOAD.streamId}/${fileName}` }), 'rfcx-streams-errors-production', `${UPLOAD.streamId}/${fileName}`)
+    expect(storage.copy).not.toHaveBeenCalled()
   })
 
   test('Duplicate is ACK-dropped (ingest resolves with handled-terminal outcome)', async () => {
