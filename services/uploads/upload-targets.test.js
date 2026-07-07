@@ -82,6 +82,49 @@ describe('upload target selection', () => {
     }))
   })
 
+  test('sourceForKey persists secret reference but not secret material', async () => {
+    process.env.UPLOAD_TARGET_ENAM_ACCESS_KEY_ID = 'access-key'
+    process.env.UPLOAD_TARGET_ENAM_SECRET_KEY = 'secret-key'
+    const uploadTargets = reloadUploadTargets()
+    const source = uploadTargets.sourceForKey({
+      id: 'r2-enam-upload-bucket',
+      version: 1,
+      provider: 's3-compatible',
+      bucket: 'rfcx-ingest-enam',
+      endpoint: 'https://account.r2.cloudflarestorage.com',
+      region: 'auto',
+      forcePathStyle: true,
+      secretRef: 'k8s:apps-prod/ingest-upload-target-r2-enam-creds:UPLOAD_S3_ACCESS_KEY_ID,UPLOAD_S3_SECRET_KEY'
+    }, 'stream/upload.flac')
+
+    expect(source).toMatchObject({
+      targetId: 'r2-enam-upload-bucket',
+      bucket: 'rfcx-ingest-enam',
+      key: 'stream/upload.flac',
+      secretRef: 'k8s:apps-prod/ingest-upload-target-r2-enam-creds:UPLOAD_S3_ACCESS_KEY_ID,UPLOAD_S3_SECRET_KEY'
+    })
+    expect(source.accessKeyId).toBeUndefined()
+    expect(source.secretAccessKey).toBeUndefined()
+  })
+
+  test('sourceForSigning attaches credentials from target-specific env vars', async () => {
+    process.env.UPLOAD_TARGET_ENAM_ACCESS_KEY_ID = 'access-key'
+    process.env.UPLOAD_TARGET_ENAM_SECRET_KEY = 'secret-key'
+    const uploadTargets = reloadUploadTargets()
+    const source = uploadTargets.sourceForSigning({
+      id: 'r2-enam-upload-bucket',
+      version: 1,
+      provider: 's3-compatible',
+      bucket: 'rfcx-ingest-enam',
+      endpoint: 'https://account.r2.cloudflarestorage.com',
+      region: 'auto',
+      forcePathStyle: true,
+      secretRef: 'k8s:apps-prod/ingest-upload-target-r2-enam-creds:UPLOAD_S3_ACCESS_KEY_ID,UPLOAD_S3_SECRET_KEY'
+    }, 'stream/upload.flac')
+
+    expect(source.accessKeyId).toBe('access-key')
+    expect(source.secretAccessKey).toBe('secret-key')
+  })
   test('registry errors fall back to env target', async () => {
     process.env.UPLOAD_TARGET_REGISTRY_MODE = 'active'
     registry.selectRegistryUploadTarget.mockRejectedValue(new Error('registry unavailable'))

@@ -1,7 +1,7 @@
 process.env.PLATFORM = 'amazon'
 process.env.UPLOAD_BUCKET = 'streams-uploads'
 
-const originalEnv = process.env
+const originalEnv = { ...process.env }
 
 const storageModulePath = '../services/storage/amazon'
 jest.mock(storageModulePath)
@@ -36,6 +36,7 @@ beforeAll(async () => {
   await startDb()
 })
 beforeEach(async () => {
+  process.env = { ...originalEnv }
   checkPermission.mockImplementation(() => {})
   getStream.mockImplementation(async () => ({ data: { id: '0a1824085e3f', project: 'goQioqL49' } }))
   getProjectUploadLimitSummary.mockImplementation(async () => ({
@@ -52,7 +53,7 @@ afterEach(async () => {
   getProjectUploadLimitSummary.mockRestore()
   getExistingSourceFile.mockRestore()
   getSignedUrl.mockRestore()
-  process.env = originalEnv
+  process.env = { ...originalEnv }
 })
 afterAll(async () => {
   await stopDb()
@@ -724,6 +725,293 @@ describe('POST /uploads', () => {
     expect(response.body.message).toEqual('Server is on maintenance. Creating new uploads is paused. Try again later.')
     const uploads = await UploadModel.find({})
     expect(uploads.length).toBe(0)
+  })
+})
+
+describe('POST /uploads/bulk', () => {
+  const validUpload = (overrides = {}) => ({
+    filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+    timestamp: '2021-06-08T19:26:40.000Z',
+    stream: '0a1824085e3f',
+    checksum: 'bulk-checksum-1',
+    sampleRate: 64000,
+    targetBitrate: 1,
+    duration: 60000,
+    fileSize: 10_000_000,
+    ...overrides
+  })
+
+  test('creates one upload document and signed URL per valid item', async () => {
+    const requestBody = {
+      uploads: [
+        validUpload(),
+        validUpload({
+          filename: '0a1824085e3f-2021-06-08T19-27-40.wav',
+          timestamp: '2021-06-08T19:27:40.000Z',
+          checksum: 'bulk-checksum-2',
+          fileSize: 20_000_000
+        })
+      ]
+    }
+
+    const response = await request(app).post('/uploads/bulk').send(requestBody)
+    const uploads = await UploadModel.find({}).sort({ timestamp: 1 })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body.requested).toBe(2)
+    expect(response.body.created).toBe(2)
+    expect(response.body.failed).toBe(0)
+    expect(response.body.uploads).toHaveLength(2)
+    expect(response.body.uploads[0]).toMatchObject({
+      index: 0,
+      ok: true,
+      url: 'http://some.url',
+      bucket: 'streams-uploads',
+      uploadTargetId: 'legacy-env-upload-bucket'
+    })
+    expect(response.body.uploads[1]).toMatchObject({
+      index: 1,
+      ok: true,
+      url: 'http://some.url',
+      bucket: 'streams-uploads',
+      uploadTargetId: 'legacy-env-upload-bucket'
+    })
+    expect(response.body.uploads[0].uploadId).toBe(`${uploads[0]._id}`)
+    expect(response.body.uploads[0].path).toBe(`${requestBody.uploads[0].stream}/${uploads[0]._id}.flac`)
+    expect(response.body.uploads[1].uploadId).toBe(`${uploads[1]._id}`)
+    expect(response.body.uploads[1].path).toBe(`${requestBody.uploads[1].stream}/${uploads[1]._id}.wav`)
+    expect(getSignedUrl).toHaveBeenCalledTimes(2)
+    expect(uploads[0].uploadSource.bucket).toBe('streams-uploads')
+    expect(uploads[1].uploadSource.bucket).toBe('streams-uploads')
+  })
+
+  test('returns per-item errors while still creating valid uploads', async () => {
+    getExistingSourceFile.mockImplementation(({ checksum }) => {
+      if (checksum === 'bulk-duplicate') {
+        return {
+          filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+          availability: 1,
+          segments: [
+            { start: '2021-06-08T19:26:40.000Z', availability: 1 }
+          ]
+        }
+      }
+      throw new EmptyResultError('Stream source file not found')
+    })
+
+    const response = await request(app).post('/uploads/bulk').send({
+      uploads: [
+        validUpload({ checksum: 'bulk-ok' }),
+        validUpload({ checksum: 'bulk-duplicate' }),
+        validUpload({ filename: 'too-large.opus', checksum: 'bulk-too-large', fileSize: 150_000_001 })
+      ]
+    })
+    const uploads = await UploadModel.find({})
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body.requested).toBe(3)
+    expect(response.body.created).toBe(1)
+    expect(response.body.failed).toBe(2)
+    expect(response.body.uploads[0].ok).toBe(true)
+    expect(response.body.uploads[1]).toMatchObject({ index: 1, ok: false, status: 400, error: 'Duplicate.' })
+    expect(response.body.uploads[2]).toMatchObject({ index: 2, ok: false, status: 400, error: 'This file size is exceeding our limit (150MB)' })
+    expect(uploads).toHaveLength(1)
+    expect(uploads[0].checksum).toBe('bulk-ok')
+  })
+
+  test('returns validation error if uploads is missing or not an array', async () => {
+    const response = await request(app).post('/uploads/bulk').send({ uploads: {} })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe("Validation errors: Parameter 'uploads' must be an array.")
+  })
+
+  test('returns validation error if uploads array is empty', async () => {
+    const response = await request(app).post('/uploads/bulk').send({ uploads: [] })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe('At least one upload is required.')
+  })
+
+  test('returns 503 error if uploading is paused', async () => {
+    process.env.CREATION_PAUSED = 'true'
+
+    const response = await request(app).post('/uploads/bulk').send({ uploads: [validUpload()] })
+
+    expect(response.statusCode).toBe(503)
+    expect(response.body.message).toEqual('Server is on maintenance. Creating new uploads is paused. Try again later.')
+    const uploads = await UploadModel.find({})
+    expect(uploads.length).toBe(0)
+  })
+})
+
+describe('GET /uploads/:id/status', () => {
+  test('returns derived ingestion status and recording identifiers', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      projectId: 'project-1',
+      userId: seedValues.primaryUserGuid,
+      status: status.INGESTED,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.flac',
+      ingestionResult: {
+        streamSourceFileId: 'source-file-guid-1',
+        streamId: '0a1824085e3f',
+        projectId: 'project-1',
+        siteId: 'site-1',
+        arbimonProjectId: 'arbimon-project-1',
+        arbimonSiteId: 'arbimon-site-1',
+        ingestedAt: '2021-06-08T19:30:00.000Z',
+        segments: [{
+          id: 'segment-guid-1',
+          start: '2021-06-08T19:26:40.000Z',
+          end: '2021-06-08T19:27:40.000Z',
+          path: '2021/06/08/0a1824085e3f/segment-guid-1.flac'
+        }]
+      }
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body).toMatchObject({
+      uploadId: `${dbUpload._id}`,
+      status: status.INGESTED,
+      statusName: 'INGESTED',
+      terminal: true,
+      retryable: false,
+      nextAction: 'complete',
+      stream: {
+        id: '0a1824085e3f',
+        projectId: 'project-1',
+        siteId: 'site-1',
+        arbimonProjectId: 'arbimon-project-1',
+        arbimonSiteId: 'arbimon-site-1'
+      },
+      recording: {
+        streamSourceFileId: 'source-file-guid-1',
+        segments: [{
+          id: 'segment-guid-1',
+          path: '2021/06/08/0a1824085e3f/segment-guid-1.flac'
+        }]
+      }
+    })
+  })
+
+  test('returns retry guidance for failed upload', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.FAILED,
+      failureMessage: 'Server failed with processing your file. Please try again later.',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.flac'
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body).toMatchObject({
+      uploadId: `${dbUpload._id}`,
+      status: status.FAILED,
+      statusName: 'FAILED',
+      terminal: true,
+      retryable: true,
+      nextAction: 'retry_upload',
+      failureMessage: 'Server failed with processing your file. Please try again later.'
+    })
+    expect(response.body.recording).toBeUndefined()
+  })
+
+  test('returns review guidance for deterministic failed upload', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.FAILED,
+      failureMessage: 'File extension is not supported',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.mp3'
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body).toMatchObject({
+      uploadId: `${dbUpload._id}`,
+      status: status.FAILED,
+      statusName: 'FAILED',
+      terminal: true,
+      retryable: false,
+      nextAction: 'review_error',
+      failureMessage: 'File extension is not supported'
+    })
+  })
+
+  test('returns forbidden error for upload which is not yours', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.otherUserId,
+      status: status.WAITING,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.flac'
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(403)
+  })
+})
+
+describe('POST /uploads/status', () => {
+  test('returns bulk status with per-id errors', async () => {
+    const ingested = await new UploadModel({
+      streamId: '0a1824085e3f',
+      projectId: 'project-1',
+      userId: seedValues.primaryUserGuid,
+      status: status.INGESTED,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'ok.flac',
+      ingestionResult: {
+        streamSourceFileId: 'source-file-guid-1',
+        streamId: '0a1824085e3f',
+        projectId: 'project-1',
+        ingestedAt: '2021-06-08T19:30:00.000Z',
+        segments: [{ id: 'segment-guid-1', start: '2021-06-08T19:26:40.000Z' }]
+      }
+    }).save()
+    const other = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.otherUserId,
+      status: status.WAITING,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'other.flac'
+    }).save()
+
+    const response = await request(app).post('/uploads/status').send({
+      uploadIds: [`${ingested._id}`, `${other._id}`, 'not-an-object-id']
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body.requested).toBe(3)
+    expect(response.body.found).toBe(1)
+    expect(response.body.failed).toBe(2)
+    expect(response.body.uploads[0]).toMatchObject({
+      index: 0,
+      ok: true,
+      uploadId: `${ingested._id}`,
+      status: status.INGESTED,
+      statusName: 'INGESTED',
+      recording: { streamSourceFileId: 'source-file-guid-1' }
+    })
+    expect(response.body.uploads[1]).toMatchObject({ index: 1, uploadId: `${other._id}`, ok: false, status: 403 })
+    expect(response.body.uploads[2]).toMatchObject({ index: 2, uploadId: 'not-an-object-id', ok: false, status: 404 })
+  })
+
+  test('returns validation error if uploadIds is missing or not an array', async () => {
+    const response = await request(app).post('/uploads/status').send({ uploadIds: {} })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe("Validation errors: Parameter 'uploadIds' must be an array.")
   })
 })
 

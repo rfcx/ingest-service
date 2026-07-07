@@ -209,3 +209,61 @@ For rfcx-local LAN/admin access, the Patroni service is reachable at `192.168.2.
 - Add metrics: selected target id, registry mode, fallback count, target health state, signed URL creation failures by target.
 - Audit any external/manual redrive tooling outside this service so it uses `uploadSource` for source bucket/key when present.
 - Decide whether `uploadTargetId` should remain in public API response or become debug-only after rollout.
+
+## 2026-07-07 update: policy-backed ENAM default
+
+The registry selector now reads the active row from `upload_target_policy_versions`.
+The supported active policy shape is:
+
+```json
+{ "mode": "single-target", "targetId": "r2-enam-upload-bucket" }
+```
+
+Selection flow in `UPLOAD_TARGET_REGISTRY_MODE=active`:
+
+1. Load enabled targets from `upload_targets`.
+2. Load the active policy from `upload_target_policy_versions`.
+3. For `single-target`, return the enabled target whose `id` matches `targetId`.
+4. If no active policy exists, fall back to the first enabled target by priority.
+5. If the policy references a missing/disabled target or unsupported mode, fail the registry lookup and the caller falls back to the legacy env target.
+
+New seed file:
+
+- `db/upload-target-registry-seed-enam-default.sql`
+
+It upserts two enabled R2 targets:
+
+- `r2-enam-upload-bucket`, bucket `rfcx-ingest-enam`, endpoint `https://0692b20bb14f524d1a0cb43754a2f1ad.r2.cloudflarestorage.com`, secret ref `k8s:apps-prod/ingest-upload-target-r2-enam-creds`, priority `10`, locale tags `enam,north-america,americas`.
+- `legacy-env-upload-bucket`, bucket `rfcx-ingest-production`, priority `100`, locale tags `legacy,global`.
+
+It then writes the active policy so the `r2-enam-upload-bucket` registry target, whose bucket is `rfcx-ingest-enam`, is the default selected by the database registry. This does **not** require changing `UPLOAD_BUCKET`; the env bucket can remain `rfcx-ingest-production` while testing registry-active behavior.
+
+## 2026-07-07 update: per-target credential resolution
+
+Registry targets may point at buckets that require different S3 credentials than
+the legacy `UPLOAD_S3_ACCESS_KEY_ID` / `UPLOAD_S3_SECRET_KEY` pair. The app now
+keeps the registry `secret_ref` as non-secret target metadata and resolves actual
+credentials only at signing/download time.
+
+Persisted Mongo `uploadSource` includes `secretRef` but never secret values.
+Transient sources passed to storage clients may include `accessKeyId` and
+`secretAccessKey` after environment resolution.
+
+Resolution order supports:
+
+1. Explicit env refs in registry: `env:ACCESS_ENV_NAME,SECRET_ENV_NAME`.
+2. Target/bucket convention env vars, including:
+   - `UPLOAD_TARGET_<TARGET_ID>_ACCESS_KEY_ID` / `_SECRET_KEY`
+   - `UPLOAD_TARGET_<BUCKET>_ACCESS_KEY_ID` / `_SECRET_KEY`
+   - `UPLOAD_TARGET_<SHORT_BUCKET_SUFFIX>_ACCESS_KEY_ID` / `_SECRET_KEY`
+
+For the prepared ENAM target, the intended app env names are:
+
+```text
+UPLOAD_TARGET_ENAM_ACCESS_KEY_ID
+UPLOAD_TARGET_ENAM_SECRET_KEY
+```
+
+These should be sourced from Kubernetes Secret
+`apps-prod/ingest-upload-target-r2-enam-creds`. API pods need them for signed
+PUT URL creation; task pods need them for source-object downloads during ingest.
