@@ -76,7 +76,7 @@ function getUpload (id) {
     })
 }
 
-function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
+function updateUploadStatus (uploadId, statusNumber, failureMessage = null, ingestionResult = null) {
   if (!statusNumbers.includes(statusNumber)) {
     throw new Error('Invalid status')
   }
@@ -91,6 +91,9 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
         upload.failureMessage = failureMessage
       } else if ([status.UPLOADED, status.INGESTED].includes(statusNumber)) {
         upload.failureMessage = undefined
+      }
+      if (ingestionResult) {
+        upload.ingestionResult = ingestionResult
       }
       return upload.save()
     })

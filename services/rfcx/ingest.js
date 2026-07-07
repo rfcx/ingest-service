@@ -208,6 +208,30 @@ function combineCorePayloadData (fileData, wavMeta, outputFiles, upload) {
   }
 }
 
+function buildIngestionResult (coreData, outputFiles, upload) {
+  const source = coreData && coreData.streamSourceFile ? coreData.streamSourceFile : {}
+  const segments = Array.isArray(coreData && coreData.streamSegments) ? coreData.streamSegments : []
+  const filesById = new Map(outputFiles.map(file => [file.guid, file]))
+  return {
+    streamSourceFileId: source.id,
+    streamId: upload.streamId || source.streamId || source.stream_id,
+    projectId: upload.projectId || source.projectId || source.project_id,
+    siteId: source.siteId || source.site_id,
+    arbimonProjectId: source.arbimonProjectId || source.arbimon_project_id,
+    arbimonSiteId: source.arbimonSiteId || source.arbimon_site_id,
+    ingestedAt: moment.utc().toDate(),
+    segments: segments.map(segment => {
+      const file = filesById.get(segment.id) || {}
+      return {
+        id: segment.id,
+        start: segment.start,
+        end: segment.end || file.end,
+        path: segment.remotePath || file.remotePath
+      }
+    })
+  }
+}
+
 async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
   let tracker = new TimeTracker('IngestTask')
   let outputFiles = []
@@ -300,7 +324,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     tracker.logAndSetNewPoint(`[${uploadId}] uploaded al segments to S3`)
 
     console.info(`[${uploadId}] Modifying status to INGESTED (${db.status.INGESTED})`)
-    await db.updateUploadStatus(uploadId, db.status.INGESTED)
+    await db.updateUploadStatus(uploadId, db.status.INGESTED, null, buildIngestionResult(coreData, outputFiles, upload))
     tracker.logAndSetNewPoint(`[${uploadId}] updated upload status in Mongo`)
 
     if (PROMETHEUS_ENABLED && fileData.sampleCount) {

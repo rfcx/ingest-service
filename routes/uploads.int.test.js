@@ -845,6 +845,176 @@ describe('POST /uploads/bulk', () => {
   })
 })
 
+describe('GET /uploads/:id/status', () => {
+  test('returns derived ingestion status and recording identifiers', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      projectId: 'project-1',
+      userId: seedValues.primaryUserGuid,
+      status: status.INGESTED,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.flac',
+      ingestionResult: {
+        streamSourceFileId: 'source-file-guid-1',
+        streamId: '0a1824085e3f',
+        projectId: 'project-1',
+        siteId: 'site-1',
+        arbimonProjectId: 'arbimon-project-1',
+        arbimonSiteId: 'arbimon-site-1',
+        ingestedAt: '2021-06-08T19:30:00.000Z',
+        segments: [{
+          id: 'segment-guid-1',
+          start: '2021-06-08T19:26:40.000Z',
+          end: '2021-06-08T19:27:40.000Z',
+          path: '2021/06/08/0a1824085e3f/segment-guid-1.flac'
+        }]
+      }
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body).toMatchObject({
+      uploadId: `${dbUpload._id}`,
+      status: status.INGESTED,
+      statusName: 'INGESTED',
+      terminal: true,
+      retryable: false,
+      nextAction: 'complete',
+      stream: {
+        id: '0a1824085e3f',
+        projectId: 'project-1',
+        siteId: 'site-1',
+        arbimonProjectId: 'arbimon-project-1',
+        arbimonSiteId: 'arbimon-site-1'
+      },
+      recording: {
+        streamSourceFileId: 'source-file-guid-1',
+        segments: [{
+          id: 'segment-guid-1',
+          path: '2021/06/08/0a1824085e3f/segment-guid-1.flac'
+        }]
+      }
+    })
+  })
+
+  test('returns retry guidance for failed upload', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.FAILED,
+      failureMessage: 'Server failed with processing your file. Please try again later.',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.flac'
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body).toMatchObject({
+      uploadId: `${dbUpload._id}`,
+      status: status.FAILED,
+      statusName: 'FAILED',
+      terminal: true,
+      retryable: true,
+      nextAction: 'retry_upload',
+      failureMessage: 'Server failed with processing your file. Please try again later.'
+    })
+    expect(response.body.recording).toBeUndefined()
+  })
+
+  test('returns review guidance for deterministic failed upload', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.FAILED,
+      failureMessage: 'File extension is not supported',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.mp3'
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body).toMatchObject({
+      uploadId: `${dbUpload._id}`,
+      status: status.FAILED,
+      statusName: 'FAILED',
+      terminal: true,
+      retryable: false,
+      nextAction: 'review_error',
+      failureMessage: 'File extension is not supported'
+    })
+  })
+
+  test('returns forbidden error for upload which is not yours', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.otherUserId,
+      status: status.WAITING,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.flac'
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(403)
+  })
+})
+
+describe('POST /uploads/status', () => {
+  test('returns bulk status with per-id errors', async () => {
+    const ingested = await new UploadModel({
+      streamId: '0a1824085e3f',
+      projectId: 'project-1',
+      userId: seedValues.primaryUserGuid,
+      status: status.INGESTED,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'ok.flac',
+      ingestionResult: {
+        streamSourceFileId: 'source-file-guid-1',
+        streamId: '0a1824085e3f',
+        projectId: 'project-1',
+        ingestedAt: '2021-06-08T19:30:00.000Z',
+        segments: [{ id: 'segment-guid-1', start: '2021-06-08T19:26:40.000Z' }]
+      }
+    }).save()
+    const other = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.otherUserId,
+      status: status.WAITING,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'other.flac'
+    }).save()
+
+    const response = await request(app).post('/uploads/status').send({
+      uploadIds: [`${ingested._id}`, `${other._id}`, 'not-an-object-id']
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body.requested).toBe(3)
+    expect(response.body.found).toBe(1)
+    expect(response.body.failed).toBe(2)
+    expect(response.body.uploads[0]).toMatchObject({
+      index: 0,
+      ok: true,
+      uploadId: `${ingested._id}`,
+      status: status.INGESTED,
+      statusName: 'INGESTED',
+      recording: { streamSourceFileId: 'source-file-guid-1' }
+    })
+    expect(response.body.uploads[1]).toMatchObject({ index: 1, uploadId: `${other._id}`, ok: false, status: 403 })
+    expect(response.body.uploads[2]).toMatchObject({ index: 2, uploadId: 'not-an-object-id', ok: false, status: 404 })
+  })
+
+  test('returns validation error if uploadIds is missing or not an array', async () => {
+    const response = await request(app).post('/uploads/status').send({ uploadIds: {} })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe("Validation errors: Parameter 'uploadIds' must be an array.")
+  })
+})
+
 describe('GET /uploads/:id', () => {
   test('returns correct upload data', async () => {
     const dbUpload = await new UploadModel({
@@ -909,6 +1079,30 @@ describe('GET /uploads/:id', () => {
     expect(response.statusCode).toBe(404)
     expect(response.body._id).toBeUndefined()
   })
+  test('returns review guidance for deterministic failed upload', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.FAILED,
+      failureMessage: 'File extension is not supported',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.mp3'
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body).toMatchObject({
+      uploadId: `${dbUpload._id}`,
+      status: status.FAILED,
+      statusName: 'FAILED',
+      terminal: true,
+      retryable: false,
+      nextAction: 'review_error',
+      failureMessage: 'File extension is not supported'
+    })
+  })
+
   test('returns forbidden error for upload which is not yours', async () => {
     const dbUpload = await new UploadModel({
       streamId: '123456789012',

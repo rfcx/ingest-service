@@ -171,6 +171,79 @@ function bulkErrorStatus (err) {
   return 500
 }
 
+function statusName (statusNumber) {
+  return Object.keys(db.status).find((key) => db.status[key] === statusNumber) || 'UNKNOWN'
+}
+
+function isTerminalStatus (statusNumber) {
+  return [db.status.INGESTED, db.status.FAILED, db.status.DUPLICATE, db.status.CHECKSUM].includes(statusNumber)
+}
+
+function isRetryableUpload (upload) {
+  if (upload.status === db.status.CHECKSUM) { return true }
+  return upload.status === db.status.FAILED && upload.failureMessage === 'Server failed with processing your file. Please try again later.'
+}
+
+function nextActionForUpload (upload) {
+  switch (upload.status) {
+    case db.status.WAITING:
+    case db.status.UPLOADED:
+      return 'wait'
+    case db.status.INGESTED:
+      return 'complete'
+    case db.status.DUPLICATE:
+      return 'ignore_duplicate'
+    case db.status.CHECKSUM:
+      return 'retry_upload'
+    case db.status.FAILED:
+      return isRetryableUpload(upload) ? 'retry_upload' : 'review_error'
+    default:
+      return 'contact_support'
+  }
+}
+
+function uploadStatusResponse (upload) {
+  const ingestionResult = upload.ingestionResult || {}
+  return {
+    uploadId: `${upload._id}`,
+    status: upload.status,
+    statusName: statusName(upload.status),
+    terminal: isTerminalStatus(upload.status),
+    retryable: isRetryableUpload(upload),
+    nextAction: nextActionForUpload(upload),
+    failureMessage: upload.failureMessage || null,
+    createdAt: upload.createdAt,
+    updatedAt: upload.updatedAt,
+    stream: {
+      id: upload.streamId,
+      projectId: upload.projectId || ingestionResult.projectId,
+      siteId: ingestionResult.siteId,
+      arbimonProjectId: ingestionResult.arbimonProjectId,
+      arbimonSiteId: ingestionResult.arbimonSiteId
+    },
+    recording: ingestionResult.streamSourceFileId
+      ? {
+          streamSourceFileId: ingestionResult.streamSourceFileId,
+          segments: ingestionResult.segments || [],
+          ingestedAt: ingestionResult.ingestedAt
+        }
+      : undefined
+  }
+}
+
+function assertUploadStatusAccess (req, upload) {
+  if (!upload) {
+    throw new EmptyResultError('Upload with given id not found.')
+  }
+  if (!auth0Service.getRoles(req.user).includes('systemUser')) {
+    const userId = req.user.guid || req.user.sub || 'unknown'
+    if (upload.userId !== userId) {
+      throw new ForbiddenError('You do not have permission to access this upload.')
+    }
+  }
+  return upload
+}
+
 /**
  * @swagger
  *
@@ -294,6 +367,105 @@ router.route('/bulk').post((req, res) => {
       uploads: results
     })
   })().catch(httpErrorHandler(req, res, 'Failed creating bulk uploads.'))
+})
+
+/**
+ * @swagger
+ *
+ * /uploads/status:
+ *   post:
+ *        summary: Gets ingestion status for multiple uploads
+ *        tags:
+ *          - uploads
+ *        requestBody:
+ *          description: Upload ids to check
+ *          required: true
+ *          content:
+ *            application/json:
+ *              schema:
+ *                $ref: '#/components/requestBodies/UploadsStatus'
+ *        responses:
+ *          200:
+ *            description: Bulk upload status response
+ *            content:
+ *              application/json:
+ *                schema:
+ *                   $ref: '#/components/schemas/UploadsStatusResponse'
+ *          400:
+ *            description: Invalid parameters
+ */
+router.route('/status').post((req, res) => {
+  const uploadIds = req.body && req.body.uploadIds
+  if (!Array.isArray(uploadIds)) {
+    return httpErrorHandler(req, res, 'Failed getting upload statuses.')(new ValidationError("Validation errors: Parameter 'uploadIds' must be an array."))
+  }
+  if (uploadIds.length < 1) {
+    return httpErrorHandler(req, res, 'Failed getting upload statuses.')(new ValidationError('At least one upload id is required.'))
+  }
+  if (uploadIds.length > maxBulkUploadCount) {
+    return httpErrorHandler(req, res, 'Failed getting upload statuses.')(new ValidationError(`Bulk upload status limit exceeded. Maximum ${maxBulkUploadCount} upload ids are allowed per request.`))
+  }
+
+  return Promise.resolve().then(async () => {
+    const results = []
+    for (let index = 0; index < uploadIds.length; index++) {
+      const uploadId = uploadIds[index]
+      try {
+        const upload = assertUploadStatusAccess(req, await db.getUpload(uploadId))
+        results.push({ index, ok: true, ...uploadStatusResponse(upload) })
+      } catch (err) {
+        results.push({
+          index,
+          uploadId,
+          ok: false,
+          status: bulkErrorStatus(err),
+          error: err.message || 'Failed getting upload status.'
+        })
+      }
+    }
+    res.json({
+      requested: uploadIds.length,
+      found: results.filter((result) => result.ok).length,
+      failed: results.filter((result) => !result.ok).length,
+      uploads: results
+    })
+  }).catch(httpErrorHandler(req, res, 'Failed getting upload statuses.'))
+})
+
+/**
+ * @swagger
+ *
+ * /uploads/{id}/status:
+ *   get:
+ *        summary: Gets ingestion status for an upload
+ *        tags:
+ *          - uploads
+ *        parameters:
+ *          - name: id
+ *            description: An upload id
+ *            in: path
+ *            required: true
+ *            type: string
+ *        responses:
+ *          200:
+ *            description: Upload status response
+ *            content:
+ *              application/json:
+ *                schema:
+ *                   $ref: '#/components/schemas/UploadStatusDetail'
+ *          403:
+ *            description: Access denied
+ *          404:
+ *            description: Upload not found
+ */
+router.route('/:id/status').get((req, res) => {
+  const id = req.params.id
+  db.getUpload(id)
+    .then((data) => {
+      const upload = assertUploadStatusAccess(req, data)
+      res.json(uploadStatusResponse(upload))
+    })
+    .catch(httpErrorHandler(req, res, 'Failed getting upload status.'))
 })
 
 /**

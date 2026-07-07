@@ -26,7 +26,22 @@ const UploadSchema = new mongoose.Schema({
     forcePathStyle: Boolean
   },
   uploadSourceDeletedAt: Date,
-  uploadSourceCleanupMessage: String
+  uploadSourceCleanupMessage: String,
+  ingestionResult: {
+    streamSourceFileId: String,
+    streamId: String,
+    projectId: String,
+    siteId: String,
+    arbimonProjectId: String,
+    arbimonSiteId: String,
+    ingestedAt: Date,
+    segments: [{
+      id: String,
+      start: Date,
+      end: Date,
+      path: String
+    }]
+  }
 })
 
 const Upload = mongoose.model('StreamUpload', UploadSchema)

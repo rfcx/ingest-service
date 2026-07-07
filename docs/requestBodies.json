@@ -147,5 +147,22 @@
     "required": [
       "uploads"
     ]
+  },
+  "UploadsStatus": {
+    "type": "object",
+    "properties": {
+      "uploadIds": {
+        "type": "array",
+        "description": "Upload ids to check for ingestion status.",
+        "minItems": 1,
+        "maxItems": 100,
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "uploadIds"
+    ]
   }
 }

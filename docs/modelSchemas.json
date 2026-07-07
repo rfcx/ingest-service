@@ -260,5 +260,31 @@
         "example": "Duplicate."
       }
     }
+  },
+  "UploadStatusDetail": {
+    "properties": {
+      "uploadId": { "type": "string", "example": "upload-id" },
+      "status": { "type": "number", "example": 20 },
+      "statusName": { "type": "string", "example": "INGESTED" },
+      "terminal": { "type": "boolean", "example": true },
+      "retryable": { "type": "boolean", "example": false },
+      "nextAction": { "type": "string", "example": "complete" },
+      "failureMessage": { "type": "string", "example": null },
+      "stream": { "type": "object" },
+      "recording": { "type": "object" }
+    }
+  },
+  "UploadsStatusResponse": {
+    "properties": {
+      "requested": { "type": "number", "example": 2 },
+      "found": { "type": "number", "example": 1 },
+      "failed": { "type": "number", "example": 1 },
+      "uploads": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/UploadStatusDetail"
+        }
+      }
+    }
   }
 }
