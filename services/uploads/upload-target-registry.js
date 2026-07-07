@@ -57,16 +57,43 @@ async function getEnabledUploadTargets () {
   return result.rows.map(rowToTarget).filter(Boolean)
 }
 
+async function getActivePolicy () {
+  const result = await getPool().query(`
+    SELECT policy
+    FROM upload_target_policy_versions
+    WHERE active = true
+    ORDER BY id DESC
+    LIMIT 1
+  `)
+  return result.rows[0] ? result.rows[0].policy : null
+}
+
+function selectTargetFromPolicy (targets, policy) {
+  if (!policy) { return targets[0] }
+
+  const mode = policy.mode || 'single-target'
+  if (mode !== 'single-target') {
+    throw new Error(`Unsupported upload target policy mode: ${mode}`)
+  }
+
+  const targetId = policy.targetId || policy.defaultTargetId
+  if (!targetId) {
+    throw new Error('Active upload target policy is missing targetId')
+  }
+
+  const target = targets.find((candidate) => candidate.id === targetId)
+  if (!target) {
+    throw new Error(`Active upload target policy references disabled or missing target: ${targetId}`)
+  }
+  return target
+}
+
 async function selectRegistryUploadTarget (_context = {}) {
-  const targets = await getEnabledUploadTargets()
+  const [targets, policy] = await Promise.all([getEnabledUploadTargets(), getActivePolicy()])
   if (targets.length === 0) {
     throw new Error('No enabled upload targets found in registry')
   }
-
-  // Phase 2 shadow/single-target implementation: deterministic first enabled
-  // target. Weighted/multi-target policy comes later, after the registry is
-  // proven in shadow mode with exactly the env-equivalent target.
-  return targets[0]
+  return selectTargetFromPolicy(targets, policy)
 }
 
 async function closeRegistryPool () {
@@ -80,6 +107,8 @@ async function closeRegistryPool () {
 module.exports = {
   selectRegistryUploadTarget,
   getEnabledUploadTargets,
+  getActivePolicy,
+  selectTargetFromPolicy,
   closeRegistryPool,
   registryDbConfig,
   rowToTarget

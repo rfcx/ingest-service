@@ -209,3 +209,31 @@ For rfcx-local LAN/admin access, the Patroni service is reachable at `192.168.2.
 - Add metrics: selected target id, registry mode, fallback count, target health state, signed URL creation failures by target.
 - Audit any external/manual redrive tooling outside this service so it uses `uploadSource` for source bucket/key when present.
 - Decide whether `uploadTargetId` should remain in public API response or become debug-only after rollout.
+
+## 2026-07-07 update: policy-backed ENAM default
+
+The registry selector now reads the active row from `upload_target_policy_versions`.
+The supported active policy shape is:
+
+```json
+{ "mode": "single-target", "targetId": "rfcx-ingest-enam" }
+```
+
+Selection flow in `UPLOAD_TARGET_REGISTRY_MODE=active`:
+
+1. Load enabled targets from `upload_targets`.
+2. Load the active policy from `upload_target_policy_versions`.
+3. For `single-target`, return the enabled target whose `id` matches `targetId`.
+4. If no active policy exists, fall back to the first enabled target by priority.
+5. If the policy references a missing/disabled target or unsupported mode, fail the registry lookup and the caller falls back to the legacy env target.
+
+New seed file:
+
+- `db/upload-target-registry-seed-enam-default.sql`
+
+It upserts two enabled R2 targets:
+
+- `rfcx-ingest-enam`, bucket `rfcx-ingest-enam`, priority `10`, locale tags `enam,north-america,americas`.
+- `legacy-env-upload-bucket`, bucket `rfcx-ingest-production`, priority `100`, locale tags `legacy,global`.
+
+It then writes the active policy so `rfcx-ingest-enam` is the default selected by the database registry. This does **not** require changing `UPLOAD_BUCKET`; the env bucket can remain `rfcx-ingest-production` while testing registry-active behavior.

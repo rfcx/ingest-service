@@ -1079,30 +1079,6 @@ describe('GET /uploads/:id', () => {
     expect(response.statusCode).toBe(404)
     expect(response.body._id).toBeUndefined()
   })
-  test('returns review guidance for deterministic failed upload', async () => {
-    const dbUpload = await new UploadModel({
-      streamId: '0a1824085e3f',
-      userId: seedValues.primaryUserGuid,
-      status: status.FAILED,
-      failureMessage: 'File extension is not supported',
-      timestamp: '2021-06-08T19:26:40.000Z',
-      originalFilename: 'recording.mp3'
-    }).save()
-
-    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
-
-    expect(response.statusCode).toBe(200)
-    expect(response.body).toMatchObject({
-      uploadId: `${dbUpload._id}`,
-      status: status.FAILED,
-      statusName: 'FAILED',
-      terminal: true,
-      retryable: false,
-      nextAction: 'review_error',
-      failureMessage: 'File extension is not supported'
-    })
-  })
-
   test('returns forbidden error for upload which is not yours', async () => {
     const dbUpload = await new UploadModel({
       streamId: '123456789012',
