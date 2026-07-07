@@ -237,3 +237,33 @@ It upserts two enabled R2 targets:
 - `legacy-env-upload-bucket`, bucket `rfcx-ingest-production`, priority `100`, locale tags `legacy,global`.
 
 It then writes the active policy so the `r2-enam-upload-bucket` registry target, whose bucket is `rfcx-ingest-enam`, is the default selected by the database registry. This does **not** require changing `UPLOAD_BUCKET`; the env bucket can remain `rfcx-ingest-production` while testing registry-active behavior.
+
+## 2026-07-07 update: per-target credential resolution
+
+Registry targets may point at buckets that require different S3 credentials than
+the legacy `UPLOAD_S3_ACCESS_KEY_ID` / `UPLOAD_S3_SECRET_KEY` pair. The app now
+keeps the registry `secret_ref` as non-secret target metadata and resolves actual
+credentials only at signing/download time.
+
+Persisted Mongo `uploadSource` includes `secretRef` but never secret values.
+Transient sources passed to storage clients may include `accessKeyId` and
+`secretAccessKey` after environment resolution.
+
+Resolution order supports:
+
+1. Explicit env refs in registry: `env:ACCESS_ENV_NAME,SECRET_ENV_NAME`.
+2. Target/bucket convention env vars, including:
+   - `UPLOAD_TARGET_<TARGET_ID>_ACCESS_KEY_ID` / `_SECRET_KEY`
+   - `UPLOAD_TARGET_<BUCKET>_ACCESS_KEY_ID` / `_SECRET_KEY`
+   - `UPLOAD_TARGET_<SHORT_BUCKET_SUFFIX>_ACCESS_KEY_ID` / `_SECRET_KEY`
+
+For the prepared ENAM target, the intended app env names are:
+
+```text
+UPLOAD_TARGET_ENAM_ACCESS_KEY_ID
+UPLOAD_TARGET_ENAM_SECRET_KEY
+```
+
+These should be sourced from Kubernetes Secret
+`apps-prod/ingest-upload-target-r2-enam-creds`. API pods need them for signed
+PUT URL creation; task pods need them for source-object downloads during ingest.
