@@ -130,5 +130,22 @@
       "stream",
       "checksum"
     ]
+  },
+  "UploadsBulk": {
+    "type": "object",
+    "properties": {
+      "uploads": {
+        "type": "array",
+        "description": "Audio files to create upload records and object-scoped signed PUT URLs for. Each item uses the same fields as POST /uploads.",
+        "minItems": 1,
+        "maxItems": 100,
+        "items": {
+          "$ref": "#/components/requestBodies/Uploads"
+        }
+      }
+    },
+    "required": [
+      "uploads"
+    ]
   }
 }

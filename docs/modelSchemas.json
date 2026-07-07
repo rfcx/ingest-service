@@ -164,6 +164,10 @@
       "bucket": {
         "type": "string",
         "example": "bucket"
+      },
+      "uploadTargetId": {
+        "type": "string",
+        "example": "legacy-env-upload-bucket"
       }
     }
   },
@@ -192,6 +196,68 @@
       "name": {
         "type": "string",
         "example": "My Projects"
+      }
+    }
+  },
+  "UploadsBulkResponse": {
+    "properties": {
+      "requested": {
+        "type": "number",
+        "example": 2
+      },
+      "created": {
+        "type": "number",
+        "example": 1
+      },
+      "failed": {
+        "type": "number",
+        "example": 1
+      },
+      "uploads": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/UploadsBulkItem"
+        }
+      }
+    }
+  },
+  "UploadsBulkItem": {
+    "properties": {
+      "index": {
+        "type": "number",
+        "example": 0
+      },
+      "ok": {
+        "type": "boolean",
+        "example": true
+      },
+      "uploadId": {
+        "type": "string",
+        "example": "upload-id"
+      },
+      "url": {
+        "type": "string",
+        "example": "url-for-upload.com"
+      },
+      "path": {
+        "type": "string",
+        "example": "stream-id/upload-id.flac"
+      },
+      "bucket": {
+        "type": "string",
+        "example": "rfcx-ingest-production"
+      },
+      "uploadTargetId": {
+        "type": "string",
+        "example": "legacy-env-upload-bucket"
+      },
+      "status": {
+        "type": "number",
+        "example": 400
+      },
+      "error": {
+        "type": "string",
+        "example": "Duplicate."
       }
     }
   }

@@ -1,7 +1,7 @@
 process.env.PLATFORM = 'amazon'
 process.env.UPLOAD_BUCKET = 'streams-uploads'
 
-const originalEnv = process.env
+const originalEnv = { ...process.env }
 
 const storageModulePath = '../services/storage/amazon'
 jest.mock(storageModulePath)
@@ -36,6 +36,7 @@ beforeAll(async () => {
   await startDb()
 })
 beforeEach(async () => {
+  process.env = { ...originalEnv }
   checkPermission.mockImplementation(() => {})
   getStream.mockImplementation(async () => ({ data: { id: '0a1824085e3f', project: 'goQioqL49' } }))
   getProjectUploadLimitSummary.mockImplementation(async () => ({
@@ -52,7 +53,7 @@ afterEach(async () => {
   getProjectUploadLimitSummary.mockRestore()
   getExistingSourceFile.mockRestore()
   getSignedUrl.mockRestore()
-  process.env = originalEnv
+  process.env = { ...originalEnv }
 })
 afterAll(async () => {
   await stopDb()
@@ -720,6 +721,123 @@ describe('POST /uploads', () => {
   test('returns 503 error if uploading is paused', async () => {
     process.env.CREATION_PAUSED = 'true'
     const response = await request(app).post('/uploads').send()
+    expect(response.statusCode).toBe(503)
+    expect(response.body.message).toEqual('Server is on maintenance. Creating new uploads is paused. Try again later.')
+    const uploads = await UploadModel.find({})
+    expect(uploads.length).toBe(0)
+  })
+})
+
+describe('POST /uploads/bulk', () => {
+  const validUpload = (overrides = {}) => ({
+    filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+    timestamp: '2021-06-08T19:26:40.000Z',
+    stream: '0a1824085e3f',
+    checksum: 'bulk-checksum-1',
+    sampleRate: 64000,
+    targetBitrate: 1,
+    duration: 60000,
+    fileSize: 10_000_000,
+    ...overrides
+  })
+
+  test('creates one upload document and signed URL per valid item', async () => {
+    const requestBody = {
+      uploads: [
+        validUpload(),
+        validUpload({
+          filename: '0a1824085e3f-2021-06-08T19-27-40.wav',
+          timestamp: '2021-06-08T19:27:40.000Z',
+          checksum: 'bulk-checksum-2',
+          fileSize: 20_000_000
+        })
+      ]
+    }
+
+    const response = await request(app).post('/uploads/bulk').send(requestBody)
+    const uploads = await UploadModel.find({}).sort({ timestamp: 1 })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body.requested).toBe(2)
+    expect(response.body.created).toBe(2)
+    expect(response.body.failed).toBe(0)
+    expect(response.body.uploads).toHaveLength(2)
+    expect(response.body.uploads[0]).toMatchObject({
+      index: 0,
+      ok: true,
+      url: 'http://some.url',
+      bucket: 'streams-uploads',
+      uploadTargetId: 'legacy-env-upload-bucket'
+    })
+    expect(response.body.uploads[1]).toMatchObject({
+      index: 1,
+      ok: true,
+      url: 'http://some.url',
+      bucket: 'streams-uploads',
+      uploadTargetId: 'legacy-env-upload-bucket'
+    })
+    expect(response.body.uploads[0].uploadId).toBe(`${uploads[0]._id}`)
+    expect(response.body.uploads[0].path).toBe(`${requestBody.uploads[0].stream}/${uploads[0]._id}.flac`)
+    expect(response.body.uploads[1].uploadId).toBe(`${uploads[1]._id}`)
+    expect(response.body.uploads[1].path).toBe(`${requestBody.uploads[1].stream}/${uploads[1]._id}.wav`)
+    expect(getSignedUrl).toHaveBeenCalledTimes(2)
+    expect(uploads[0].uploadSource.bucket).toBe('streams-uploads')
+    expect(uploads[1].uploadSource.bucket).toBe('streams-uploads')
+  })
+
+  test('returns per-item errors while still creating valid uploads', async () => {
+    getExistingSourceFile.mockImplementation(({ checksum }) => {
+      if (checksum === 'bulk-duplicate') {
+        return {
+          filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+          availability: 1,
+          segments: [
+            { start: '2021-06-08T19:26:40.000Z', availability: 1 }
+          ]
+        }
+      }
+      throw new EmptyResultError('Stream source file not found')
+    })
+
+    const response = await request(app).post('/uploads/bulk').send({
+      uploads: [
+        validUpload({ checksum: 'bulk-ok' }),
+        validUpload({ checksum: 'bulk-duplicate' }),
+        validUpload({ filename: 'too-large.opus', checksum: 'bulk-too-large', fileSize: 150_000_001 })
+      ]
+    })
+    const uploads = await UploadModel.find({})
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body.requested).toBe(3)
+    expect(response.body.created).toBe(1)
+    expect(response.body.failed).toBe(2)
+    expect(response.body.uploads[0].ok).toBe(true)
+    expect(response.body.uploads[1]).toMatchObject({ index: 1, ok: false, status: 400, error: 'Duplicate.' })
+    expect(response.body.uploads[2]).toMatchObject({ index: 2, ok: false, status: 400, error: 'This file size is exceeding our limit (150MB)' })
+    expect(uploads).toHaveLength(1)
+    expect(uploads[0].checksum).toBe('bulk-ok')
+  })
+
+  test('returns validation error if uploads is missing or not an array', async () => {
+    const response = await request(app).post('/uploads/bulk').send({ uploads: {} })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe("Validation errors: Parameter 'uploads' must be an array.")
+  })
+
+  test('returns validation error if uploads array is empty', async () => {
+    const response = await request(app).post('/uploads/bulk').send({ uploads: [] })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe('At least one upload is required.')
+  })
+
+  test('returns 503 error if uploading is paused', async () => {
+    process.env.CREATION_PAUSED = 'true'
+
+    const response = await request(app).post('/uploads/bulk').send({ uploads: [validUpload()] })
+
     expect(response.statusCode).toBe(503)
     expect(response.body.message).toEqual('Server is on maintenance. Creating new uploads is paused. Try again later.')
     const uploads = await UploadModel.find({})

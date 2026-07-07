@@ -13,6 +13,8 @@ const moment = require('moment-timezone')
 const { getSampleRateFromFilename } = require('../services/rfcx/guardian')
 const { maxDurationWithGraceSeconds, maxDurationHoursDisplay, flacLimitSize, wavLimitSize, otherLimitSize } = require('../utils/limits')
 
+const maxBulkUploadCount = Number(process.env.UPLOAD_BULK_MAX_ITEMS || 100)
+
 function getProjectIdFromStream (stream) {
   if (!stream) { return null }
   if (typeof stream.project === 'string') { return stream.project }
@@ -45,6 +47,128 @@ async function assertProjectUploadWithinLimit (idToken, streamId, durationMs) {
   }
 
   return { projectId, summary }
+}
+
+function uploadConverter (body) {
+  const converter = new Converter(body || {}, {})
+  converter.convert('filename').toString()
+  converter.convert('timestamp').toMomentUtc()
+  converter.convert('stream').toString()
+  converter.convert('duration').optional().minimum(1).toInt()
+  converter.convert('fileSize').optional().minimum(1).toInt()
+  converter.convert('sampleRate').optional().toInt()
+  converter.convert('targetBitrate').optional().toInt()
+  converter.convert('checksum').optional().toString()
+  return converter
+}
+
+async function validateUploadParams (params) {
+  // Cannot upload to the future
+  const isFuture = params.timestamp.isAfter(moment.utc())
+  if (isFuture) {
+    throw new ValidationError(`Future date upload: ${params.timestamp}`)
+  }
+
+  // Cannot upload to the past older than year 1971
+  const isPast = params.timestamp.year() < 1971
+  if (isPast) {
+    throw new ValidationError(`Past date upload: ${params.timestamp}`)
+  }
+
+  // Cannot upload file that duration more than the configured max (milliseconds)
+  const durationLimit = maxDurationWithGraceSeconds * 1000
+  if (params.duration && params.duration > durationLimit) {
+    throw new ValidationError(`Audio duration is more than ${maxDurationHoursDisplay} hours`)
+  }
+
+  // Cannot upload file that size more than the per-extension limit.
+  // FLAC may be large (already compressed); WAV/other stay tightly bounded.
+  const fileExtension = params.filename.split('.').pop().toLowerCase()
+  if (fileExtension === 'flac' && params.fileSize && params.fileSize > flacLimitSize) {
+    throw new ValidationError(`This flac file size is exceeding our limit (${flacLimitSize / 1_000_000}MB)`)
+  }
+  if (fileExtension === 'wav' && params.fileSize && params.fileSize > wavLimitSize) {
+    throw new ValidationError(`This wav file size is exceeding our limit (${wavLimitSize / 1_000_000}MB)`)
+  }
+  // Other file extensions (e.g. opus)
+  if (!['flac', 'wav'].includes(fileExtension) && params.fileSize && params.fileSize > otherLimitSize) {
+    throw new ValidationError(`This file size is exceeding our limit (${otherLimitSize / 1_000_000}MB)`)
+  }
+  return params
+}
+
+async function parseUploadParams (body) {
+  const params = await uploadConverter(body).validate()
+  return validateUploadParams(params)
+}
+
+async function createSignedUpload (rawParams, { req, idToken, userId }) {
+  const params = await parseUploadParams(rawParams)
+
+  if (!auth0Service.getRoles(req.user).includes('systemUser')) {
+    await streamService.checkPermission('U', params.stream, idToken)
+  }
+  const uploadProject = await assertProjectUploadWithinLimit(idToken, params.stream, params.duration)
+  const fileExtension = params.filename.split('.').pop().toLowerCase()
+  let { filename, timestamp, stream, sampleRate, targetBitrate, checksum } = params
+  if (params.checksum) {
+    try {
+      const existingStreamSourceFile = await segmentService.getExistingSourceFile({ stream, timestamp, checksum, idToken })
+      const hasSegments = existingStreamSourceFile.segments && existingStreamSourceFile.segments.length
+      const sameFile = hasSegments && Math.abs(moment.utc(existingStreamSourceFile.segments[0].start).valueOf() - timestamp.valueOf()) < 1000
+      if (!sameFile || (sameFile && existingStreamSourceFile.availability !== 0)) {
+        const message = sameFile ? 'Duplicate.' : 'Invalid.'
+        throw new ValidationError(message)
+      }
+    } catch (e) {
+      if (e.message !== 'Stream source file not found') {
+        throw e
+      }
+    }
+  }
+  if (params.filename.endsWith('.opus')) {
+    const gSampleRate = getSampleRateFromFilename(params.filename)
+    if (gSampleRate) {
+      sampleRate = gSampleRate
+    }
+  }
+  const uploadTarget = await uploadTargets.selectUploadTarget({
+    streamId: stream,
+    userId,
+    projectId: uploadProject?.projectId,
+    duration: params.duration,
+    fileExtension,
+    timestamp: timestamp.toISOString()
+  })
+  const upload = await db.generateUpload({
+    streamId: stream,
+    userId,
+    projectId: uploadProject?.projectId,
+    duration: params.duration,
+    timestamp: timestamp.toISOString(),
+    originalFilename: filename,
+    fileExtension,
+    sampleRate,
+    targetBitrate,
+    checksum,
+    uploadTarget
+  })
+  const uploadId = upload.id
+  const url = await storage.getSignedUrl(upload.path, 'audio/' + fileExtension, upload.uploadSource)
+  return {
+    uploadId,
+    url,
+    path: upload.path,
+    bucket: upload.uploadSource?.bucket || process.env.UPLOAD_BUCKET,
+    uploadTargetId: upload.uploadSource?.targetId
+  }
+}
+
+function bulkErrorStatus (err) {
+  if (err instanceof ValidationError) { return 400 }
+  if (err instanceof ForbiddenError) { return 403 }
+  if (err instanceof EmptyResultError) { return 404 }
+  return 500
 }
 
 /**
@@ -89,111 +213,87 @@ router.route('/').post((req, res) => {
   }
   const idToken = req.headers.authorization
   const userId = req.user.guid || req.user.sub || 'unknown'
-  const converter = new Converter(req.body, {})
-  converter.convert('filename').toString()
-  converter.convert('timestamp').toMomentUtc()
-  converter.convert('stream').toString()
-  converter.convert('duration').optional().minimum(1).toInt()
-  converter.convert('fileSize').optional().minimum(1).toInt()
-  converter.convert('sampleRate').optional().toInt()
-  converter.convert('targetBitrate').optional().toInt()
-  converter.convert('checksum').optional().toString()
 
-  converter.validate()
-    .then(async (params) => {
-      // Cannot upload to the future
-      const isFuture = params.timestamp.isAfter(moment.utc())
-      if (isFuture) {
-        throw new ValidationError(`Future date upload: ${params.timestamp}`)
-      }
-
-      // Cannot upload to the past older than year 1971
-      const isPast = params.timestamp.year() < 1971
-      if (isPast) {
-        throw new ValidationError(`Past date upload: ${params.timestamp}`)
-      }
-
-      // Cannot upload file that duration more than the configured max (milliseconds)
-      const durationLimit = maxDurationWithGraceSeconds * 1000
-      if (params.duration && params.duration > durationLimit) {
-        throw new ValidationError(`Audio duration is more than ${maxDurationHoursDisplay} hours`)
-      }
-
-      // Cannot upload file that size more than the per-extension limit.
-      // FLAC may be large (already compressed); WAV/other stay tightly bounded.
-      const fileExtension = params.filename.split('.').pop().toLowerCase()
-      if (fileExtension === 'flac' && params.fileSize && params.fileSize > flacLimitSize) {
-        throw new ValidationError(`This flac file size is exceeding our limit (${flacLimitSize / 1_000_000}MB)`)
-      }
-      if (fileExtension === 'wav' && params.fileSize && params.fileSize > wavLimitSize) {
-        throw new ValidationError(`This wav file size is exceeding our limit (${wavLimitSize / 1_000_000}MB)`)
-      }
-      // Other file extensions (e.g. opus)
-      if (!['flac', 'wav'].includes(fileExtension) && params.fileSize && params.fileSize > otherLimitSize) {
-        throw new ValidationError(`This file size is exceeding our limit (${otherLimitSize / 1_000_000}MB)`)
-      }
-      return params
-    })
-    .then(async (params) => {
-      if (!auth0Service.getRoles(req.user).includes('systemUser')) {
-        await streamService.checkPermission('U', params.stream, idToken)
-      }
-      const uploadProject = await assertProjectUploadWithinLimit(idToken, params.stream, params.duration)
-      const fileExtension = params.filename.split('.').pop().toLowerCase()
-      let { filename, timestamp, stream, sampleRate, targetBitrate, checksum } = params
-      if (params.checksum) {
-        try {
-          const existingStreamSourceFile = await segmentService.getExistingSourceFile({ stream, timestamp, checksum, idToken })
-          const hasSegments = existingStreamSourceFile.segments && existingStreamSourceFile.segments.length
-          const sameFile = hasSegments && Math.abs(moment.utc(existingStreamSourceFile.segments[0].start).valueOf() - timestamp.valueOf()) < 1000
-          if (!sameFile || (sameFile && existingStreamSourceFile.availability !== 0)) {
-            const message = sameFile ? 'Duplicate.' : 'Invalid.'
-            throw new ValidationError(message)
-          }
-        } catch (e) {
-          if (e.message !== 'Stream source file not found') {
-            throw e
-          }
-        }
-      }
-      if (params.filename.endsWith('.opus')) {
-        const gSampleRate = getSampleRateFromFilename(params.filename)
-        if (gSampleRate) {
-          sampleRate = gSampleRate
-        }
-      }
-      const uploadTarget = await uploadTargets.selectUploadTarget({
-        streamId: stream,
-        userId,
-        projectId: uploadProject?.projectId,
-        duration: params.duration,
-        fileExtension,
-        timestamp: timestamp.toISOString()
-      })
-      const upload = await db.generateUpload({
-        streamId: stream,
-        userId,
-        projectId: uploadProject?.projectId,
-        duration: params.duration,
-        timestamp: timestamp.toISOString(),
-        originalFilename: filename,
-        fileExtension,
-        sampleRate,
-        targetBitrate,
-        checksum,
-        uploadTarget
-      })
-      const uploadId = upload.id
-      const url = await storage.getSignedUrl(upload.path, 'audio/' + fileExtension, upload.uploadSource)
-      res.json({
-        uploadId,
-        url,
-        path: upload.path,
-        bucket: upload.uploadSource?.bucket || process.env.UPLOAD_BUCKET,
-        uploadTargetId: upload.uploadSource?.targetId
-      })
+  createSignedUpload(req.body, { req, idToken, userId })
+    .then((upload) => {
+      res.json(upload)
     })
     .catch(httpErrorHandler(req, res, 'Failed creating an upload.'))
+})
+
+/**
+ * @swagger
+ *
+ * /uploads/bulk:
+ *   post:
+ *        summary: Generates signed URLs for multiple audio files
+ *        description: Creates one upload document and one object-scoped signed PUT URL per submitted audio file. Item failures are returned inline so valid files can still proceed.
+ *        tags:
+ *          - uploads
+ *        requestBody:
+ *          description: Bulk upload request
+ *          required: true
+ *          content:
+ *            application/json:
+ *              schema:
+ *                $ref: '#/components/requestBodies/UploadsBulk'
+ *        responses:
+ *          200:
+ *            description: Bulk upload result with per-item success or error entries
+ *            content:
+ *              application/json:
+ *                schema:
+ *                   $ref: '#/components/schemas/UploadsBulkResponse'
+ *          400:
+ *            description: Invalid bulk request wrapper
+ *          401:
+ *            description: Unauthorized
+ *          503:
+ *            description: Upload creation is paused
+ */
+router.route('/bulk').post((req, res) => {
+  if (`${process.env.CREATION_PAUSED}` === 'true') {
+    return res.status(503).json({ message: 'Server is on maintenance. Creating new uploads is paused. Try again later.' })
+  }
+
+  const uploads = req.body && req.body.uploads
+  if (!Array.isArray(uploads)) {
+    return httpErrorHandler(req, res, 'Failed creating bulk uploads.')(new ValidationError("Validation errors: Parameter 'uploads' must be an array."))
+  }
+  if (uploads.length < 1) {
+    return httpErrorHandler(req, res, 'Failed creating bulk uploads.')(new ValidationError('At least one upload is required.'))
+  }
+  if (uploads.length > maxBulkUploadCount) {
+    return httpErrorHandler(req, res, 'Failed creating bulk uploads.')(new ValidationError(`Bulk upload limit exceeded. Maximum ${maxBulkUploadCount} uploads are allowed per request.`))
+  }
+
+  const idToken = req.headers.authorization
+  const userId = req.user.guid || req.user.sub || 'unknown'
+
+  ;(async () => {
+    const results = []
+    for (let index = 0; index < uploads.length; index++) {
+      try {
+        const upload = await createSignedUpload(uploads[index], { req, idToken, userId })
+        results.push({ index, ok: true, ...upload })
+      } catch (err) {
+        results.push({
+          index,
+          ok: false,
+          status: bulkErrorStatus(err),
+          error: err.message || 'Failed creating upload.'
+        })
+      }
+    }
+
+    const created = results.filter((result) => result.ok).length
+    res.json({
+      requested: uploads.length,
+      created,
+      failed: uploads.length - created,
+      uploads: results
+    })
+  })().catch(httpErrorHandler(req, res, 'Failed creating bulk uploads.'))
 })
 
 /**
