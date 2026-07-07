@@ -12,7 +12,7 @@ describe('upload target registry policy selection', () => {
       forcePathStyle: true
     },
     {
-      id: 'rfcx-ingest-enam',
+      id: 'r2-enam-upload-bucket',
       version: 1,
       provider: 's3-compatible',
       bucket: 'rfcx-ingest-enam',
@@ -29,7 +29,7 @@ describe('upload target registry policy selection', () => {
   test('selects target from active single-target policy', () => {
     const selected = registry.selectTargetFromPolicy(targets, {
       mode: 'single-target',
-      targetId: 'rfcx-ingest-enam'
+      targetId: 'r2-enam-upload-bucket'
     })
 
     expect(selected).toBe(targets[1])
@@ -45,7 +45,7 @@ describe('upload target registry policy selection', () => {
   test('rejects unsupported policy modes', () => {
     expect(() => registry.selectTargetFromPolicy(targets, {
       mode: 'geo-weighted',
-      targetId: 'rfcx-ingest-enam'
+      targetId: 'r2-enam-upload-bucket'
     })).toThrow('Unsupported upload target policy mode: geo-weighted')
   })
 })

@@ -216,7 +216,7 @@ The registry selector now reads the active row from `upload_target_policy_versio
 The supported active policy shape is:
 
 ```json
-{ "mode": "single-target", "targetId": "rfcx-ingest-enam" }
+{ "mode": "single-target", "targetId": "r2-enam-upload-bucket" }
 ```
 
 Selection flow in `UPLOAD_TARGET_REGISTRY_MODE=active`:
@@ -233,7 +233,7 @@ New seed file:
 
 It upserts two enabled R2 targets:
 
-- `rfcx-ingest-enam`, bucket `rfcx-ingest-enam`, priority `10`, locale tags `enam,north-america,americas`.
+- `r2-enam-upload-bucket`, bucket `rfcx-ingest-enam`, endpoint `https://0692b20bb14f524d1a0cb43754a2f1ad.r2.cloudflarestorage.com`, secret ref `k8s:apps-prod/ingest-upload-target-r2-enam-creds`, priority `10`, locale tags `enam,north-america,americas`.
 - `legacy-env-upload-bucket`, bucket `rfcx-ingest-production`, priority `100`, locale tags `legacy,global`.
 
-It then writes the active policy so `rfcx-ingest-enam` is the default selected by the database registry. This does **not** require changing `UPLOAD_BUCKET`; the env bucket can remain `rfcx-ingest-production` while testing registry-active behavior.
+It then writes the active policy so the `r2-enam-upload-bucket` registry target, whose bucket is `rfcx-ingest-enam`, is the default selected by the database registry. This does **not** require changing `UPLOAD_BUCKET`; the env bucket can remain `rfcx-ingest-production` while testing registry-active behavior.
