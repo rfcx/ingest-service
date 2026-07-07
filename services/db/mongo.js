@@ -37,7 +37,8 @@ function generateUpload (opts) {
         return {
           id,
           path,
-          uploadSource: data.uploadSource
+          uploadSource: data.uploadSource,
+          signingSource: uploadTarget ? uploadTargets.sourceForSigning(uploadTarget, path) : undefined
         }
       } else {
         throw Error('Can not create upload.')

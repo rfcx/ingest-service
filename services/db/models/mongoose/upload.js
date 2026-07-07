@@ -23,7 +23,8 @@ const UploadSchema = new mongoose.Schema({
     key: String,
     endpoint: String,
     region: String,
-    forcePathStyle: Boolean
+    forcePathStyle: Boolean,
+    secretRef: String
   },
   uploadSourceDeletedAt: Date,
   uploadSourceCleanupMessage: String,

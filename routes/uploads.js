@@ -154,7 +154,7 @@ async function createSignedUpload (rawParams, { req, idToken, userId }) {
     uploadTarget
   })
   const uploadId = upload.id
-  const url = await storage.getSignedUrl(upload.path, 'audio/' + fileExtension, upload.uploadSource)
+  const url = await storage.getSignedUrl(upload.path, 'audio/' + fileExtension, upload.signingSource || upload.uploadSource)
   return {
     uploadId,
     url,

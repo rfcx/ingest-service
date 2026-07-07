@@ -24,8 +24,8 @@ function uploadClientForSource (source) {
   return buildS3Client({
     endpoint: source.endpoint,
     forcePathStyle: source.forcePathStyle,
-    accessKeyId: process.env.UPLOAD_S3_ACCESS_KEY_ID,
-    secretAccessKey: process.env.UPLOAD_S3_SECRET_KEY,
+    accessKeyId: source.accessKeyId || process.env.UPLOAD_S3_ACCESS_KEY_ID,
+    secretAccessKey: source.secretAccessKey || process.env.UPLOAD_S3_SECRET_KEY,
     region: source.region
   })
 }

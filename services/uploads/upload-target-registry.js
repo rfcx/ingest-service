@@ -43,13 +43,14 @@ function rowToTarget (row) {
     bucket: row.bucket,
     endpoint: row.endpoint || undefined,
     region: row.region || undefined,
-    forcePathStyle: row.force_path_style === null ? undefined : row.force_path_style
+    forcePathStyle: row.force_path_style === null ? undefined : row.force_path_style,
+    secretRef: row.secret_ref || undefined
   }
 }
 
 async function getEnabledUploadTargets () {
   const result = await getPool().query(`
-    SELECT id, version, provider, bucket, endpoint, region, force_path_style, priority, capacity_weight
+    SELECT id, version, provider, bucket, endpoint, region, force_path_style, secret_ref, priority, capacity_weight
     FROM upload_targets
     WHERE state = 'enabled'
     ORDER BY priority ASC, id ASC
