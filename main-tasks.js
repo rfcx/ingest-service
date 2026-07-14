@@ -26,3 +26,15 @@ ingestConsumer.start().catch((e) => {
   console.error('Ingest consumer failed to start; exiting for restart', e && e.message)
   process.exit(1)
 })
+
+// Ingest lane ROUTER (rfcx-local, 2026-07-14): consume the legacy upload queue,
+// look up each upload's laneTier from Mongo, re-publish onto the matching lane
+// queue for the weighted multi-lane consumer above. Only meaningful for the
+// rabbitmq consumer type; disabled via INGEST_LANE_ROUTER=off. Self-healing;
+// does NOT exit the pod on failure (the consumer is the liveness anchor).
+if (consumerType === 'rabbitmq') {
+  const { startRouter } = require('./services/consumer/router')
+  startRouter().catch((e) => {
+    console.error('Ingest lane router failed (continuing; consumer still drains legacy):', e && e.message)
+  })
+}

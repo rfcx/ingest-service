@@ -59,6 +59,11 @@ function uploadConverter (body) {
   converter.convert('sampleRate').optional().toInt()
   converter.convert('targetBitrate').optional().toInt()
   converter.convert('checksum').optional().toString()
+  // rfcx-local lane tier (2026-07-14): OPTIONAL requested ingest lane group.
+  // express|priority|standard; anything else (or absent) -> standard. The
+  // CRITERIA that decide the tier are applied here in the web-service (future);
+  // for now we accept a client/service-supplied hint and default to standard.
+  converter.convert('laneTier').optional().toString()
   return converter
 }
 
@@ -95,6 +100,18 @@ async function validateUploadParams (params) {
     throw new ValidationError(`This file size is exceeding our limit (${otherLimitSize / 1_000_000}MB)`)
   }
   return params
+}
+
+// rfcx-local lane-tier selection (2026-07-14). THE place to implement the
+// criteria (express if small file, priority if paid project/tier, etc.). For
+// now: honour an explicit `laneTier` on the request; otherwise standard.
+// Returns one of express|priority|standard.
+const LANE_TIERS = ['express', 'priority', 'standard']
+function deriveLaneTier (params, _ctx) {
+  const requested = (params && params.laneTier ? String(params.laneTier) : '').toLowerCase()
+  if (LANE_TIERS.includes(requested)) { return requested }
+  // --- future criteria go here (size/duration/project-tier) ---
+  return 'standard'
 }
 
 async function parseUploadParams (body) {
@@ -140,6 +157,10 @@ async function createSignedUpload (rawParams, { req, idToken, userId }) {
     fileExtension,
     timestamp: timestamp.toISOString()
   })
+  // rfcx-local lane tier: apply the (future) selection criteria here. For now,
+  // honour an explicit request and default to standard. This is the single
+  // place to add "express if small", "priority if paid project", etc.
+  const laneTier = deriveLaneTier(params, { uploadProject })
   const upload = await db.generateUpload({
     streamId: stream,
     userId,
@@ -151,7 +172,8 @@ async function createSignedUpload (rawParams, { req, idToken, userId }) {
     sampleRate,
     targetBitrate,
     checksum,
-    uploadTarget
+    uploadTarget,
+    laneTier
   })
   const uploadId = upload.id
   const url = await storage.getSignedUrl(upload.path, 'audio/' + fileExtension, upload.signingSource || upload.uploadSource)

@@ -15,6 +15,12 @@ const UploadSchema = new mongoose.Schema({
   sampleRate: Number,
   targetBitrate: Number,
   checksum: String,
+  // rfcx-local lane tier (2026-07-14): which ingest lane group this upload's
+  // work is routed to by the lane router. One of express|priority|standard;
+  // defaults to standard. The criteria that CHOOSE the tier live in the upload
+  // registration endpoint (routes/uploads.js); this field is the persisted
+  // decision the router reads.
+  laneTier: { type: String, default: 'standard' },
   uploadSource: {
     targetId: String,
     targetVersion: Number,
