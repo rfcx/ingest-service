@@ -10,7 +10,7 @@ const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 
 const statusNumbers = Object.values(status)
 
 function generateUpload (opts) {
-  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum, projectId, duration, uploadTarget } = opts
+  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum, projectId, duration, uploadTarget, laneTier } = opts
 
   const upload = new UploadModel({
     streamId,
@@ -22,7 +22,11 @@ function generateUpload (opts) {
     originalFilename,
     sampleRate,
     targetBitrate,
-    checksum
+    checksum,
+    // rfcx-local lane tier: express|priority|standard, default standard.
+    laneTier: ['express', 'priority', 'standard'].includes((laneTier || '').toLowerCase())
+      ? laneTier.toLowerCase()
+      : 'standard'
   })
 
   const id = upload._id
