@@ -67,7 +67,10 @@ async function routerLoop () {
   connection.on('error', (e) => console.error('Ingest router connection error', e && e.message))
   connection.on('close', stop)
 
-  const channel = await connection.createChannel()
+  // Confirm channel: sendToQueue + waitForConfirms needs a CONFIRM channel
+  // (amqplib exposes waitForConfirms only on createConfirmChannel(); a plain
+  // channel has no confirmSelect()).
+  const channel = await connection.createConfirmChannel()
   channel.on('error', (e) => console.error('Ingest router channel error', e && e.message))
   channel.on('close', stop)
 
@@ -76,9 +79,7 @@ async function routerLoop () {
   for (const q of [...lanes.expressLanes(), ...lanes.priorityLanes(), ...lanes.fairLanes()]) {
     await channel.checkQueue(q)
   }
-  // publisher confirms so a re-publish that the broker didn't accept nacks the
-  // source message (no silent loss).
-  await channel.confirmSelect()
+  // (confirm channel already established above -> waitForConfirms works)
   await channel.prefetch(20) // small pipeline; routing is cheap
 
   // depth cache for least-loaded lane selection (refreshed opportunistically).
