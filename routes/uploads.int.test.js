@@ -5,7 +5,7 @@ const originalEnv = { ...process.env }
 
 const storageModulePath = '../services/storage/amazon'
 jest.mock(storageModulePath)
-const { getSignedUrl } = require(storageModulePath)
+const { getSignedUrl, createMultipartUpload, getSignedPartUrls, completeMultipartUpload, abortMultipartUpload } = require(storageModulePath)
 
 const streamsModulePath = '../services/rfcx/streams'
 jest.mock(streamsModulePath)
@@ -45,6 +45,10 @@ beforeEach(async () => {
   }))
   getExistingSourceFile.mockImplementation(() => { throw new EmptyResultError('Stream source file not found') })
   getSignedUrl.mockImplementation(() => 'http://some.url')
+  createMultipartUpload.mockImplementation(async () => 'mp-upload-id-1')
+  getSignedPartUrls.mockImplementation(async (path, mpId, partNumbers) => partNumbers.map(partNumber => ({ partNumber, url: `http://part.url/${partNumber}` })))
+  completeMultipartUpload.mockImplementation(async () => ({}))
+  abortMultipartUpload.mockImplementation(async () => ({}))
   await truncateDbModels(UploadModel)
 })
 afterEach(async () => {
@@ -53,6 +57,10 @@ afterEach(async () => {
   getProjectUploadLimitSummary.mockRestore()
   getExistingSourceFile.mockRestore()
   getSignedUrl.mockRestore()
+  createMultipartUpload.mockRestore()
+  getSignedPartUrls.mockRestore()
+  completeMultipartUpload.mockRestore()
+  abortMultipartUpload.mockRestore()
   process.env = { ...originalEnv }
 })
 afterAll(async () => {
@@ -1119,5 +1127,128 @@ describe('GET /uploads/:id', () => {
     expect(response.body.sampleRate).toEqual(12000)
     expect(response.body.targetBitrate).toEqual(2921629)
     expect(response.body.checksum).toEqual('b40e6a5687c7ce2557ce48e131cc68c2889bfdc2')
+  })
+})
+
+describe('POST /uploads/multipart', () => {
+  const validBody = {
+    filename: 'bigfile-2021-06-08T19-26-40.flac',
+    timestamp: '2021-06-08T19:26:40.000Z',
+    stream: '0a1824085e3f',
+    duration: 3600000,
+    fileSize: 200 * 1024 * 1024, // 200MB -> 4 parts at default 64MB
+    sampleRate: 48000
+  }
+
+  test('registers the upload and returns per-part signed urls', async () => {
+    const response = await request(app).post('/uploads/multipart').send(validBody)
+    expect(response.statusCode).toBe(200)
+    expect(response.body.uploadId).toBeDefined()
+    expect(response.body.multipartUploadId).toEqual('mp-upload-id-1')
+    expect(response.body.partCount).toEqual(4)
+    expect(response.body.partUrls).toHaveLength(4)
+    expect(response.body.partUrls[0]).toEqual({ partNumber: 1, url: 'http://part.url/1' })
+    const upload = await UploadModel.findById(response.body.uploadId)
+    expect(upload.multipart.uploadId).toEqual('mp-upload-id-1')
+    expect(upload.multipart.partCount).toEqual(4)
+    expect(upload.status).toEqual(status.WAITING)
+  })
+
+  test('rejects files below the multipart minimum', async () => {
+    const response = await request(app).post('/uploads/multipart').send({ ...validBody, fileSize: 10 * 1024 * 1024 })
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toContain('Multipart is for files')
+  })
+
+  test('requires fileSize', async () => {
+    const { fileSize, ...withoutSize } = validBody
+    const response = await request(app).post('/uploads/multipart').send(withoutSize)
+    expect(response.statusCode).toBe(400)
+  })
+
+  test('applies the same duplicate check as single uploads', async () => {
+    getExistingSourceFile.mockImplementation(async () => ({
+      availability: 1,
+      segments: [{ start: '2021-06-08T19:26:40.000Z' }]
+    }))
+    const response = await request(app).post('/uploads/multipart').send({ ...validBody, checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca' })
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toContain('Duplicate')
+  })
+})
+
+describe('POST /uploads/:id/multipart/complete', () => {
+  const makeMultipartUpload = async (overrides = {}) => {
+    return await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.WAITING,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'bigfile.flac',
+      multipart: { uploadId: 'mp-upload-id-1', partSizeBytes: 64 * 1024 * 1024, partCount: 2 },
+      uploadSource: { targetId: 't1', bucket: 'streams-uploads', key: '0a1824085e3f/x.flac' },
+      ...overrides
+    }).save()
+  }
+
+  test('completes with valid parts', async () => {
+    const dbUpload = await makeMultipartUpload()
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/complete`).send({
+      parts: [{ partNumber: 1, etag: '"etag1"' }, { partNumber: 2, etag: '"etag2"' }]
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.body.completed).toBe(true)
+    expect(completeMultipartUpload).toHaveBeenCalledTimes(1)
+    const refreshed = await UploadModel.findById(dbUpload._id)
+    expect(refreshed.multipart.completedAt).toBeDefined()
+  })
+
+  test('is idempotent when already completed', async () => {
+    const dbUpload = await makeMultipartUpload({ multipart: { uploadId: 'mp-upload-id-1', partSizeBytes: 1, partCount: 1, completedAt: new Date() } })
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/complete`).send({
+      parts: [{ partNumber: 1, etag: '"etag1"' }]
+    })
+    expect(response.statusCode).toBe(200)
+    expect(completeMultipartUpload).not.toHaveBeenCalled()
+  })
+
+  test('rejects malformed parts', async () => {
+    const dbUpload = await makeMultipartUpload()
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/complete`).send({ parts: [{ partNumber: 'x' }] })
+    expect(response.statusCode).toBe(400)
+  })
+
+  test('403 for a different user', async () => {
+    const dbUpload = await makeMultipartUpload({ userId: seedValues.otherUserGuid })
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/complete`).send({
+      parts: [{ partNumber: 1, etag: '"etag1"' }]
+    })
+    expect(response.statusCode).toBe(403)
+  })
+
+  test('404 when no multipart in progress', async () => {
+    const dbUpload = await makeMultipartUpload({ multipart: undefined })
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/complete`).send({
+      parts: [{ partNumber: 1, etag: '"etag1"' }]
+    })
+    expect(response.statusCode).toBe(404)
+  })
+})
+
+describe('POST /uploads/:id/multipart/abort', () => {
+  test('aborts an in-progress multipart upload', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.WAITING,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'bigfile.flac',
+      multipart: { uploadId: 'mp-upload-id-1', partSizeBytes: 1, partCount: 1 },
+      uploadSource: { targetId: 't1', bucket: 'streams-uploads', key: '0a1824085e3f/x.flac' }
+    }).save()
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/abort`).send({})
+    expect(response.statusCode).toBe(200)
+    expect(response.body.aborted).toBe(true)
+    expect(abortMultipartUpload).toHaveBeenCalledTimes(1)
   })
 })

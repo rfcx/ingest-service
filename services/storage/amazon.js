@@ -102,6 +102,63 @@ function getSignedUrl (filePath, contentType, source) {
   }))
 }
 
+// ---------------------------------------------------------------------------
+// Presigned MULTIPART upload (browser large-file path, 2026-07-16).
+// S3-compatible multipart against the upload bucket (R2 supports the full
+// Create/UploadPart/Complete/Abort set). The service signs per-part PUT URLs
+// so the client never holds credentials; Complete/Abort are performed
+// server-side (they are cheap control-plane calls and R2's event rule fires
+// on CompleteMultipartUpload, keeping the ingestion trigger unchanged).
+// ---------------------------------------------------------------------------
+
+function createMultipartUpload (filePath, contentType, source) {
+  const params = {
+    Bucket: source?.bucket || uploadBucket,
+    Key: source?.key || filePath,
+    ContentType: contentType
+  }
+  const client = uploadClientForSource(source)
+  return client.createMultipartUpload(params).promise().then(data => data.UploadId)
+}
+
+function getSignedPartUrls (filePath, multipartUploadId, partNumbers, source) {
+  const client = uploadClientForSource(source)
+  const bucket = source?.bucket || uploadBucket
+  const key = source?.key || filePath
+  return Promise.all(partNumbers.map(partNumber => new Promise((resolve, reject) => {
+    client.getSignedUrl('uploadPart', {
+      Bucket: bucket,
+      Key: key,
+      UploadId: multipartUploadId,
+      PartNumber: partNumber,
+      Expires: 60 * 60 * 24 // 24 hours, matches single-PUT expiry
+    }, (err, url) => {
+      if (err) { reject(err) } else { resolve({ partNumber, url }) }
+    })
+  })))
+}
+
+function completeMultipartUpload (filePath, multipartUploadId, parts, source) {
+  const client = uploadClientForSource(source)
+  return client.completeMultipartUpload({
+    Bucket: source?.bucket || uploadBucket,
+    Key: source?.key || filePath,
+    UploadId: multipartUploadId,
+    MultipartUpload: {
+      Parts: parts.map(part => ({ PartNumber: part.partNumber, ETag: part.etag }))
+    }
+  }).promise()
+}
+
+function abortMultipartUpload (filePath, multipartUploadId, source) {
+  const client = uploadClientForSource(source)
+  return client.abortMultipartUpload({
+    Bucket: source?.bucket || uploadBucket,
+    Key: source?.key || filePath,
+    UploadId: multipartUploadId
+  }).promise()
+}
+
 function download (remotePath, localPath, source) {
   const bucket = source?.bucket || uploadBucket
   const key = source?.key || remotePath
@@ -191,6 +248,10 @@ function deleteObject (Bucket, Key) {
 
 module.exports = {
   getSignedUrl,
+  createMultipartUpload,
+  getSignedPartUrls,
+  completeMultipartUpload,
+  abortMultipartUpload,
   download,
   upload,
   createFromData,
