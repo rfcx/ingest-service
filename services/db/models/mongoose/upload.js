@@ -34,6 +34,15 @@ const UploadSchema = new mongoose.Schema({
   },
   uploadSourceDeletedAt: Date,
   uploadSourceCleanupMessage: String,
+  // Presigned multipart upload state (2026-07-16, browser large-file path).
+  // Present only for multipart uploads; single-PUT uploads never set it.
+  multipart: {
+    uploadId: String, // the S3/R2 multipart UploadId
+    partSizeBytes: Number,
+    partCount: Number,
+    completedAt: Date,
+    abortedAt: Date
+  },
   ingestionResult: {
     streamSourceFileId: String,
     streamId: String,

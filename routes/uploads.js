@@ -119,7 +119,9 @@ async function parseUploadParams (body) {
   return validateUploadParams(params)
 }
 
-async function createSignedUpload (rawParams, { req, idToken, userId }) {
+// Shared registration: validation, permission, quota, dedup, target selection
+// and the Mongo upload doc. Used by both the single-PUT and multipart flows.
+async function registerUpload (rawParams, { req, idToken, userId }) {
   const params = await parseUploadParams(rawParams)
 
   if (!auth0Service.getRoles(req.user).includes('systemUser')) {
@@ -175,11 +177,62 @@ async function createSignedUpload (rawParams, { req, idToken, userId }) {
     uploadTarget,
     laneTier
   })
+  return { upload, params, fileExtension }
+}
+
+async function createSignedUpload (rawParams, { req, idToken, userId }) {
+  const { upload, fileExtension } = await registerUpload(rawParams, { req, idToken, userId })
   const uploadId = upload.id
   const url = await storage.getSignedUrl(upload.path, 'audio/' + fileExtension, upload.signingSource || upload.uploadSource)
   return {
     uploadId,
     url,
+    path: upload.path,
+    bucket: upload.uploadSource?.bucket || process.env.UPLOAD_BUCKET,
+    uploadTargetId: upload.uploadSource?.targetId
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Presigned multipart upload (2026-07-16, browser large-file path).
+//
+// Part sizing: fixed server-chosen size so the client cannot pick pathological
+// values. S3/R2 constraints: parts 5MB..5GB (last part may be smaller), max
+// 10,000 parts. With 64MB parts a 1GiB FLAC is 16 parts; well within limits.
+// ---------------------------------------------------------------------------
+const MULTIPART_PART_SIZE_BYTES = Number(process.env.MULTIPART_PART_SIZE_BYTES || 64 * 1024 * 1024)
+const MULTIPART_MIN_FILE_BYTES = Number(process.env.MULTIPART_MIN_FILE_BYTES || 100 * 1024 * 1024)
+const MULTIPART_MAX_PARTS = 10000
+
+async function createMultipartSignedUpload (rawParams, { req, idToken, userId }) {
+  if (!rawParams || !rawParams.fileSize) {
+    throw new ValidationError('fileSize is required for multipart uploads.')
+  }
+  const fileSize = Number(rawParams.fileSize)
+  if (fileSize < MULTIPART_MIN_FILE_BYTES) {
+    throw new ValidationError(`Multipart is for files >= ${MULTIPART_MIN_FILE_BYTES / 1_000_000}MB; use POST /uploads for smaller files.`)
+  }
+  const partCount = Math.ceil(fileSize / MULTIPART_PART_SIZE_BYTES)
+  if (partCount > MULTIPART_MAX_PARTS) {
+    throw new ValidationError('File is too large for the configured part size.')
+  }
+
+  const { upload, fileExtension } = await registerUpload(rawParams, { req, idToken, userId })
+  const uploadId = upload.id
+  const signingSource = upload.signingSource || upload.uploadSource
+  const contentType = 'audio/' + fileExtension
+
+  const multipartUploadId = await storage.createMultipartUpload(upload.path, contentType, signingSource)
+  await db.setUploadMultipart(uploadId, { uploadId: multipartUploadId, partSizeBytes: MULTIPART_PART_SIZE_BYTES, partCount })
+  const partNumbers = Array.from({ length: partCount }, (_, i) => i + 1)
+  const partUrls = await storage.getSignedPartUrls(upload.path, multipartUploadId, partNumbers, signingSource)
+
+  return {
+    uploadId,
+    multipartUploadId,
+    partSizeBytes: MULTIPART_PART_SIZE_BYTES,
+    partCount,
+    partUrls,
     path: upload.path,
     bucket: upload.uploadSource?.bucket || process.env.UPLOAD_BUCKET,
     uploadTargetId: upload.uploadSource?.targetId
@@ -314,6 +367,116 @@ router.route('/').post((req, res) => {
       res.json(upload)
     })
     .catch(httpErrorHandler(req, res, 'Failed creating an upload.'))
+})
+
+/**
+ * @swagger
+ *
+ * /uploads/multipart:
+ *   post:
+ *        summary: Registers a large upload and returns presigned part URLs
+ *        description: Same validation/permission/quota/dedup as POST /uploads, but for large files. Returns one presigned PUT URL per part (server-chosen part size). The client PUTs each part (collecting ETags) then calls /uploads/{id}/multipart/complete.
+ *        tags:
+ *          - uploads
+ *        responses:
+ *          200:
+ *            description: Multipart upload descriptor with per-part signed URLs
+ *          400:
+ *            description: Invalid parameters (or file too small for multipart)
+ *          401:
+ *            description: Unauthorized
+ *          503:
+ *            description: Upload creation is paused
+ */
+router.route('/multipart').post((req, res) => {
+  if (`${process.env.CREATION_PAUSED}` === 'true') {
+    return res.status(503).json({ message: 'Server is on maintenance. Creating new uploads is paused. Try again later.' })
+  }
+  const idToken = req.headers.authorization
+  const userId = req.user.guid || req.user.sub || 'unknown'
+
+  createMultipartSignedUpload(req.body, { req, idToken, userId })
+    .then((upload) => { res.json(upload) })
+    .catch(httpErrorHandler(req, res, 'Failed creating a multipart upload.'))
+})
+
+/**
+ * @swagger
+ *
+ * /uploads/{id}/multipart/complete:
+ *   post:
+ *        summary: Completes a multipart upload
+ *        description: Server-side CompleteMultipartUpload with the client-collected part ETags. R2 fires its ObjectCreated event on completion, triggering ingestion exactly like a single PUT.
+ *        tags:
+ *          - uploads
+ *        responses:
+ *          200:
+ *            description: Completed
+ *          400:
+ *            description: Invalid parts payload
+ *          403:
+ *            description: Not the upload owner
+ *          404:
+ *            description: Unknown upload / no multipart in progress
+ */
+router.route('/:id/multipart/complete').post((req, res) => {
+  const id = req.params.id
+  const parts = req.body && req.body.parts
+  if (!Array.isArray(parts) || parts.length < 1 || !parts.every(p => p && Number.isInteger(p.partNumber) && typeof p.etag === 'string' && p.etag.length > 0)) {
+    return httpErrorHandler(req, res, 'Failed completing multipart upload.')(new ValidationError("Parameter 'parts' must be a non-empty array of { partNumber, etag }."))
+  }
+
+  return Promise.resolve().then(async () => {
+    const upload = assertUploadStatusAccess(req, await db.getUpload(id))
+    if (!upload.multipart || !upload.multipart.uploadId) {
+      throw new EmptyResultError('No multipart upload in progress for this upload id.')
+    }
+    if (upload.multipart.completedAt) {
+      // Idempotent: repeated completes (e.g. client retry after a timeout)
+      return res.json({ uploadId: id, completed: true })
+    }
+    // The object key lives on the persisted uploadSource (fetched docs have
+    // no top-level `path`); legacy fallback derives it from streamId + id.
+    const fallbackKey = `${upload.streamId}/${upload._id}.${(upload.originalFilename || '').split('.').pop().toLowerCase()}`
+    const source = uploadTargets.sourceFromUpload(upload, fallbackKey)
+    await storage.completeMultipartUpload(source.key || fallbackKey, upload.multipart.uploadId, parts, source)
+    await db.setUploadMultipartCompleted(id)
+    res.json({ uploadId: id, completed: true })
+  }).catch(httpErrorHandler(req, res, 'Failed completing multipart upload.'))
+})
+
+/**
+ * @swagger
+ *
+ * /uploads/{id}/multipart/abort:
+ *   post:
+ *        summary: Aborts a multipart upload and frees its stored parts
+ *        tags:
+ *          - uploads
+ *        responses:
+ *          200:
+ *            description: Aborted
+ *          403:
+ *            description: Not the upload owner
+ *          404:
+ *            description: Unknown upload / no multipart in progress
+ */
+router.route('/:id/multipart/abort').post((req, res) => {
+  const id = req.params.id
+  return Promise.resolve().then(async () => {
+    const upload = assertUploadStatusAccess(req, await db.getUpload(id))
+    if (!upload.multipart || !upload.multipart.uploadId) {
+      throw new EmptyResultError('No multipart upload in progress for this upload id.')
+    }
+    if (upload.multipart.abortedAt || upload.multipart.completedAt) {
+      return res.json({ uploadId: id, aborted: Boolean(upload.multipart.abortedAt) })
+    }
+    const fallbackKey = `${upload.streamId}/${upload._id}.${(upload.originalFilename || '').split('.').pop().toLowerCase()}`
+    const source = uploadTargets.sourceFromUpload(upload, fallbackKey)
+    await storage.abortMultipartUpload(source.key || fallbackKey, upload.multipart.uploadId, source)
+    await db.setUploadMultipartAborted(id)
+    res.json({ uploadId: id, aborted: true })
+  }).catch(httpErrorHandler(req, res, 'Failed aborting multipart upload.'))
 })
 
 /**

@@ -81,6 +81,18 @@ function getUpload (id) {
     })
 }
 
+function setUploadMultipart (uploadId, multipart) {
+  return UploadModel.updateOne({ _id: uploadId }, { $set: { multipart, updatedAt: new Date() } })
+}
+
+function setUploadMultipartCompleted (uploadId) {
+  return UploadModel.updateOne({ _id: uploadId }, { $set: { 'multipart.completedAt': new Date(), updatedAt: new Date() } })
+}
+
+function setUploadMultipartAborted (uploadId) {
+  return UploadModel.updateOne({ _id: uploadId }, { $set: { 'multipart.abortedAt': new Date(), updatedAt: new Date() } })
+}
+
 function updateUploadStatus (uploadId, statusNumber, failureMessage = null, ingestionResult = null) {
   if (!statusNumbers.includes(statusNumber)) {
     throw new Error('Invalid status')
@@ -180,6 +192,9 @@ function getOrCreateHealthCheck () {
 module.exports = {
   generateUpload,
   getPendingProjectDuration,
+  setUploadMultipart,
+  setUploadMultipartCompleted,
+  setUploadMultipartAborted,
   getUpload,
   getUploadDuplicateCount,
   getUploadFailedCount,
