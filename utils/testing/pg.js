@@ -6,12 +6,22 @@
 // none of which an in-memory stub would reproduce faithfully.
 //
 // It applies THE SAME `migrations/pg/001-ingest-schema.sql` that S2 applies to
-// the cluster, so the tested schema and the deployed schema cannot drift.
+// the cluster, VERBATIM, so the tested schema and the deployed schema cannot
+// drift.
+//
+// PARALLELISM: jest runs suites in parallel workers against one server, so each
+// worker gets its OWN DATABASE (`<base>_w<JEST_WORKER_ID>`) containing the real
+// `ingest` schema. Schema-level isolation was tried first and does not work
+// here: `services/db/uploads-pg.js` schema-qualifies its statements (correctly
+// — that makes it immune to a surprising search_path), so a per-worker schema
+// would have required de-qualifying production SQL purely to suit the tests.
+// Database-level isolation keeps production code untouched and is stronger.
+// This is the failure the first CI run exposed while every suite passed locally
+// when run one at a time.
 //
 // Connection comes from UPLOADS_POSTGRES_* / POSTGRES_* (see docker-compose:
-// CI starts a `postgres` service). When no server is configured/reachable the
-// PG suites SKIP rather than fail, so the default-path CI gate (UPLOADS_DB
-// unset) never depends on a database being present.
+// CI starts a `postgres` service). When none is configured the PG suites SKIP,
+// so the default-path CI gate (UPLOADS_DB unset) never depends on a database.
 // ---------------------------------------------------------------------------
 
 const fs = require('fs')
@@ -20,16 +30,35 @@ const { Pool } = require('pg')
 
 const MIGRATION_PATH = path.join(__dirname, '..', '..', 'migrations', 'pg', '001-ingest-schema.sql')
 
-function testDbConfig () {
+const WORKER_ID = process.env.JEST_WORKER_ID || `p${process.pid}`
+
+// Captured ONCE at module load. connect() rewrites UPLOADS_POSTGRES_DB so the
+// module under test targets this worker's database; without a snapshot, a later
+// read of the env var would return the worker name and the maintenance
+// connection would try to connect to the database it is trying to drop.
+const BASE_DB = process.env.UPLOADS_POSTGRES_DB || process.env.POSTGRES_DB || 'postgres'
+
+function baseDbName () {
+  return BASE_DB
+}
+
+/** This worker's private database. */
+function workerDbName () {
+  return `${baseDbName()}_w${WORKER_ID}`
+}
+
+function baseConfig () {
   return {
     host: process.env.UPLOADS_POSTGRES_HOSTNAME || process.env.POSTGRES_HOSTNAME || 'localhost',
     port: Number(process.env.UPLOADS_POSTGRES_PORT || process.env.POSTGRES_PORT || 5432),
-    database: process.env.UPLOADS_POSTGRES_DB || process.env.POSTGRES_DB || 'postgres',
     user: process.env.UPLOADS_POSTGRES_USERNAME || process.env.POSTGRES_USERNAME || 'postgres',
     password: process.env.UPLOADS_POSTGRES_PASSWORD || process.env.POSTGRES_PASSWORD || 'postgres',
-    connectionTimeoutMillis: 3000,
-    max: 3
+    connectionTimeoutMillis: 5000
   }
+}
+
+function testDbConfig () {
+  return { ...baseConfig(), database: workerDbName(), max: 3 }
 }
 
 let pool
@@ -56,13 +85,37 @@ function isConfigured () {
   return Boolean(process.env.UPLOADS_POSTGRES_HOSTNAME || process.env.POSTGRES_HOSTNAME)
 }
 
+/** Create (or recreate) this worker's database from the maintenance database. */
+async function createWorkerDatabase () {
+  const admin = new Pool({ ...baseConfig(), database: baseDbName(), max: 1 })
+  try {
+    // A previous crashed run may have left it behind.
+    await admin.query(`DROP DATABASE IF EXISTS "${workerDbName()}"`)
+    await admin.query(`CREATE DATABASE "${workerDbName()}"`)
+  } finally {
+    await admin.end()
+  }
+}
+
+async function dropWorkerDatabase () {
+  const admin = new Pool({ ...baseConfig(), database: baseDbName(), max: 1 })
+  try {
+    await admin.query(`DROP DATABASE IF EXISTS "${workerDbName()}"`)
+  } catch (e) { /* best effort */ } finally {
+    await admin.end()
+  }
+}
+
+/** Apply the real migration file, unmodified. */
 async function migrate () {
-  const sql = fs.readFileSync(MIGRATION_PATH, 'utf8')
-  await getPool().query(sql)
+  await getPool().query(fs.readFileSync(MIGRATION_PATH, 'utf8'))
 }
 
 async function connect () {
+  await createWorkerDatabase()
   await migrate()
+  // Point the module under test at this worker's database.
+  process.env.UPLOADS_POSTGRES_DB = workerDbName()
 }
 
 async function truncate () {
@@ -70,11 +123,6 @@ async function truncate () {
 }
 
 async function disconnect () {
-  // Drop the schema so a re-run starts from the migration, then release both
-  // this harness's pool and the pool held by the module under test.
-  try {
-    await getPool().query('DROP SCHEMA IF EXISTS ingest CASCADE')
-  } catch (e) { /* best effort */ }
   if (pool) {
     await pool.end()
     pool = undefined
@@ -82,6 +130,14 @@ async function disconnect () {
   try {
     await require('../../services/db/uploads-pg')._internal.closePool()
   } catch (e) { /* best effort */ }
+  await dropWorkerDatabase()
+  process.env.UPLOADS_POSTGRES_DB = BASE_DB
+}
+
+/** Row count of a table in this worker's database. */
+async function countRows (table) {
+  const result = await getPool().query(`SELECT COUNT(*)::int AS c FROM ingest.${table}`)
+  return result.rows[0].c
 }
 
 /** Raw row access, for assertions that must see the stored shape not the mapper's. */
@@ -142,7 +198,9 @@ module.exports = {
   truncate,
   migrate,
   getPool,
+  countRows,
   rawRow,
   insertUpload,
-  testDbConfig
+  testDbConfig,
+  workerDbName
 }

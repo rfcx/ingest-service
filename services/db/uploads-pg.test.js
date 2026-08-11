@@ -324,8 +324,7 @@ describePg('counts and quota', () => {
     expect(first.event).toBe('check')
     const second = await db.getOrCreateHealthCheck()
     expect(second.event).toBe('check')
-    const rows = await pgTesting.getPool().query('SELECT COUNT(*)::int AS c FROM ingest.health_check')
-    expect(rows.rows[0].c).toBe(1)
+    expect(await pgTesting.countRows('health_check')).toBe(1)
   })
 })
 
