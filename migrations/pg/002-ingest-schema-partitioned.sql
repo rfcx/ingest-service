@@ -131,6 +131,14 @@ DECLARE
   bound_to date;
   dropped integer := 0;
 BEGIN
+  -- DETACH needs ACCESS EXCLUSIVE on the parent; while that request queues
+  -- behind an in-flight reader, NEW queries queue behind it (measured: an
+  -- innocent SELECT waited the full reader duration). Bound the damage: wait
+  -- at most lock_timeout per partition, skip on contention, retry next run.
+  -- (DETACH CONCURRENTLY would avoid the queueing entirely but cannot run
+  -- inside a function/transaction block, so it is not available behind this
+  -- SECURITY DEFINER boundary.)
+  PERFORM set_config('lock_timeout', '2000ms', true);  -- true = this tx only
   FOR r IN
     SELECT c.relname
     FROM pg_class c
@@ -143,9 +151,13 @@ BEGIN
     -- partition name encodes its day: stream_uploads_pYYYYMMDD covers [d, d+1)
     bound_to := to_date(right(r.relname, 8), 'YYYYMMDD') + 1;
     IF bound_to <= cutoff THEN
-      EXECUTE format('ALTER TABLE ingest.stream_uploads DETACH PARTITION ingest.%I', r.relname);
-      EXECUTE format('DROP TABLE ingest.%I', r.relname);
-      dropped := dropped + 1;
+      BEGIN
+        EXECUTE format('ALTER TABLE ingest.stream_uploads DETACH PARTITION ingest.%I', r.relname);
+        EXECUTE format('DROP TABLE ingest.%I', r.relname);
+        dropped := dropped + 1;
+      EXCEPTION WHEN lock_not_available THEN
+        RAISE NOTICE 'drop_expired_partitions: % contended (lock_timeout), skipped — retried next run', r.relname;
+      END;
     END IF;
   END LOOP;
   RETURN dropped;
@@ -180,6 +192,29 @@ BEGIN
   RETURN created;
 END
 $fn$;
+
+-- Observability: derive maintenance health from the partition catalog itself
+-- (no bookkeeping row that could itself go stale). horizon_days_remaining
+-- counts partitions covering today onward — it shrinking toward 0 means the
+-- maintenance path (CronJob or hand-run) has stopped; alert on < 1.
+CREATE OR REPLACE VIEW ingest.retention_status AS
+SELECT
+  max(to_date(right(c.relname, 8), 'YYYYMMDD'))                         AS newest_partition_day,
+  min(to_date(right(c.relname, 8), 'YYYYMMDD'))                         AS oldest_partition_day,
+  count(*) FILTER (WHERE to_date(right(c.relname, 8), 'YYYYMMDD') >= current_date) AS horizon_days_remaining,
+  count(*)                                                              AS dated_partitions,
+  (SELECT count(*) FROM ingest.stream_uploads_default)                  AS default_partition_rows
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+JOIN pg_inherits i ON i.inhrelid = c.oid
+WHERE n.nspname = 'ingest'
+  AND i.inhparent = 'ingest.stream_uploads'::regclass
+  AND c.relname LIKE 'stream\_uploads\_p%';
+
+-- NOTE: no GRANTs here — roles are cluster-scoped and owned by the platform
+-- apply Job (rfcx-local data-stores/ingest-pg-schema-apply.yaml), which
+-- grants SELECT on this view to ingest_service + ingest_retention. This file
+-- must apply cleanly on a bare database (tests run it verbatim).
 
 -- lock down: only the roles that legitimately schedule maintenance
 REVOKE EXECUTE ON FUNCTION ingest.ensure_partitions(integer) FROM PUBLIC;
