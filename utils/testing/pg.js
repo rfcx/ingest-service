@@ -5,9 +5,9 @@
 // behaviour, partial indexes, char(24) comparison semantics and ON CONFLICT,
 // none of which an in-memory stub would reproduce faithfully.
 //
-// It applies THE SAME `migrations/pg/001-ingest-schema.sql` that S2 applies to
-// the cluster, VERBATIM, so the tested schema and the deployed schema cannot
-// drift.
+// It applies THE SAME `migrations/pg/002-ingest-schema-partitioned.sql` that
+// the platform applies to the cluster, VERBATIM, so the tested schema and the
+// deployed schema cannot drift.
 //
 // PARALLELISM: jest runs suites in parallel workers against one server, so each
 // worker gets its OWN DATABASE (`<base>_w<JEST_WORKER_ID>`) containing the real
