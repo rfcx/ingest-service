@@ -1,3 +1,7 @@
+-- ⚠️ SUPERSEDED by 002-ingest-schema-partitioned.sql (2026-08-11, before any
+-- traffic reached the table): the store is now RANGE-partitioned by created_at
+-- (retention = DROP PARTITION, insert path 3 small indexes). Kept for history;
+-- do NOT apply this file to a new environment.
 -- ---------------------------------------------------------------------------
 -- ingest-service: PostgreSQL upload store (mongo2pg S1)
 --

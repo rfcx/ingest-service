@@ -5,9 +5,9 @@
 // behaviour, partial indexes, char(24) comparison semantics and ON CONFLICT,
 // none of which an in-memory stub would reproduce faithfully.
 //
-// It applies THE SAME `migrations/pg/001-ingest-schema.sql` that S2 applies to
-// the cluster, VERBATIM, so the tested schema and the deployed schema cannot
-// drift.
+// It applies THE SAME `migrations/pg/002-ingest-schema-partitioned.sql` that
+// the platform applies to the cluster, VERBATIM, so the tested schema and the
+// deployed schema cannot drift.
 //
 // PARALLELISM: jest runs suites in parallel workers against one server, so each
 // worker gets its OWN DATABASE (`<base>_w<JEST_WORKER_ID>`) containing the real
@@ -28,7 +28,8 @@ const fs = require('fs')
 const path = require('path')
 const { Pool } = require('pg')
 
-const MIGRATION_PATH = path.join(__dirname, '..', '..', 'migrations', 'pg', '001-ingest-schema.sql')
+// 002 (partitioned) superseded 001 before any traffic reached the table.
+const MIGRATION_PATH = path.join(__dirname, '..', '..', 'migrations', 'pg', '002-ingest-schema-partitioned.sql')
 
 const WORKER_ID = process.env.JEST_WORKER_ID || `p${process.pid}`
 
@@ -114,6 +115,8 @@ async function migrate () {
 async function connect () {
   await createWorkerDatabase()
   await migrate()
+  // exercise the partition-maintenance path the retention job will use
+  await getPool().query('SELECT ingest.ensure_partitions(3)')
   // Point the module under test at this worker's database.
   process.env.UPLOADS_POSTGRES_DB = workerDbName()
 }
