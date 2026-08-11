@@ -1,8 +1,7 @@
 const moment = require('moment-timezone')
 const path = require('path')
 
-const UploadModel = require('../db/models/mongoose/upload').Upload
-const db = require('../db/mongo')
+const db = require('../db/uploads')
 const segmentService = require('./segments')
 const storage = require(`../storage/${process.env.PLATFORM || 'amazon'}`)
 
@@ -55,16 +54,13 @@ function buildConfig (env = process.env) {
 
 async function findCandidates (config) {
   const cutoff = moment.utc().subtract(config.ageHours, 'hours').toDate()
-  return UploadModel.find({
-    status: { $in: config.statuses },
-    updatedAt: { $lte: cutoff },
-    uploadSourceDeletedAt: { $exists: false },
-    streamId: { $ne: null },
-    checksum: { $ne: null },
-    originalFilename: { $ne: null }
+  // Goes through the backend seam (Mongo or PG) rather than a driver model,
+  // so this job follows UPLOADS_DB like every other consumer.
+  return db.findCleanupCandidates({
+    statuses: config.statuses,
+    cutoff,
+    batchSize: config.batchSize
   })
-    .sort({ updatedAt: 1 })
-    .limit(config.batchSize)
 }
 
 async function coreConfirmsIngested (upload) {
@@ -77,10 +73,7 @@ async function coreConfirmsIngested (upload) {
 }
 
 async function markDeleted (upload, message) {
-  await UploadModel.updateOne(
-    { _id: upload._id, uploadSourceDeletedAt: { $exists: false } },
-    { $set: { uploadSourceDeletedAt: new Date(), uploadSourceCleanupMessage: message } }
-  )
+  await db.markUploadSourceDeleted(upload._id, message)
 }
 
 async function cleanupUpload (upload, config) {

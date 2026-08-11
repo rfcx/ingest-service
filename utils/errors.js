@@ -1,4 +1,4 @@
-const db = require('../services/db/mongo')
+const db = require('../services/db/uploads')
 const { ValidationError, EmptyResultError, ForbiddenError, UnauthorizedError } = require('@rfcx/http-utils')
 
 class IngestionError extends Error {

@@ -21,7 +21,7 @@
 // eslint's static loop analysis can't see -> disable the false-positive rule.
 /* eslint-disable no-unmodified-loop-condition */
 const amqplib = require('amqplib')
-const db = require('../db/mongo')
+const db = require('../db/uploads')
 const lanes = require('./lanes')
 const { parseUploadFromFileName } = require('./misc')
 

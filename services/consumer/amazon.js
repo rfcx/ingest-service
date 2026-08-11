@@ -3,7 +3,7 @@ const AWS = require('../../utils/aws')
 const { ingest } = require('../rfcx/ingest')
 const { parseUploadFromFileName } = require('./misc')
 const TimeTracker = require('../../utils/time-tracker')
-const db = require('../db/mongo')
+const db = require('../db/uploads')
 
 const { flacLimitSize, wavLimitSize } = require('../../utils/limits')
 
