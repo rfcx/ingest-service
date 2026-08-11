@@ -174,22 +174,15 @@ async function ensurePartitionRange (Upload, pool, filter) {
   if (!bounds.length || !bounds[0].min) { return }
   const min = new Date(bounds[0].min)
   const max = new Date(bounds[0].max)
-  let created = 0
-  for (let d = new Date(Date.UTC(min.getUTCFullYear(), min.getUTCMonth(), min.getUTCDate()));
-    d <= max; d = new Date(d.getTime() + 86400000)) {
-    const name = `stream_uploads_p${d.toISOString().slice(0, 10).replace(/-/g, '')}`
-    const from = d.toISOString().slice(0, 10)
-    const to = new Date(d.getTime() + 86400000).toISOString().slice(0, 10)
-    const res = await pool.query(`
-      SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'ingest' AND c.relname = $1`, [name])
-    if (res.rows.length === 0) {
-      await pool.query(`CREATE TABLE ingest.${name} PARTITION OF ingest.stream_uploads FOR VALUES FROM ('${from}') TO ('${to}')`)
-      created++
-    }
-  }
+  // Partition creation is DDL, which the app role is (correctly) DENIED —
+  // it goes through the SECURITY DEFINER maintenance functions instead.
+  // (v1 of this tool did raw CREATE TABLE and the privilege model rejected
+  // it in production: the deny was the system working as designed.)
+  const fromDay = min.toISOString().slice(0, 10)
+  const toDay = max.toISOString().slice(0, 10)
+  const created = await pool.query('SELECT ingest.ensure_partitions_range($1::date, $2::date) AS n', [fromDay, toDay])
   await pool.query('SELECT ingest.ensure_partitions(3)') // today + horizon
-  console.log(`[backfill] partitions ensured (created ${created} for range ${min.toISOString().slice(0, 10)}..${max.toISOString().slice(0, 10)})`)
+  console.log(`[backfill] partitions ensured (created ${created.rows[0].n} for range ${fromDay}..${toDay})`)
 }
 
 async function backfill (Upload, pool) {

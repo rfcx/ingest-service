@@ -152,8 +152,38 @@ BEGIN
 END
 $fn$;
 
+-- Range variant for the backfill: creates daily partitions covering
+-- [from_day, to_day] (verbatim historical created_at values must have real
+-- partitions — rows landing in DEFAULT would never be reclaimed by
+-- drop_expired_partitions). Same SECURITY DEFINER rationale as above.
+CREATE OR REPLACE FUNCTION ingest.ensure_partitions_range (from_day date, to_day date)
+RETURNS integer LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = ingest, pg_temp AS $fn$
+DECLARE
+  d date;
+  created integer := 0;
+  part text;
+BEGIN
+  IF to_day < from_day OR to_day - from_day > 3660 THEN
+    RAISE EXCEPTION 'ensure_partitions_range: bad range % .. %', from_day, to_day;
+  END IF;
+  FOR d IN SELECT generate_series(from_day, to_day, interval '1 day')::date LOOP
+    part := 'stream_uploads_p' || to_char(d, 'YYYYMMDD');
+    IF NOT EXISTS (SELECT FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                   WHERE n.nspname = 'ingest' AND c.relname = part) THEN
+      EXECUTE format(
+        'CREATE TABLE ingest.%I PARTITION OF ingest.stream_uploads FOR VALUES FROM (%L) TO (%L)',
+        part, d, d + 1);
+      created := created + 1;
+    END IF;
+  END LOOP;
+  RETURN created;
+END
+$fn$;
+
 -- lock down: only the roles that legitimately schedule maintenance
 REVOKE EXECUTE ON FUNCTION ingest.ensure_partitions(integer) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION ingest.drop_expired_partitions(integer) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION ingest.ensure_partitions_range(date, date) FROM PUBLIC;
 
 COMMIT;
