@@ -1,7 +1,7 @@
 const platform = process.env.PLATFORM || 'amazon'
 
 const storage = require(`../storage/${platform}`)
-const db = require('../db/mongo')
+const db = require('../db/uploads')
 const audioService = require('../audio')
 const dirUtil = require('../../utils/dir')
 const segmentService = require('../rfcx/segments')

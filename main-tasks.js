@@ -3,7 +3,11 @@ require('dotenv').config()
 require('./utils/process-handlers').installProcessHandlers('ingest-service-tasks')
 
 console.info('Tasks: starting')
-require('./utils/mongo')
+// See main-api.js: utils/mongo connects at require time, so gate it on the
+// selected upload-store backend.
+if (!require('./utils/uploads-db').isPostgresUploads()) {
+  require('./utils/mongo')
+}
 const api = require('./routes/index-tasks')
 
 const port = process.env.PORT || 3030

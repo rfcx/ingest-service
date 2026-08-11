@@ -1,7 +1,7 @@
 const axios = require('../../utils/axios')
 const auth0Service = require('../auth0')
 const { matchAxiosErrorToRfcx, IngestionError } = require('../../utils/errors')
-const { status } = require('../db/mongo')
+const { status } = require('../db/uploads')
 const { DUPLICATE, INGESTED, FAILED } = status
 
 const apiHostName = process.env.API_HOST

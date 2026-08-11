@@ -189,6 +189,43 @@ function getOrCreateHealthCheck () {
     })
 }
 
+// ---------------------------------------------------------------------------
+// upload-source cleanup seam (mongo2pg S1)
+//
+// `upload-source-cleanup.js` previously reached for UploadModel directly. It
+// now goes through these two functions, which exist with identical signatures
+// and semantics in `uploads-pg.js`, so the cleanup job works on either engine.
+// The predicate authorises deletion of real R2/S3 objects — keep the two
+// implementations in step.
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {{ statuses: number[], cutoff: Date, batchSize: number }} opts
+ */
+function findCleanupCandidates ({ statuses, cutoff, batchSize }) {
+  return UploadModel.find({
+    status: { $in: statuses },
+    updatedAt: { $lte: cutoff },
+    uploadSourceDeletedAt: { $exists: false },
+    streamId: { $ne: null },
+    checksum: { $ne: null },
+    originalFilename: { $ne: null }
+  })
+    .sort({ updatedAt: 1 })
+    .limit(batchSize)
+}
+
+/**
+ * Idempotent: the `$exists:false` guard stops a concurrent second pass from
+ * overwriting the original deletion record.
+ */
+function markUploadSourceDeleted (uploadId, message) {
+  return UploadModel.updateOne(
+    { _id: uploadId, uploadSourceDeletedAt: { $exists: false } },
+    { $set: { uploadSourceDeletedAt: new Date(), uploadSourceCleanupMessage: message } }
+  )
+}
+
 module.exports = {
   generateUpload,
   getPendingProjectDuration,
@@ -203,5 +240,7 @@ module.exports = {
   saveDeploymentInfo,
   updateDeploymentInfo,
   getOrCreateHealthCheck,
+  findCleanupCandidates,
+  markUploadSourceDeleted,
   status
 }
