@@ -138,7 +138,7 @@ const UPSERT = `
      upload_source, upload_source_deleted_at, upload_source_cleanup_message,
      multipart, ingestion_result, created_at, updated_at)
   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
-  ON CONFLICT (id) DO UPDATE SET
+  ON CONFLICT (id, created_at) DO UPDATE SET
     stream_id = excluded.stream_id,
     user_id = excluded.user_id,
     project_id = excluded.project_id,
@@ -161,8 +161,40 @@ const UPSERT = `
   -- late-delta guard: never clobber a PG row that is newer than this Mongo doc
   WHERE ingest.stream_uploads.updated_at <= excluded.updated_at`
 
+async function ensurePartitionRange (Upload, pool, filter) {
+  // Partitioned table (migration 002): rows route by created_at, and
+  // retention drops whole partitions by name. Backfilled rows carry VERBATIM
+  // historical created_at values, so their daily partitions must exist —
+  // otherwise they land in the DEFAULT partition, which retention never
+  // drops. Create one partition per day across the source data's range.
+  const bounds = await Upload.aggregate([
+    { $match: filter },
+    { $group: { _id: null, min: { $min: '$createdAt' }, max: { $max: '$createdAt' } } }
+  ])
+  if (!bounds.length || !bounds[0].min) { return }
+  const min = new Date(bounds[0].min)
+  const max = new Date(bounds[0].max)
+  let created = 0
+  for (let d = new Date(Date.UTC(min.getUTCFullYear(), min.getUTCMonth(), min.getUTCDate()));
+    d <= max; d = new Date(d.getTime() + 86400000)) {
+    const name = `stream_uploads_p${d.toISOString().slice(0, 10).replace(/-/g, '')}`
+    const from = d.toISOString().slice(0, 10)
+    const to = new Date(d.getTime() + 86400000).toISOString().slice(0, 10)
+    const res = await pool.query(`
+      SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'ingest' AND c.relname = $1`, [name])
+    if (res.rows.length === 0) {
+      await pool.query(`CREATE TABLE ingest.${name} PARTITION OF ingest.stream_uploads FOR VALUES FROM ('${from}') TO ('${to}')`)
+      created++
+    }
+  }
+  await pool.query('SELECT ingest.ensure_partitions(3)') // today + horizon
+  console.log(`[backfill] partitions ensured (created ${created} for range ${min.toISOString().slice(0, 10)}..${max.toISOString().slice(0, 10)})`)
+}
+
 async function backfill (Upload, pool) {
   const filter = SINCE ? { updatedAt: { $gte: SINCE } } : {}
+  await ensurePartitionRange(Upload, pool, filter)
   const total = await Upload.countDocuments(filter)
   console.log(`[backfill] mode=${SINCE ? 'delta since ' + SINCE.toISOString() : 'full'} docs=${total} batch=${BATCH_SIZE}`)
 
