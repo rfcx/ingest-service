@@ -93,7 +93,11 @@ CREATE TABLE IF NOT EXISTS ingest.health_check (
 
 -- Create daily partitions from today-1 through today+days_ahead (idempotent).
 CREATE OR REPLACE FUNCTION ingest.ensure_partitions (days_ahead integer DEFAULT 3)
-RETURNS integer LANGUAGE plpgsql AS $fn$
+RETURNS integer LANGUAGE plpgsql
+-- SECURITY DEFINER: these create/drop partition tables, which the
+-- retention role must trigger but must not be able to do ad hoc.
+-- Owned by the applying superuser; EXECUTE granted explicitly below.
+SECURITY DEFINER SET search_path = ingest, pg_temp AS $fn$
 DECLARE
   d date;
   created integer := 0;
@@ -116,7 +120,11 @@ $fn$;
 -- Drop whole partitions strictly older than the retention window. Never
 -- touches the DEFAULT partition. Returns the number of partitions dropped.
 CREATE OR REPLACE FUNCTION ingest.drop_expired_partitions (retention_days integer DEFAULT 14)
-RETURNS integer LANGUAGE plpgsql AS $fn$
+RETURNS integer LANGUAGE plpgsql
+-- SECURITY DEFINER: these create/drop partition tables, which the
+-- retention role must trigger but must not be able to do ad hoc.
+-- Owned by the applying superuser; EXECUTE granted explicitly below.
+SECURITY DEFINER SET search_path = ingest, pg_temp AS $fn$
 DECLARE
   r record;
   cutoff date := current_date - retention_days;
@@ -143,5 +151,9 @@ BEGIN
   RETURN dropped;
 END
 $fn$;
+
+-- lock down: only the roles that legitimately schedule maintenance
+REVOKE EXECUTE ON FUNCTION ingest.ensure_partitions(integer) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION ingest.drop_expired_partitions(integer) FROM PUBLIC;
 
 COMMIT;
