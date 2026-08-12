@@ -254,7 +254,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     tracker.logAndSetNewPoint(`[${uploadId}] downloaded file`)
     console.info(`[${uploadId}] Updating upload status to UPLOADED`)
     await db.updateUploadStatus(uploadId, db.status.UPLOADED)
-    tracker.logAndSetNewPoint(`[${uploadId}] updated upload status in Mongo`)
+    tracker.logAndSetNewPoint(`[${uploadId}] updated upload status in upload store`)
 
     const fileData = await audioService.identify(fileLocalPath)
     tracker.logAndSetNewPoint(`[${uploadId}] identified file with ffmpeg`)
@@ -325,7 +325,7 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
 
     console.info(`[${uploadId}] Modifying status to INGESTED (${db.status.INGESTED})`)
     await db.updateUploadStatus(uploadId, db.status.INGESTED, null, buildIngestionResult(coreData, outputFiles, upload))
-    tracker.logAndSetNewPoint(`[${uploadId}] updated upload status in Mongo`)
+    tracker.logAndSetNewPoint(`[${uploadId}] updated upload status in upload store`)
 
     if (PROMETHEUS_ENABLED && fileData.sampleCount) {
       console.info(`[${uploadId}] Updating processing metrics`)
