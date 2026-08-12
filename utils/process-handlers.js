@@ -26,12 +26,20 @@ function installProcessHandlers (label) {
   })
 
   process.on('unhandledRejection', (reason) => {
-    console.error('Unhandled promise rejection', {
+    // Exit (like uncaughtException above) instead of only logging. A silently-
+    // swallowed rejection previously left the process running in an undefined
+    // state — most damagingly, an initial RabbitMQ connect failure that left
+    // the consumer pod up but NOT consuming (queue stalled at 0 consumers, pod
+    // looked healthy). Exiting lets kubernetes restart the pod, which (with the
+    // consumer's reconnect-with-backoff) recovers cleanly. Process state after
+    // an unhandled rejection is undefined, so continuing is never safe.
+    console.error('Unhandled promise rejection (will exit)', {
       service: label,
       message: reason && reason.message,
       stack: reason && reason.stack,
       reason: typeof reason === 'object' ? undefined : reason
     })
+    process.exit(1)
   })
 }
 

@@ -1,11 +1,11 @@
 process.env.PLATFORM = 'amazon'
 process.env.UPLOAD_BUCKET = 'streams-uploads'
 
-const originalEnv = process.env
+const originalEnv = { ...process.env }
 
 const storageModulePath = '../services/storage/amazon'
 jest.mock(storageModulePath)
-const { getSignedUrl } = require(storageModulePath)
+const { getSignedUrl, createMultipartUpload, getSignedPartUrls, completeMultipartUpload, abortMultipartUpload } = require(storageModulePath)
 
 const streamsModulePath = '../services/rfcx/streams'
 jest.mock(streamsModulePath)
@@ -36,6 +36,7 @@ beforeAll(async () => {
   await startDb()
 })
 beforeEach(async () => {
+  process.env = { ...originalEnv }
   checkPermission.mockImplementation(() => {})
   getStream.mockImplementation(async () => ({ data: { id: '0a1824085e3f', project: 'goQioqL49' } }))
   getProjectUploadLimitSummary.mockImplementation(async () => ({
@@ -44,6 +45,10 @@ beforeEach(async () => {
   }))
   getExistingSourceFile.mockImplementation(() => { throw new EmptyResultError('Stream source file not found') })
   getSignedUrl.mockImplementation(() => 'http://some.url')
+  createMultipartUpload.mockImplementation(async () => 'mp-upload-id-1')
+  getSignedPartUrls.mockImplementation(async (path, mpId, partNumbers) => partNumbers.map(partNumber => ({ partNumber, url: `http://part.url/${partNumber}` })))
+  completeMultipartUpload.mockImplementation(async () => ({}))
+  abortMultipartUpload.mockImplementation(async () => ({}))
   await truncateDbModels(UploadModel)
 })
 afterEach(async () => {
@@ -52,7 +57,11 @@ afterEach(async () => {
   getProjectUploadLimitSummary.mockRestore()
   getExistingSourceFile.mockRestore()
   getSignedUrl.mockRestore()
-  process.env = originalEnv
+  createMultipartUpload.mockRestore()
+  getSignedPartUrls.mockRestore()
+  completeMultipartUpload.mockRestore()
+  abortMultipartUpload.mockRestore()
+  process.env = { ...originalEnv }
 })
 afterAll(async () => {
   await stopDb()
@@ -121,7 +130,7 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual(`Past date upload: ${requestBody.timestamp}`)
   })
-  test('returns validation error if duration is more than 1 hour', async () => {
+  test('returns validation error if duration is more than 24 hours', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
@@ -129,12 +138,12 @@ describe('POST /uploads', () => {
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
       targetBitrate: 1,
-      duration: 3_601_001,
+      duration: (24 * 60 * 60 * 1000) + (60 * 1000) + 1001, // > 24h + 1min grace
       fileSize: 1_000_000
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual('Audio duration is more than 1 hour')
+    expect(response.body.message).toEqual('Audio duration is more than 24 hours')
   })
   test('returns validation error if duration is 0', async () => {
     const requestBody = {
@@ -151,7 +160,7 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual('Validation errors: Parameter \'duration\' is smaller than the minimum 1.')
   })
-  test('returns validation error if fileSize as flac file more than 150MB', async () => {
+  test('returns validation error if fileSize as flac file more than 1GB', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
       timestamp: '2021-06-08T19:26:40.000Z',
@@ -160,12 +169,13 @@ describe('POST /uploads', () => {
       sampleRate: 64000,
       targetBitrate: 1,
       duration: 3600000,
-      fileSize: 150_000_001
+      fileSize: 1_073_741_825
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual('This flac file size is exceeding our limit (150MB)')
+    expect(response.body.message).toEqual('This flac file size is exceeding our limit (1073.741824MB)')
   })
+
   test('returns validation error if fileSize as wav file more than 200MB', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.wav',
@@ -382,7 +392,9 @@ describe('POST /uploads', () => {
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
-      targetBitrate: 1
+      targetBitrate: 1,
+      duration: 3600000,
+      fileSize: 500_000_000 // > old 150MB cap, < new 1GB FLAC cap
     }
     const response = await request(app).post('/uploads').send(requestBody)
     const upload = await UploadModel.findOne({ checksum: requestBody.checksum })
@@ -391,6 +403,11 @@ describe('POST /uploads', () => {
     expect(response.body.url).toBe('http://some.url')
     expect(response.body.path).toBeDefined()
     expect(response.body.bucket).toBe('streams-uploads')
+    expect(response.body.uploadTargetId).toBe('legacy-env-upload-bucket')
+    expect(upload.uploadSource.targetId).toBe('legacy-env-upload-bucket')
+    expect(upload.uploadSource.bucket).toBe('streams-uploads')
+    expect(upload.uploadSource.key).toBe(response.body.path)
+    expect(getSignedUrl).toHaveBeenCalledWith(response.body.path, 'audio/flac', expect.objectContaining({ bucket: 'streams-uploads', key: response.body.path }))
     expect(upload.originalFilename).toBe(requestBody.filename)
     expect(upload.streamId).toBe(requestBody.stream)
     expect(upload.userId).toBe(seedValues.primaryUserGuid)
@@ -719,6 +736,342 @@ describe('POST /uploads', () => {
   })
 })
 
+describe('POST /uploads/bulk', () => {
+  const validUpload = (overrides = {}) => ({
+    filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+    timestamp: '2021-06-08T19:26:40.000Z',
+    stream: '0a1824085e3f',
+    checksum: 'bulk-checksum-1',
+    sampleRate: 64000,
+    targetBitrate: 1,
+    duration: 60000,
+    fileSize: 10_000_000,
+    ...overrides
+  })
+
+  test('creates one upload document and signed URL per valid item', async () => {
+    const requestBody = {
+      uploads: [
+        validUpload(),
+        validUpload({
+          filename: '0a1824085e3f-2021-06-08T19-27-40.wav',
+          timestamp: '2021-06-08T19:27:40.000Z',
+          checksum: 'bulk-checksum-2',
+          fileSize: 20_000_000
+        })
+      ]
+    }
+
+    const response = await request(app).post('/uploads/bulk').send(requestBody)
+    const uploads = await UploadModel.find({}).sort({ timestamp: 1 })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body.requested).toBe(2)
+    expect(response.body.created).toBe(2)
+    expect(response.body.failed).toBe(0)
+    expect(response.body.uploads).toHaveLength(2)
+    expect(response.body.uploads[0]).toMatchObject({
+      index: 0,
+      ok: true,
+      url: 'http://some.url',
+      bucket: 'streams-uploads',
+      uploadTargetId: 'legacy-env-upload-bucket'
+    })
+    expect(response.body.uploads[1]).toMatchObject({
+      index: 1,
+      ok: true,
+      url: 'http://some.url',
+      bucket: 'streams-uploads',
+      uploadTargetId: 'legacy-env-upload-bucket'
+    })
+    expect(response.body.uploads[0].uploadId).toBe(`${uploads[0]._id}`)
+    expect(response.body.uploads[0].path).toBe(`${requestBody.uploads[0].stream}/${uploads[0]._id}.flac`)
+    expect(response.body.uploads[1].uploadId).toBe(`${uploads[1]._id}`)
+    expect(response.body.uploads[1].path).toBe(`${requestBody.uploads[1].stream}/${uploads[1]._id}.wav`)
+    expect(getSignedUrl).toHaveBeenCalledTimes(2)
+    expect(uploads[0].uploadSource.bucket).toBe('streams-uploads')
+    expect(uploads[1].uploadSource.bucket).toBe('streams-uploads')
+  })
+
+  test('returns per-item errors while still creating valid uploads', async () => {
+    getExistingSourceFile.mockImplementation(({ checksum }) => {
+      if (checksum === 'bulk-duplicate') {
+        return {
+          filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+          availability: 1,
+          segments: [
+            { start: '2021-06-08T19:26:40.000Z', availability: 1 }
+          ]
+        }
+      }
+      throw new EmptyResultError('Stream source file not found')
+    })
+
+    const response = await request(app).post('/uploads/bulk').send({
+      uploads: [
+        validUpload({ checksum: 'bulk-ok' }),
+        validUpload({ checksum: 'bulk-duplicate' }),
+        validUpload({ filename: 'too-large.opus', checksum: 'bulk-too-large', fileSize: 150_000_001 })
+      ]
+    })
+    const uploads = await UploadModel.find({})
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body.requested).toBe(3)
+    expect(response.body.created).toBe(1)
+    expect(response.body.failed).toBe(2)
+    expect(response.body.uploads[0].ok).toBe(true)
+    expect(response.body.uploads[1]).toMatchObject({ index: 1, ok: false, status: 400, error: 'Duplicate.' })
+    expect(response.body.uploads[2]).toMatchObject({ index: 2, ok: false, status: 400, error: 'This file size is exceeding our limit (150MB)' })
+    expect(uploads).toHaveLength(1)
+    expect(uploads[0].checksum).toBe('bulk-ok')
+  })
+
+  test('per-batch lookup cache: permission + project-summary hit ONCE per stream, quota still enforced across the batch', async () => {
+    // 6 items, one stream. Pre-cache: 6 permission calls + 6 stream gets +
+    // 6 summary calls. With the cache: 1 of each. Quota: limit allows only
+    // 4 more minutes; items are 1 minute each — the batch itself must
+    // consume the budget (batchPendingMs) even though the DB pending figure
+    // can't see uncommitted siblings mid-batch.
+    getProjectUploadLimitSummary.mockClear()
+    checkPermission.mockClear()
+    getStream.mockClear()
+    getProjectUploadLimitSummary.mockImplementation(async () => ({
+      recordingMinutesCount: 0,
+      recordingMinutesLimit: 4
+    }))
+
+    const response = await request(app).post('/uploads/bulk').send({
+      uploads: Array.from({ length: 6 }, (_, i) => validUpload({
+        checksum: `bulk-quota-${i}`,
+        timestamp: `2021-06-08T1${i}:26:40.000Z`,
+        duration: 60000 // 1 minute each
+      }))
+    })
+
+    expect(response.statusCode).toBe(200)
+    // shared lookups collapsed to one round trip each
+    expect(checkPermission).toHaveBeenCalledTimes(1)
+    expect(getStream).toHaveBeenCalledTimes(1)
+    expect(getProjectUploadLimitSummary).toHaveBeenCalledTimes(1)
+    // quota: exactly 4 of 6 admitted; 2 rejected by the batch-aware check
+    expect(response.body.created).toBe(4)
+    expect(response.body.failed).toBe(2)
+    const rejected = response.body.uploads.filter(u => !u.ok)
+    expect(rejected).toHaveLength(2)
+    for (const r of rejected) {
+      expect(r.error).toBe('Project recording-minute limit exceeded.')
+    }
+  })
+
+  test('parallel registration preserves request-order index addressing', async () => {
+    const response = await request(app).post('/uploads/bulk').send({
+      uploads: Array.from({ length: 10 }, (_, i) => validUpload({
+        checksum: `bulk-order-${i}`,
+        timestamp: `2021-06-08T1${i % 10}:26:40.000Z`
+      }))
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.body.uploads.map(u => u.index)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    expect(response.body.created).toBe(10)
+  })
+
+  test('returns validation error if uploads is missing or not an array', async () => {
+    const response = await request(app).post('/uploads/bulk').send({ uploads: {} })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe("Validation errors: Parameter 'uploads' must be an array.")
+  })
+
+  test('returns validation error if uploads array is empty', async () => {
+    const response = await request(app).post('/uploads/bulk').send({ uploads: [] })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe('At least one upload is required.')
+  })
+
+  test('returns 503 error if uploading is paused', async () => {
+    process.env.CREATION_PAUSED = 'true'
+
+    const response = await request(app).post('/uploads/bulk').send({ uploads: [validUpload()] })
+
+    expect(response.statusCode).toBe(503)
+    expect(response.body.message).toEqual('Server is on maintenance. Creating new uploads is paused. Try again later.')
+    const uploads = await UploadModel.find({})
+    expect(uploads.length).toBe(0)
+  })
+})
+
+describe('GET /uploads/:id/status', () => {
+  test('returns derived ingestion status and recording identifiers', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      projectId: 'project-1',
+      userId: seedValues.primaryUserGuid,
+      status: status.INGESTED,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.flac',
+      ingestionResult: {
+        streamSourceFileId: 'source-file-guid-1',
+        streamId: '0a1824085e3f',
+        projectId: 'project-1',
+        siteId: 'site-1',
+        arbimonProjectId: 'arbimon-project-1',
+        arbimonSiteId: 'arbimon-site-1',
+        ingestedAt: '2021-06-08T19:30:00.000Z',
+        segments: [{
+          id: 'segment-guid-1',
+          start: '2021-06-08T19:26:40.000Z',
+          end: '2021-06-08T19:27:40.000Z',
+          path: '2021/06/08/0a1824085e3f/segment-guid-1.flac'
+        }]
+      }
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body).toMatchObject({
+      uploadId: `${dbUpload._id}`,
+      status: status.INGESTED,
+      statusName: 'INGESTED',
+      terminal: true,
+      retryable: false,
+      nextAction: 'complete',
+      stream: {
+        id: '0a1824085e3f',
+        projectId: 'project-1',
+        siteId: 'site-1',
+        arbimonProjectId: 'arbimon-project-1',
+        arbimonSiteId: 'arbimon-site-1'
+      },
+      recording: {
+        streamSourceFileId: 'source-file-guid-1',
+        segments: [{
+          id: 'segment-guid-1',
+          path: '2021/06/08/0a1824085e3f/segment-guid-1.flac'
+        }]
+      }
+    })
+  })
+
+  test('returns retry guidance for failed upload', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.FAILED,
+      failureMessage: 'Server failed with processing your file. Please try again later.',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.flac'
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body).toMatchObject({
+      uploadId: `${dbUpload._id}`,
+      status: status.FAILED,
+      statusName: 'FAILED',
+      terminal: true,
+      retryable: true,
+      nextAction: 'retry_upload',
+      failureMessage: 'Server failed with processing your file. Please try again later.'
+    })
+    expect(response.body.recording).toBeUndefined()
+  })
+
+  test('returns review guidance for deterministic failed upload', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.FAILED,
+      failureMessage: 'File extension is not supported',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.mp3'
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body).toMatchObject({
+      uploadId: `${dbUpload._id}`,
+      status: status.FAILED,
+      statusName: 'FAILED',
+      terminal: true,
+      retryable: false,
+      nextAction: 'review_error',
+      failureMessage: 'File extension is not supported'
+    })
+  })
+
+  test('returns forbidden error for upload which is not yours', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.otherUserId,
+      status: status.WAITING,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.flac'
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(403)
+  })
+})
+
+describe('POST /uploads/status', () => {
+  test('returns bulk status with per-id errors', async () => {
+    const ingested = await new UploadModel({
+      streamId: '0a1824085e3f',
+      projectId: 'project-1',
+      userId: seedValues.primaryUserGuid,
+      status: status.INGESTED,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'ok.flac',
+      ingestionResult: {
+        streamSourceFileId: 'source-file-guid-1',
+        streamId: '0a1824085e3f',
+        projectId: 'project-1',
+        ingestedAt: '2021-06-08T19:30:00.000Z',
+        segments: [{ id: 'segment-guid-1', start: '2021-06-08T19:26:40.000Z' }]
+      }
+    }).save()
+    const other = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.otherUserId,
+      status: status.WAITING,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'other.flac'
+    }).save()
+
+    const response = await request(app).post('/uploads/status').send({
+      uploadIds: [`${ingested._id}`, `${other._id}`, 'not-an-object-id']
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body.requested).toBe(3)
+    expect(response.body.found).toBe(1)
+    expect(response.body.failed).toBe(2)
+    expect(response.body.uploads[0]).toMatchObject({
+      index: 0,
+      ok: true,
+      uploadId: `${ingested._id}`,
+      status: status.INGESTED,
+      statusName: 'INGESTED',
+      recording: { streamSourceFileId: 'source-file-guid-1' }
+    })
+    expect(response.body.uploads[1]).toMatchObject({ index: 1, uploadId: `${other._id}`, ok: false, status: 403 })
+    expect(response.body.uploads[2]).toMatchObject({ index: 2, uploadId: 'not-an-object-id', ok: false, status: 404 })
+  })
+
+  test('returns validation error if uploadIds is missing or not an array', async () => {
+    const response = await request(app).post('/uploads/status').send({ uploadIds: {} })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toBe("Validation errors: Parameter 'uploadIds' must be an array.")
+  })
+})
+
 describe('GET /uploads/:id', () => {
   test('returns correct upload data', async () => {
     const dbUpload = await new UploadModel({
@@ -823,5 +1176,128 @@ describe('GET /uploads/:id', () => {
     expect(response.body.sampleRate).toEqual(12000)
     expect(response.body.targetBitrate).toEqual(2921629)
     expect(response.body.checksum).toEqual('b40e6a5687c7ce2557ce48e131cc68c2889bfdc2')
+  })
+})
+
+describe('POST /uploads/multipart', () => {
+  const validBody = {
+    filename: 'bigfile-2021-06-08T19-26-40.flac',
+    timestamp: '2021-06-08T19:26:40.000Z',
+    stream: '0a1824085e3f',
+    duration: 3600000,
+    fileSize: 200 * 1024 * 1024, // 200MB -> 4 parts at default 64MB
+    sampleRate: 48000
+  }
+
+  test('registers the upload and returns per-part signed urls', async () => {
+    const response = await request(app).post('/uploads/multipart').send(validBody)
+    expect(response.statusCode).toBe(200)
+    expect(response.body.uploadId).toBeDefined()
+    expect(response.body.multipartUploadId).toEqual('mp-upload-id-1')
+    expect(response.body.partCount).toEqual(4)
+    expect(response.body.partUrls).toHaveLength(4)
+    expect(response.body.partUrls[0]).toEqual({ partNumber: 1, url: 'http://part.url/1' })
+    const upload = await UploadModel.findById(response.body.uploadId)
+    expect(upload.multipart.uploadId).toEqual('mp-upload-id-1')
+    expect(upload.multipart.partCount).toEqual(4)
+    expect(upload.status).toEqual(status.WAITING)
+  })
+
+  test('rejects files below the multipart minimum', async () => {
+    const response = await request(app).post('/uploads/multipart').send({ ...validBody, fileSize: 10 * 1024 * 1024 })
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toContain('Multipart is for files')
+  })
+
+  test('requires fileSize', async () => {
+    const { fileSize, ...withoutSize } = validBody
+    const response = await request(app).post('/uploads/multipart').send(withoutSize)
+    expect(response.statusCode).toBe(400)
+  })
+
+  test('applies the same duplicate check as single uploads', async () => {
+    getExistingSourceFile.mockImplementation(async () => ({
+      availability: 1,
+      segments: [{ start: '2021-06-08T19:26:40.000Z' }]
+    }))
+    const response = await request(app).post('/uploads/multipart').send({ ...validBody, checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca' })
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toContain('Duplicate')
+  })
+})
+
+describe('POST /uploads/:id/multipart/complete', () => {
+  const makeMultipartUpload = async (overrides = {}) => {
+    return await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.WAITING,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'bigfile.flac',
+      multipart: { uploadId: 'mp-upload-id-1', partSizeBytes: 64 * 1024 * 1024, partCount: 2 },
+      uploadSource: { targetId: 't1', bucket: 'streams-uploads', key: '0a1824085e3f/x.flac' },
+      ...overrides
+    }).save()
+  }
+
+  test('completes with valid parts', async () => {
+    const dbUpload = await makeMultipartUpload()
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/complete`).send({
+      parts: [{ partNumber: 1, etag: '"etag1"' }, { partNumber: 2, etag: '"etag2"' }]
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.body.completed).toBe(true)
+    expect(completeMultipartUpload).toHaveBeenCalledTimes(1)
+    const refreshed = await UploadModel.findById(dbUpload._id)
+    expect(refreshed.multipart.completedAt).toBeDefined()
+  })
+
+  test('is idempotent when already completed', async () => {
+    const dbUpload = await makeMultipartUpload({ multipart: { uploadId: 'mp-upload-id-1', partSizeBytes: 1, partCount: 1, completedAt: new Date() } })
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/complete`).send({
+      parts: [{ partNumber: 1, etag: '"etag1"' }]
+    })
+    expect(response.statusCode).toBe(200)
+    expect(completeMultipartUpload).not.toHaveBeenCalled()
+  })
+
+  test('rejects malformed parts', async () => {
+    const dbUpload = await makeMultipartUpload()
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/complete`).send({ parts: [{ partNumber: 'x' }] })
+    expect(response.statusCode).toBe(400)
+  })
+
+  test('403 for a different user', async () => {
+    const dbUpload = await makeMultipartUpload({ userId: seedValues.otherUserGuid })
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/complete`).send({
+      parts: [{ partNumber: 1, etag: '"etag1"' }]
+    })
+    expect(response.statusCode).toBe(403)
+  })
+
+  test('404 when no multipart in progress', async () => {
+    const dbUpload = await makeMultipartUpload({ multipart: undefined })
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/complete`).send({
+      parts: [{ partNumber: 1, etag: '"etag1"' }]
+    })
+    expect(response.statusCode).toBe(404)
+  })
+})
+
+describe('POST /uploads/:id/multipart/abort', () => {
+  test('aborts an in-progress multipart upload', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.WAITING,
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'bigfile.flac',
+      multipart: { uploadId: 'mp-upload-id-1', partSizeBytes: 1, partCount: 1 },
+      uploadSource: { targetId: 't1', bucket: 'streams-uploads', key: '0a1824085e3f/x.flac' }
+    }).save()
+    const response = await request(app).post(`/uploads/${dbUpload._id}/multipart/abort`).send({})
+    expect(response.statusCode).toBe(200)
+    expect(response.body.aborted).toBe(true)
+    expect(abortMultipartUpload).toHaveBeenCalledTimes(1)
   })
 })

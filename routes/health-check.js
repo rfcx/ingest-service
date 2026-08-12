@@ -1,5 +1,5 @@
 const router = require('express').Router()
-const db = require('../services/db/mongo')
+const db = require('../services/db/uploads')
 
 /**
  * @swagger

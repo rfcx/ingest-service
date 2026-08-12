@@ -4,12 +4,13 @@ const HealthCheckModel = require('./models/mongoose/healthcheck').HealthCheck
 const { EmptyResultError } = require('@rfcx/http-utils')
 const moment = require('moment-timezone')
 const { CastError } = require('mongoose')
+const uploadTargets = require('../uploads/upload-targets')
 
 const status = { WAITING: 0, UPLOADED: 10, INGESTED: 20, FAILED: 30, DUPLICATE: 31, CHECKSUM: 32 }
 const statusNumbers = Object.values(status)
 
 function generateUpload (opts) {
-  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum, projectId, duration } = opts
+  const { streamId, userId, timestamp, originalFilename, fileExtension, sampleRate, targetBitrate, checksum, projectId, duration, uploadTarget, laneTier } = opts
 
   const upload = new UploadModel({
     streamId,
@@ -21,16 +22,27 @@ function generateUpload (opts) {
     originalFilename,
     sampleRate,
     targetBitrate,
-    checksum
+    checksum,
+    // rfcx-local lane tier: express|priority|standard, default standard.
+    laneTier: ['express', 'priority', 'standard'].includes((laneTier || '').toLowerCase())
+      ? laneTier.toLowerCase()
+      : 'standard'
   })
+
+  const id = upload._id
+  const path = `${streamId}/${id}.${fileExtension}`
+  if (uploadTarget) {
+    upload.uploadSource = uploadTargets.sourceForKey(uploadTarget, path)
+  }
 
   return upload.save()
     .then((data) => {
       if (data && data._id) {
-        const id = data._id
         return {
           id,
-          path: `${streamId}/${id}.${fileExtension}`
+          path,
+          uploadSource: data.uploadSource,
+          signingSource: uploadTarget ? uploadTargets.sourceForSigning(uploadTarget, path) : undefined
         }
       } else {
         throw Error('Can not create upload.')
@@ -69,7 +81,19 @@ function getUpload (id) {
     })
 }
 
-function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
+function setUploadMultipart (uploadId, multipart) {
+  return UploadModel.updateOne({ _id: uploadId }, { $set: { multipart, updatedAt: new Date() } })
+}
+
+function setUploadMultipartCompleted (uploadId) {
+  return UploadModel.updateOne({ _id: uploadId }, { $set: { 'multipart.completedAt': new Date(), updatedAt: new Date() } })
+}
+
+function setUploadMultipartAborted (uploadId) {
+  return UploadModel.updateOne({ _id: uploadId }, { $set: { 'multipart.abortedAt': new Date(), updatedAt: new Date() } })
+}
+
+function updateUploadStatus (uploadId, statusNumber, failureMessage = null, ingestionResult = null) {
   if (!statusNumbers.includes(statusNumber)) {
     throw new Error('Invalid status')
   }
@@ -82,6 +106,11 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null) {
       upload.updatedAt = moment().tz('UTC').toDate()
       if (failureMessage != null) {
         upload.failureMessage = failureMessage
+      } else if ([status.UPLOADED, status.INGESTED].includes(statusNumber)) {
+        upload.failureMessage = undefined
+      }
+      if (ingestionResult) {
+        upload.ingestionResult = ingestionResult
       }
       return upload.save()
     })
@@ -160,9 +189,49 @@ function getOrCreateHealthCheck () {
     })
 }
 
+// ---------------------------------------------------------------------------
+// upload-source cleanup seam (mongo2pg S1)
+//
+// `upload-source-cleanup.js` previously reached for UploadModel directly. It
+// now goes through these two functions, which exist with identical signatures
+// and semantics in `uploads-pg.js`, so the cleanup job works on either engine.
+// The predicate authorises deletion of real R2/S3 objects — keep the two
+// implementations in step.
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {{ statuses: number[], cutoff: Date, batchSize: number }} opts
+ */
+function findCleanupCandidates ({ statuses, cutoff, batchSize }) {
+  return UploadModel.find({
+    status: { $in: statuses },
+    updatedAt: { $lte: cutoff },
+    uploadSourceDeletedAt: { $exists: false },
+    streamId: { $ne: null },
+    checksum: { $ne: null },
+    originalFilename: { $ne: null }
+  })
+    .sort({ updatedAt: 1 })
+    .limit(batchSize)
+}
+
+/**
+ * Idempotent: the `$exists:false` guard stops a concurrent second pass from
+ * overwriting the original deletion record.
+ */
+function markUploadSourceDeleted (uploadId, message) {
+  return UploadModel.updateOne(
+    { _id: uploadId, uploadSourceDeletedAt: { $exists: false } },
+    { $set: { uploadSourceDeletedAt: new Date(), uploadSourceCleanupMessage: message } }
+  )
+}
+
 module.exports = {
   generateUpload,
   getPendingProjectDuration,
+  setUploadMultipart,
+  setUploadMultipartCompleted,
+  setUploadMultipartAborted,
   getUpload,
   getUploadDuplicateCount,
   getUploadFailedCount,
@@ -171,5 +240,7 @@ module.exports = {
   saveDeploymentInfo,
   updateDeploymentInfo,
   getOrCreateHealthCheck,
+  findCleanupCandidates,
+  markUploadSourceDeleted,
   status
 }

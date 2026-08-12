@@ -14,7 +14,50 @@ const UploadSchema = new mongoose.Schema({
   failureMessage: String,
   sampleRate: Number,
   targetBitrate: Number,
-  checksum: String
+  checksum: String,
+  // rfcx-local lane tier (2026-07-14): which ingest lane group this upload's
+  // work is routed to by the lane router. One of express|priority|standard;
+  // defaults to standard. The criteria that CHOOSE the tier live in the upload
+  // registration endpoint (routes/uploads.js); this field is the persisted
+  // decision the router reads.
+  laneTier: { type: String, default: 'standard' },
+  uploadSource: {
+    targetId: String,
+    targetVersion: Number,
+    provider: String,
+    bucket: String,
+    key: String,
+    endpoint: String,
+    region: String,
+    forcePathStyle: Boolean,
+    secretRef: String
+  },
+  uploadSourceDeletedAt: Date,
+  uploadSourceCleanupMessage: String,
+  // Presigned multipart upload state (2026-07-16, browser large-file path).
+  // Present only for multipart uploads; single-PUT uploads never set it.
+  multipart: {
+    uploadId: String, // the S3/R2 multipart UploadId
+    partSizeBytes: Number,
+    partCount: Number,
+    completedAt: Date,
+    abortedAt: Date
+  },
+  ingestionResult: {
+    streamSourceFileId: String,
+    streamId: String,
+    projectId: String,
+    siteId: String,
+    arbimonProjectId: String,
+    arbimonSiteId: String,
+    ingestedAt: Date,
+    segments: [{
+      id: String,
+      start: Date,
+      end: Date,
+      path: String
+    }]
+  }
 })
 
 const Upload = mongoose.model('StreamUpload', UploadSchema)

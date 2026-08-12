@@ -1,36 +1,49 @@
-const AWS = require('../../utils/aws')
+require('../../utils/aws') // applies AWS.config.update() global creds/region
 const fs = require('fs')
+// Shared endpoint-aware S3 client factory. Routes through the in-cluster
+// s3-proxy (s3-reader/s3-writer chain) when an endpoint is set; vanilla AWS
+// otherwise. Centralized in @rfcx/s3-storage-client so endpoint/path-style
+// wiring is identical across all RFCx services. NOTE: when no credential
+// override is passed, the package omits creds and the client inherits the
+// SDK-global creds set by utils/aws.js (AWS_ACCESS_KEY_ID etc.) -- same as
+// the previous behavior.
+const { createS3Client } = require('@rfcx/s3-storage-client')
 
 const uploadBucket = process.env.UPLOAD_BUCKET
 
-// Build a configured AWS.S3 client. When an endpoint is set, the
-// client is wired for S3-compatible storage (MinIO, B2, R2, the
-// in-cluster s3-proxy/s3-writer, etc.); when unset, it talks to
-// vanilla AWS S3 with the global SDK config.
-//
-// Optional per-bucket credentials let the caller override the
-// global AWS_ACCESS_KEY_ID / AWS_SECRET_KEY / AWS_REGION_ID with a
-// scoped set of credentials. Useful when the upload bucket lives on
-// a different provider (e.g. Cloudflare R2) than the segment-write
-// bucket (e.g. B2 via the local s3-writer).
+function uploadClientForSource (source) {
+  if (!source || !source.bucket) { return uploadClient }
+  const envForcePathStyle = process.env.UPLOAD_S3_FORCE_PATH_STYLE === undefined ? undefined : process.env.UPLOAD_S3_FORCE_PATH_STYLE === 'true'
+  if (
+    source.endpoint === process.env.UPLOAD_S3_ENDPOINT &&
+    source.forcePathStyle === envForcePathStyle &&
+    source.region === process.env.UPLOAD_S3_REGION_ID
+  ) {
+    return uploadClient
+  }
+  return buildS3Client({
+    endpoint: source.endpoint,
+    forcePathStyle: source.forcePathStyle,
+    accessKeyId: source.accessKeyId || process.env.UPLOAD_S3_ACCESS_KEY_ID,
+    secretAccessKey: source.secretAccessKey || process.env.UPLOAD_S3_SECRET_KEY,
+    region: source.region
+  })
+}
+
+// Build a configured AWS.S3 client (endpoint-aware via the shared package).
+// Optional per-bucket credentials override the global creds -- used when the
+// upload bucket lives on a different provider (e.g. Cloudflare R2) than the
+// segment-write bucket (e.g. B2 via the local s3-writer). signatureVersion v4
+// is preserved via `extra`.
 function buildS3Client ({ endpoint, forcePathStyle, accessKeyId, secretAccessKey, region }) {
-  const config = {
-    signatureVersion: 'v4'
-  }
-  if (endpoint) {
-    config.endpoint = endpoint
-    config.s3ForcePathStyle = forcePathStyle === 'true' || forcePathStyle === true
-  }
-  // When any credential override is supplied, use it instead of the
-  // SDK-global creds. Otherwise (all undefined), the client picks up
-  // AWS_ACCESS_KEY_ID / AWS_SECRET_KEY / AWS_REGION_ID via
-  // AWS.config.update() in utils/aws.js.
-  if (accessKeyId || secretAccessKey || region) {
-    if (accessKeyId) { config.accessKeyId = accessKeyId }
-    if (secretAccessKey) { config.secretAccessKey = secretAccessKey }
-    if (region) { config.region = region }
-  }
-  return new AWS.S3(config)
+  return createS3Client({
+    endpoint,
+    forcePathStyle: forcePathStyle === undefined ? undefined : (forcePathStyle === 'true' || forcePathStyle === true),
+    accessKeyId,
+    secretAccessKey,
+    region,
+    extra: { signatureVersion: 'v4' }
+  })
 }
 
 // Default client. Used for everything unless overridden below.
@@ -70,15 +83,16 @@ function clientFor (bucket) {
   return defaultClient
 }
 
-function getSignedUrl (filePath, contentType) {
+function getSignedUrl (filePath, contentType, source) {
   const params = {
-    Bucket: uploadBucket,
-    Key: filePath,
+    Bucket: source?.bucket || uploadBucket,
+    Key: source?.key || filePath,
     Expires: 60 * 60 * 24, // 24 hours
     ContentType: contentType
   }
+  const client = uploadClientForSource(source)
   return (new Promise((resolve, reject) => {
-    uploadClient.getSignedUrl('putObject', params, (err, data) => {
+    client.getSignedUrl('putObject', params, (err, data) => {
       if (err) {
         reject(err)
       } else {
@@ -88,18 +102,78 @@ function getSignedUrl (filePath, contentType) {
   }))
 }
 
-function download (remotePath, localPath) {
+// ---------------------------------------------------------------------------
+// Presigned MULTIPART upload (browser large-file path, 2026-07-16).
+// S3-compatible multipart against the upload bucket (R2 supports the full
+// Create/UploadPart/Complete/Abort set). The service signs per-part PUT URLs
+// so the client never holds credentials; Complete/Abort are performed
+// server-side (they are cheap control-plane calls and R2's event rule fires
+// on CompleteMultipartUpload, keeping the ingestion trigger unchanged).
+// ---------------------------------------------------------------------------
+
+function createMultipartUpload (filePath, contentType, source) {
+  const params = {
+    Bucket: source?.bucket || uploadBucket,
+    Key: source?.key || filePath,
+    ContentType: contentType
+  }
+  const client = uploadClientForSource(source)
+  return client.createMultipartUpload(params).promise().then(data => data.UploadId)
+}
+
+function getSignedPartUrls (filePath, multipartUploadId, partNumbers, source) {
+  const client = uploadClientForSource(source)
+  const bucket = source?.bucket || uploadBucket
+  const key = source?.key || filePath
+  return Promise.all(partNumbers.map(partNumber => new Promise((resolve, reject) => {
+    client.getSignedUrl('uploadPart', {
+      Bucket: bucket,
+      Key: key,
+      UploadId: multipartUploadId,
+      PartNumber: partNumber,
+      Expires: 60 * 60 * 24 // 24 hours, matches single-PUT expiry
+    }, (err, url) => {
+      if (err) { reject(err) } else { resolve({ partNumber, url }) }
+    })
+  })))
+}
+
+function completeMultipartUpload (filePath, multipartUploadId, parts, source) {
+  const client = uploadClientForSource(source)
+  return client.completeMultipartUpload({
+    Bucket: source?.bucket || uploadBucket,
+    Key: source?.key || filePath,
+    UploadId: multipartUploadId,
+    MultipartUpload: {
+      Parts: parts.map(part => ({ PartNumber: part.partNumber, ETag: part.etag }))
+    }
+  }).promise()
+}
+
+function abortMultipartUpload (filePath, multipartUploadId, source) {
+  const client = uploadClientForSource(source)
+  return client.abortMultipartUpload({
+    Bucket: source?.bucket || uploadBucket,
+    Key: source?.key || filePath,
+    UploadId: multipartUploadId
+  }).promise()
+}
+
+function download (remotePath, localPath, source) {
+  const bucket = source?.bucket || uploadBucket
+  const key = source?.key || remotePath
+  const client = uploadClientForSource(source)
   return new Promise((resolve, reject) => {
     try {
-      uploadClient.headObject({
-        Bucket: uploadBucket,
-        Key: remotePath
+      client.headObject({
+        Bucket: bucket,
+        Key: key
       }, (headErr, data) => {
         if (headErr) { reject(headErr) }
         const tempWriteStream = fs.createWriteStream(localPath)
-        const tempReadStream = uploadClient.getObject({
-          Bucket: uploadBucket,
-          Key: remotePath
+        const tempReadStream = client.getObject({
+          Bucket: bucket,
+          Key: key
         })
           .createReadStream()
 
@@ -139,6 +213,15 @@ function createFromData (Bucket, remotePath, data) {
   return clientFor(Bucket).putObject(opts).promise()
 }
 
+function copyFromSource (source, Bucket, Key, ContentType) {
+  const sourceBucket = source?.bucket || uploadBucket
+  const sourceKey = source?.key || Key
+  const sourceClient = uploadClientForSource(source)
+  const readStream = sourceClient.getObject({ Bucket: sourceBucket, Key: sourceKey }).createReadStream()
+  const opts = { Bucket, Key, Body: readStream, ContentType }
+  return clientFor(Bucket).upload(opts).promise()
+}
+
 /**
  * Copies a file on S3.
  *
@@ -165,9 +248,14 @@ function deleteObject (Bucket, Key) {
 
 module.exports = {
   getSignedUrl,
+  createMultipartUpload,
+  getSignedPartUrls,
+  completeMultipartUpload,
+  abortMultipartUpload,
   download,
   upload,
   createFromData,
+  copyFromSource,
   copy,
   deleteObject
 }

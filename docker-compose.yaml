@@ -7,3 +7,31 @@ services:
       dockerfile: ./build/Dockerfile
       target: ingest-service
     command: "tail -f /dev/null"
+    depends_on:
+      uploads-postgres:
+        condition: service_healthy
+    environment:
+      # Points the PG upload-store test suites (mongo2pg S1) at the service
+      # below. UPLOADS_DB itself is deliberately NOT set: the suite default
+      # stays 'mongo', and the PG suites opt in per-test. Without these vars
+      # the PG suites SKIP rather than fail.
+      UPLOADS_POSTGRES_HOSTNAME: uploads-postgres
+      UPLOADS_POSTGRES_PORT: "5432"
+      UPLOADS_POSTGRES_DB: ingest_test
+      UPLOADS_POSTGRES_USERNAME: ingest_test
+      UPLOADS_POSTGRES_PASSWORD: ingest_test
+
+  # Throwaway PostgreSQL for the upload-store test suites. Version tracks the
+  # cluster's Patroni major (14) so jsonb / partial-index / char(24) behaviour
+  # under test matches production.
+  uploads-postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: ingest_test
+      POSTGRES_USER: ingest_test
+      POSTGRES_PASSWORD: ingest_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ingest_test -d ingest_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

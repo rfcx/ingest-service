@@ -4,6 +4,7 @@ const path = require('path')
 const fs = require('fs')
 const platform = process.env.PLATFORM || 'amazon'
 const storage = require(`../storage/${platform}`)
+const audioService = require('../audio')
 const segmentService = require('../rfcx/segments')
 const { status } = require('../../services/db/mongo')
 const { rimraf } = require('rimraf')
@@ -18,13 +19,16 @@ const UploadModel = require('../../services/db/models/mongoose/upload').Upload
 
 const UPLOAD = { id: new mongoose.Types.ObjectId(), originalFilename: '0a1824085e3f-2021-06-08T19-26-40.flac', timestamp: '2021-06-08T19:26:40.000Z', streamId: '0a1824085e3f', checksum: 'c0cdd1156b69c8255ff83b9eb0ba6412cced8411', sampleRate: 48000, targetBitrate: 1, duration: 250000 }
 
-const tempDirPath = path.join(__dirname, '../../test/tmp/')
+// Per-worker temp dir — see the note in services/audio.test.js: this path
+// was shared with that suite and rimraf'd by both.
+const tempDirPath = path.join(__dirname, `../../test/tmp-w${process.env.JEST_WORKER_ID || '0'}/`)
 
 beforeAll(async () => {
   muteConsole('warn')
   await startDb()
 })
 beforeEach(async () => {
+  process.env = { ...originalEnv, UPLOAD_BUCKET: 'streams-uploads' }
   if (!fs.existsSync(tempDirPath)) {
     fs.mkdirSync(tempDirPath)
   }
@@ -34,8 +38,28 @@ beforeEach(async () => {
   jest.spyOn(storage, 'download').mockReturnValue('')
   jest.spyOn(storage, 'upload').mockReturnValue(Promise.resolve({ ETag: true }))
   jest.spyOn(storage, 'deleteObject').mockReturnValue('')
+  jest.spyOn(storage, 'copyFromSource').mockReturnValue(Promise.resolve({ ETag: true }))
   jest.spyOn(storage, 'copy').mockReturnValue('')
   jest.spyOn(storage, 'createFromData').mockReturnValue('')
+  jest.spyOn(audioService, 'convert').mockResolvedValue({
+    meta: {
+      duration: 299.806032,
+      sampleCount: 13221446,
+      sampleRate: 48000,
+      bitRate: 1,
+      codec: 'pcm_s16le',
+      size: 6672949,
+      checksum: UPLOAD.checksum
+    }
+  })
+  jest.spyOn(audioService, 'split').mockResolvedValue([0, 1, 2, 3, 4].map((idx) => ({
+    path: `${tempDirPath}segment-${idx}.wav`,
+    meta: {
+      duration: 60,
+      sampleCount: 2880000,
+      size: 1024 + idx
+    }
+  })))
   jest.spyOn(segmentService, 'createStreamFileData').mockReturnValue({
     streamSourceFile: {
       id: 'e52edb98-e482-41e3-b9fb-95de76d1f7e2',
@@ -81,6 +105,12 @@ beforeEach(async () => {
 afterEach(async () => {
   process.env = originalEnv
   await rimraf(tempDirPath + '*', { glob: true })
+  // Restore all spies between tests. Otherwise per-test spies (e.g.
+  // jest.spyOn(segmentService,'createStreamFileData')) accumulate call counts
+  // across tests on top of the beforeEach spies, so assertions like
+  // expect(createSpy).not.toHaveBeenCalled() see leaked calls from earlier
+  // tests and fail depending on suite order (the CI flakiness root cause).
+  jest.restoreAllMocks()
 })
 afterAll(async () => {
   await stopDb()
@@ -97,11 +127,21 @@ describe('Test ingest service', () => {
       console.info(err)
     })
     const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    upload.failureMessage = 'previous transient failure'
+    await upload.save()
 
     await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
 
     const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
     expect(newUpload.status).toBe(status.INGESTED)
+    expect(newUpload.failureMessage).toBeUndefined()
+    expect(newUpload.ingestionResult.streamSourceFileId).toBe('e52edb98-e482-41e3-b9fb-95de76d1f7e2')
+    expect(newUpload.ingestionResult.streamId).toBe(UPLOAD.streamId)
+    expect(newUpload.ingestionResult.segments).toHaveLength(5)
+    expect(newUpload.ingestionResult.segments[0].id).toBe('6ec8579f-e5b4-4d97-b4ce-c625a10908fb')
+    expect(newUpload.ingestionResult.segments[0].path).toBe(`2021/06/08/${UPLOAD.streamId}/6ec8579f-e5b4-4d97-b4ce-c625a10908fb.flac`)
+    expect(storage.download).toHaveBeenCalledWith(`${UPLOAD.streamId}/${fileName}`, path.join(tempDirPath, UPLOAD.streamId, fileName), expect.objectContaining({ bucket: 'streams-uploads', key: `${UPLOAD.streamId}/${fileName}` }))
+    expect(storage.deleteObject).not.toHaveBeenCalled()
   })
 
   test('Checksum error', async () => {
@@ -132,7 +172,13 @@ describe('Test ingest service', () => {
     })
     const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
 
-    await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    // An unexpected (non-IngestionError) failure records FAILED status AND
+    // re-throws so the consumer nacks the message to the DLQ (transient /
+    // unexpected outcomes are inspectable / redrivable). Handled-terminal
+    // IngestionErrors (duplicate/checksum/etc.) resolve instead (ACK-drop).
+    await expect(
+      ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    ).rejects.toThrow()
 
     const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
     expect(newUpload.status).toBe(status.FAILED)
@@ -156,5 +202,92 @@ describe('Test ingest service', () => {
     const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
     expect(newUpload.status).toBe(status.DUPLICATE)
     expect(newUpload.failureMessage).toBe('Duplicate file. Matching sha1 signature already ingested.')
+  })
+
+  test('Error archive streams from recorded upload source', async () => {
+    const fileName = 'test-1min-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    process.env.ERROR_BUCKET_ENABLED = 'true'
+    process.env.ERROR_BUCKET = 'rfcx-streams-errors-production'
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    upload.uploadSource = {
+      targetId: 'legacy-env-upload-bucket',
+      targetVersion: 1,
+      provider: 's3-compatible',
+      bucket: 'rfcx-ingest-production',
+      key: `${UPLOAD.streamId}/${fileName}`,
+      endpoint: 'https://example.r2.cloudflarestorage.com',
+      region: 'auto',
+      forcePathStyle: true
+    }
+    await upload.save()
+
+    const result = await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+
+    expect(result.outcome).toBe('handled-terminal')
+    expect(result.status).toBe(status.CHECKSUM)
+    expect(storage.copyFromSource).toHaveBeenCalledWith(expect.objectContaining({ bucket: 'rfcx-ingest-production', key: `${UPLOAD.streamId}/${fileName}` }), 'rfcx-streams-errors-production', `${UPLOAD.streamId}/${fileName}`)
+    expect(storage.copy).not.toHaveBeenCalled()
+  })
+
+  test('Duplicate is ACK-dropped (ingest resolves with handled-terminal outcome)', async () => {
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    jest.spyOn(segmentService, 'createStreamFileData').mockRejectedValue(new IngestionError('Duplicate file. Matching sha1 signature already ingested.', status.DUPLICATE))
+
+    // Must RESOLVE (so the consumer ACKs and does not dead-letter it).
+    const result = await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    expect(result).toBeDefined()
+    expect(result.outcome).toBe('handled-terminal')
+    expect(result.status).toBe(status.DUPLICATE)
+    expect(storage.deleteObject).not.toHaveBeenCalled()
+  })
+
+  test('Handled-terminal preserves source upload for lifecycle expiry', async () => {
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    jest.spyOn(segmentService, 'createStreamFileData').mockRejectedValue(new IngestionError('Duplicate file. Matching sha1 signature already ingested.', status.DUPLICATE))
+
+    const result = await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    expect(result.outcome).toBe('handled-terminal')
+    expect(storage.deleteObject).not.toHaveBeenCalled()
+  })
+
+  test('Pre-transcode dedup ACK-drops (coreData empty => no rollback crash)', async () => {
+    // Regression: the pre-transcode dedup path throws DUPLICATE BEFORE
+    // createStreamFileData runs, leaving coreData = {} (truthy). The catch
+    // must NOT attempt the Core rollback (coreData.streamSourceFile.id is
+    // undefined) — doing so threw out of the catch and nacked the message.
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    // Pre-transcode dedup returns a genuine already-ingested match.
+    const ts = new Date(UPLOAD.timestamp).toISOString()
+    jest.spyOn(segmentService, 'findIngestedDuplicate').mockResolvedValue({
+      id: 'existing-source-file-id',
+      availability: 1,
+      segments: [{ start: ts }]
+    })
+    const createSpy = jest.spyOn(segmentService, 'createStreamFileData')
+
+    const result = await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    // Resolved (ACK-drop), transcode/Core-create skipped, no nack/crash.
+    expect(result.outcome).toBe('handled-terminal')
+    expect(result.status).toBe(status.DUPLICATE)
+    expect(createSpy).not.toHaveBeenCalled()
   })
 })

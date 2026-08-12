@@ -1,6 +1,7 @@
 const ffmpeg = require('fluent-ffmpeg')
 const sha1File = require('sha1-file')
 const path = require('path')
+const { splitTimeoutMs, convertTimeoutMs } = require('../utils/limits')
 
 /**
  * Probe an audio file to find its sample rate, duration and other meta data
@@ -67,7 +68,7 @@ function split (sourceFile, destinationPath, maxDuration) {
     const timeout = setTimeout(function () {
       command.kill()
       reject(Error('Timeout')) // TODO: move to errors
-    }, 120000)
+    }, splitTimeoutMs)
 
     command
       .on('error', function (err, stdout, stderr) {
@@ -118,7 +119,7 @@ function convert (sourceFile, destinationPath) {
     const timeout = setTimeout(function () {
       command.kill()
       reject(Error('Timeout')) // TODO: move to errors
-    }, 60000)
+    }, convertTimeoutMs)
 
     command
       .on('error', function (err, stdout, stderr) {
