@@ -827,6 +827,55 @@ describe('POST /uploads/bulk', () => {
     expect(uploads[0].checksum).toBe('bulk-ok')
   })
 
+  test('per-batch lookup cache: permission + project-summary hit ONCE per stream, quota still enforced across the batch', async () => {
+    // 6 items, one stream. Pre-cache: 6 permission calls + 6 stream gets +
+    // 6 summary calls. With the cache: 1 of each. Quota: limit allows only
+    // 4 more minutes; items are 1 minute each — the batch itself must
+    // consume the budget (batchPendingMs) even though the DB pending figure
+    // can't see uncommitted siblings mid-batch.
+    getProjectUploadLimitSummary.mockClear()
+    checkPermission.mockClear()
+    getStream.mockClear()
+    getProjectUploadLimitSummary.mockImplementation(async () => ({
+      recordingMinutesCount: 0,
+      recordingMinutesLimit: 4
+    }))
+
+    const response = await request(app).post('/uploads/bulk').send({
+      uploads: Array.from({ length: 6 }, (_, i) => validUpload({
+        checksum: `bulk-quota-${i}`,
+        timestamp: `2021-06-08T1${i}:26:40.000Z`,
+        duration: 60000 // 1 minute each
+      }))
+    })
+
+    expect(response.statusCode).toBe(200)
+    // shared lookups collapsed to one round trip each
+    expect(checkPermission).toHaveBeenCalledTimes(1)
+    expect(getStream).toHaveBeenCalledTimes(1)
+    expect(getProjectUploadLimitSummary).toHaveBeenCalledTimes(1)
+    // quota: exactly 4 of 6 admitted; 2 rejected by the batch-aware check
+    expect(response.body.created).toBe(4)
+    expect(response.body.failed).toBe(2)
+    const rejected = response.body.uploads.filter(u => !u.ok)
+    expect(rejected).toHaveLength(2)
+    for (const r of rejected) {
+      expect(r.error).toBe('Project recording-minute limit exceeded.')
+    }
+  })
+
+  test('parallel registration preserves request-order index addressing', async () => {
+    const response = await request(app).post('/uploads/bulk').send({
+      uploads: Array.from({ length: 10 }, (_, i) => validUpload({
+        checksum: `bulk-order-${i}`,
+        timestamp: `2021-06-08T1${i % 10}:26:40.000Z`
+      }))
+    })
+    expect(response.statusCode).toBe(200)
+    expect(response.body.uploads.map(u => u.index)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    expect(response.body.created).toBe(10)
+  })
+
   test('returns validation error if uploads is missing or not an array', async () => {
     const response = await request(app).post('/uploads/bulk').send({ uploads: {} })
 

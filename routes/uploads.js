@@ -14,6 +14,10 @@ const { getSampleRateFromFilename } = require('../services/rfcx/guardian')
 const { maxDurationWithGraceSeconds, maxDurationHoursDisplay, flacLimitSize, wavLimitSize, otherLimitSize } = require('../utils/limits')
 
 const maxBulkUploadCount = Number(process.env.UPLOAD_BULK_MAX_ITEMS || 100)
+// Parallelism for /uploads/bulk registration (2026-08-12 perf fix). Modest
+// default: each item still does its own dedup lookup + doc insert + signing,
+// and 8 workers on a 100-item batch already collapses ~85s to a few seconds.
+const bulkSignConcurrency = Number(process.env.UPLOAD_BULK_SIGN_CONCURRENCY || 8)
 
 function getProjectIdFromStream (stream) {
   if (!stream) { return null }
@@ -24,14 +28,54 @@ function getProjectIdFromStream (stream) {
   return null
 }
 
-async function assertProjectUploadWithinLimit (idToken, streamId, durationMs) {
+/**
+ * Bulk-batch registration cache (2026-08-12 — the /uploads/bulk latency fix).
+ *
+ * A browser batch is typically 100 items for ONE stream, but registerUpload
+ * repeated the same three HTTP round trips (permission check, stream→project
+ * resolution, project-limit summary) for every item — measured ~850ms/item,
+ * so a full batch held "Requesting URL…" for ~85s. The cache memoizes those
+ * per-(stream) lookups for the LIFETIME OF ONE REQUEST only; per-item work
+ * (dedup by checksum, target selection, doc creation, signing) is untouched.
+ *
+ * Quota correctness under the parallel loop: batchPendingMs tracks duration
+ * ADMITTED in this batch per project and is added to the DB pending figure.
+ * Items already created by this batch may ALSO appear in the DB figure —
+ * that double-count only over-reserves (conservative at the limit edge),
+ * never under-enforces.
+ */
+function makeBulkRegistrationCache () {
+  return {
+    permissionByStream: new Map(), // stream -> Promise<void>
+    projectByStream: new Map(), // stream -> Promise<{ projectId, summary } | null>
+    batchPendingMs: new Map() // projectId -> number
+  }
+}
+
+async function resolveProjectSummary (idToken, streamId, cache) {
+  const fetch = async () => {
+    const streamResponse = await streamService.get({ id: streamId, idToken })
+    const projectId = getProjectIdFromStream(streamResponse?.data)
+    if (!projectId) { return null }
+    const summary = await arbimonService.getProjectUploadLimitSummary(idToken, projectId)
+    return { projectId, summary }
+  }
+  if (!cache) { return fetch() }
+  let promise = cache.projectByStream.get(streamId)
+  if (!promise) {
+    promise = fetch()
+    cache.projectByStream.set(streamId, promise)
+  }
+  return promise
+}
+
+async function assertProjectUploadWithinLimit (idToken, streamId, durationMs, cache) {
   if (!durationMs || durationMs <= 0) { return null }
 
-  const streamResponse = await streamService.get({ id: streamId, idToken })
-  const projectId = getProjectIdFromStream(streamResponse?.data)
-  if (!projectId) { return null }
+  const resolved = await resolveProjectSummary(idToken, streamId, cache)
+  if (!resolved) { return null }
+  const { projectId, summary } = resolved
 
-  const summary = await arbimonService.getProjectUploadLimitSummary(idToken, projectId)
   if (summary.isLocked) {
     throw new ValidationError('Project is view-only and cannot accept uploads.')
   }
@@ -40,10 +84,14 @@ async function assertProjectUploadWithinLimit (idToken, streamId, durationMs) {
   }
 
   const pendingDurationMs = await db.getPendingProjectDuration(projectId)
-  const totalMinutes = Number(summary.recordingMinutesCount || 0) + ((Number(pendingDurationMs || 0) + durationMs) / 60000)
+  const batchPendingMs = cache ? (cache.batchPendingMs.get(projectId) || 0) : 0
+  const totalMinutes = Number(summary.recordingMinutesCount || 0) + ((Number(pendingDurationMs || 0) + batchPendingMs + durationMs) / 60000)
 
   if (totalMinutes > Number(summary.recordingMinutesLimit) + 1e-9) {
     throw new ValidationError('Project recording-minute limit exceeded.')
+  }
+  if (cache) {
+    cache.batchPendingMs.set(projectId, batchPendingMs + durationMs)
   }
 
   return { projectId, summary }
@@ -121,13 +169,25 @@ async function parseUploadParams (body) {
 
 // Shared registration: validation, permission, quota, dedup, target selection
 // and the Mongo upload doc. Used by both the single-PUT and multipart flows.
-async function registerUpload (rawParams, { req, idToken, userId }) {
+async function registerUpload (rawParams, { req, idToken, userId, bulkCache }) {
   const params = await parseUploadParams(rawParams)
 
   if (!auth0Service.getRoles(req.user).includes('systemUser')) {
-    await streamService.checkPermission('U', params.stream, idToken)
+    if (bulkCache) {
+      // one permission round trip per (stream) per batch — shared promise
+      let permission = bulkCache.permissionByStream.get(params.stream)
+      if (!permission) {
+        // Promise.resolve: a sync return (or a mock) would store a falsy
+        // value and defeat the cache — always store a real promise.
+        permission = Promise.resolve(streamService.checkPermission('U', params.stream, idToken))
+        bulkCache.permissionByStream.set(params.stream, permission)
+      }
+      await permission
+    } else {
+      await streamService.checkPermission('U', params.stream, idToken)
+    }
   }
-  const uploadProject = await assertProjectUploadWithinLimit(idToken, params.stream, params.duration)
+  const uploadProject = await assertProjectUploadWithinLimit(idToken, params.stream, params.duration, bulkCache)
   const fileExtension = params.filename.split('.').pop().toLowerCase()
   let { filename, timestamp, stream, sampleRate, targetBitrate, checksum } = params
   if (params.checksum) {
@@ -180,8 +240,8 @@ async function registerUpload (rawParams, { req, idToken, userId }) {
   return { upload, params, fileExtension }
 }
 
-async function createSignedUpload (rawParams, { req, idToken, userId }) {
-  const { upload, fileExtension } = await registerUpload(rawParams, { req, idToken, userId })
+async function createSignedUpload (rawParams, { req, idToken, userId, bulkCache }) {
+  const { upload, fileExtension } = await registerUpload(rawParams, { req, idToken, userId, bulkCache })
   const uploadId = upload.id
   const url = await storage.getSignedUrl(upload.path, 'audio/' + fileExtension, upload.signingSource || upload.uploadSource)
   return {
@@ -529,20 +589,31 @@ router.route('/bulk').post((req, res) => {
   const userId = req.user.guid || req.user.sub || 'unknown'
 
   ;(async () => {
-    const results = []
-    for (let index = 0; index < uploads.length; index++) {
-      try {
-        const upload = await createSignedUpload(uploads[index], { req, idToken, userId })
-        results.push({ index, ok: true, ...upload })
-      } catch (err) {
-        results.push({
-          index,
-          ok: false,
-          status: bulkErrorStatus(err),
-          error: err.message || 'Failed creating upload.'
-        })
+    // Bounded-parallel registration with a per-batch lookup cache
+    // (2026-08-12): the serial per-item loop repeated the same permission/
+    // project/quota round trips 100× — measured ~85s per full batch. Items
+    // for the same stream now share those lookups and register concurrently;
+    // results keep their request order via index addressing.
+    const bulkCache = makeBulkRegistrationCache()
+    const results = new Array(uploads.length)
+    let cursor = 0
+    const worker = async () => {
+      while (cursor < uploads.length) {
+        const index = cursor++
+        try {
+          const upload = await createSignedUpload(uploads[index], { req, idToken, userId, bulkCache })
+          results[index] = { index, ok: true, ...upload }
+        } catch (err) {
+          results[index] = {
+            index,
+            ok: false,
+            status: bulkErrorStatus(err),
+            error: err.message || 'Failed creating upload.'
+          }
+        }
       }
     }
+    await Promise.all(Array.from({ length: Math.min(bulkSignConcurrency, uploads.length) }, worker))
 
     const created = results.filter((result) => result.ok).length
     res.json({
