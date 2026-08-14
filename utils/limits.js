@@ -22,7 +22,13 @@ function intFromEnv (name, fallback) {
 // FLAC may be large (already compressed). Default 1 GiB.
 const flacLimitSize = intFromEnv('MAX_FLAC_BYTES', 1_073_741_824)
 // WAV stays bounded (uncompressed -> expensive to process). Default 200 MB.
+// AIFF shares this cap: it is uncompressed PCM in a different container, so it
+// is the same size for the same audio (measured: 22,050,054 B AIFF vs
+// 22,050,078 B WAV for an identical 125s stereo 44.1kHz signal). Leaving it on
+// the `other` cap would reject AIFF files that are accepted as WAV.
 const wavLimitSize = intFromEnv('MAX_WAV_BYTES', 200_000_000)
+// Extensions that carry uncompressed PCM and therefore share the WAV cap.
+const uncompressedExtensions = ['wav', 'aiff', 'aif']
 // Anything else (e.g. opus) uses the same bound as WAV's old default. 150 MB.
 const otherLimitSize = intFromEnv('MAX_OTHER_BYTES', 150_000_000)
 
@@ -50,7 +56,7 @@ const splitTimeoutMs = intFromEnv('FFMPEG_SPLIT_TIMEOUT_MS', 15 * 60 * 1000)
  */
 function sizeLimitForExtension (fileExtension) {
   if (fileExtension === 'flac') { return flacLimitSize }
-  if (fileExtension === 'wav') { return wavLimitSize }
+  if (uncompressedExtensions.includes(fileExtension)) { return wavLimitSize }
   return otherLimitSize
 }
 
@@ -58,6 +64,7 @@ module.exports = {
   flacLimitSize,
   wavLimitSize,
   otherLimitSize,
+  uncompressedExtensions,
   maxDurationSeconds,
   durationGraceSeconds,
   maxDurationWithGraceSeconds,

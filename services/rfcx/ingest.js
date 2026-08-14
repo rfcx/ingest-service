@@ -16,9 +16,17 @@ const ingestBucket = process.env.INGEST_BUCKET
 const errorBucket = process.env.ERROR_BUCKET
 const uploadTargets = require('../uploads/upload-targets')
 
-const supportedExtensions = ['.wav', '.flac', '.opus']
-const losslessExtensions = ['.wav', '.flac']
-const extensionsRequiringConvToWav = ['.flac']
+// Accepted upload formats.
+//
+// AIFF (2026-08-14): added as a LOSSLESS format, handled exactly like FLAC --
+// decoded to WAV, split, then each segment encoded to FLAC. Measured against
+// the production ffmpeg (4.4.2) on 125s and 1200s fixtures: span drift 0.000s
+// at every duration tested, identical to WAV/FLAC, across standard 16-bit BE,
+// 24-bit, AIFF-C `sowt` (little-endian) and the 3-letter `.aif` spelling.
+// Both spellings are accepted because recorders and Mac tooling emit each.
+const supportedExtensions = ['.wav', '.flac', '.opus', '.aiff', '.aif']
+const losslessExtensions = ['.wav', '.flac', '.aiff', '.aif']
+const extensionsRequiringConvToWav = ['.flac', '.aiff', '.aif']
 
 const { IngestionError } = require('../../utils/errors')
 const { maxDurationWithGraceSeconds, maxDurationHoursDisplay } = require('../../utils/limits')
