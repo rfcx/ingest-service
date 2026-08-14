@@ -117,10 +117,29 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual(`Future date upload: ${requestBody.timestamp}`)
   })
-  test('returns validation error if timestamp is past older than year 1971', async () => {
+  test('ACCEPTS a historical (pre-1971) timestamp — digitised archive material', async () => {
+    // Behaviour change 2026-08-13: pre-1971 dates are no longer blanket-
+    // rejected. Digitised tape/archive recordings are legitimate and the
+    // storage layer represents them natively. The "a digital recorder cannot
+    // predate 1971" rule needs the file's own metadata, which does not exist
+    // at sign time, so it is enforced at ingest instead
+    // (services/rfcx/ingest.js -> validateAudioMeta).
+    const requestBody = {
+      filename: 'archive-1955-06-12T10-15-00.flac',
+      timestamp: moment('1955-06-12T10:15:00.000Z').utc(),
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(200)
+  })
+
+  test('returns validation error if timestamp is absurdly old (parse failure)', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
-      timestamp: moment('1970-12-31T23:59:59.999Z').utc() /* past */,
+      timestamp: moment('0218-03-21T05:10:00.000Z').utc() /* misparsed */,
       stream: '0a1824085e3f',
       checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
       sampleRate: 64000,
@@ -128,7 +147,7 @@ describe('POST /uploads', () => {
     }
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
-    expect(response.body.message).toEqual(`Past date upload: ${requestBody.timestamp}`)
+    expect(response.body.message).toMatch(/not a plausible recording date/)
   })
   test('returns validation error if duration is more than 24 hours', async () => {
     const requestBody = {
