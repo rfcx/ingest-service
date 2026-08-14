@@ -12,6 +12,7 @@ const auth0Service = require('../services/auth0')
 const moment = require('moment-timezone')
 const { getSampleRateFromFilename } = require('../services/rfcx/guardian')
 const { maxDurationWithGraceSeconds, maxDurationHoursDisplay, flacLimitSize, wavLimitSize, otherLimitSize } = require('../utils/limits')
+const { minRecordingYear } = require('../utils/recorder-provenance')
 
 const maxBulkUploadCount = Number(process.env.UPLOAD_BULK_MAX_ITEMS || 100)
 
@@ -74,10 +75,19 @@ async function validateUploadParams (params) {
     throw new ValidationError(`Future date upload: ${params.timestamp}`)
   }
 
-  // Cannot upload to the past older than year 1971
-  const isPast = params.timestamp.year() < 1971
-  if (isPast) {
-    throw new ValidationError(`Past date upload: ${params.timestamp}`)
+  // Historical recordings ARE permitted (digitised tape/archive material):
+  // the storage layer represents them natively and production already holds
+  // ~551 genuine pre-1971 segments. What must still be rejected is an UNSET
+  // RECORDER CLOCK (a dead battery restarts a digital recorder at the Unix
+  // epoch), and that is decided by PROVENANCE, not by the date alone.
+  //
+  // At sign time we have no file bytes and therefore no recorder tags, so we
+  // can only enforce the absurdity floor here. The provenance rule runs at
+  // ingest, where ffprobe has read the file's own metadata
+  // (services/rfcx/ingest.js -> validateAudioMeta). See
+  // utils/recorder-provenance.js for the measurements behind this.
+  if (params.timestamp.year() < minRecordingYear) {
+    throw new ValidationError(`Past date upload: ${params.timestamp} (before ${minRecordingYear}, which is not a plausible recording date)`)
   }
 
   // Cannot upload file that duration more than the configured max (milliseconds)
