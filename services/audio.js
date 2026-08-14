@@ -9,6 +9,73 @@ const { splitTimeoutMs, convertTimeoutMs } = require('../utils/limits')
  * @param {String} sourceFile - path to source file on disk
  * @returns {Promise<Object>} - an object containing the meta data
  */
+/**
+ * Measure a file's TRUE audio length by decoding it.
+ *
+ * WHY THIS EXISTS. `identify()` reads ffprobe's `stream.duration`, which for
+ * some containers reports the segment's END POSITION IN THE ORIGINAL TIMELINE
+ * rather than its own length. Measured on opus segments cut by `split()`:
+ *
+ *   segment 0: stream.duration 60.0065  (true 59.9935)
+ *   segment 1: stream.duration 120.0065 (true 59.9935)   <-- cumulative
+ *   segment 2: stream.duration 125.0130 (true  5.0135)   <-- cumulative
+ *
+ * `setAdditionalFileAttrs()` ACCUMULATES those values to build each segment's
+ * start/end, so the error compounds: a real 301.7s opus recording was recorded
+ * in production as spanning 1202s (4x). `duration_ts` is cumulative too, and
+ * `sampleCount` is computed FROM stream.duration, so neither is a way out.
+ *
+ * Decoding is the only source that is right for every container. It costs ~90ms
+ * for a 60s segment (measured), which is negligible against the transcode and
+ * upload work already happening per segment.
+ *
+ * DECODES TO THE `wav` MUXER, writing to the platform's null DEVICE. Decoding
+ * is required (the container metadata is what we distrust); discarding the
+ * output costs nothing.
+ *
+ * Uses fluent-ffmpeg like the rest of this file — same binary resolution
+ * (FFMPEG_PATH), same error/timeout surface, same thing to mock in tests. An
+ * earlier revision spawned ffmpeg directly because `.outputFormat()` failed
+ * with "Output format wav is not available"; that turned out to be
+ * fluent-ffmpeg 2.1.2's format probe being unable to parse ffmpeg 8.x's
+ * `-formats` output (0 formats discovered locally, 400 on the prod image's
+ * ffmpeg 4.4.2). It was never a production failure, and 2.1.3 fixes the probe
+ * outright (411 formats on the same local ffmpeg 8.1.1), so there is no reason
+ * to bypass the wrapper.
+ *
+ * Returns undefined if the probe fails; callers fall back to identify()'s value
+ * rather than dropping the segment — a slightly wrong timestamp beats a lost
+ * recording.
+ */
+function measureDecodedDuration (sourceFile) {
+  return new Promise((resolve) => {
+    let settled = false
+    const done = (value) => {
+      if (settled) { return }
+      settled = true
+      clearTimeout(timeout)
+      resolve(value)
+    }
+
+    const command = ffmpeg(sourceFile)
+      .output(process.platform === 'win32' ? 'NUL' : '/dev/null')
+      .outputFormat('wav')
+      .outputOptions(['-progress pipe:1'])
+      .on('error', () => { done(undefined) })
+      .on('end', (stdout) => {
+        // `-progress` writes repeating key=value blocks; the LAST out_time_us
+        // is the total decoded length.
+        const matches = String(stdout || '').match(/out_time_us=(\d+)/g)
+        if (!matches || matches.length === 0) { done(undefined); return }
+        const us = parseInt(matches[matches.length - 1].split('=')[1], 10)
+        done(Number.isFinite(us) ? us / 1000000 : undefined)
+      })
+
+    const timeout = setTimeout(() => { command.kill(); done(undefined) }, convertTimeoutMs)
+    command.run()
+  })
+}
+
 function identify (sourceFile) {
   return new Promise((resolve, reject) => {
     ffmpeg(sourceFile)
@@ -81,6 +148,33 @@ function split (sourceFile, destinationPath, maxDuration) {
           try {
             const filePath = path.join(destinationPath, x)
             const meta = await identify(filePath)
+
+            // CORRECT THE SEGMENT DURATION WHERE THE CONTAINER LIES.
+            //
+            // Stream-copy segmentation leaves some containers (opus observed;
+            // any packet-based format is a candidate) reporting the segment's
+            // END POSITION IN THE SOURCE TIMELINE instead of its own length.
+            // setAdditionalFileAttrs() accumulates these, so the error
+            // compounds across a file — a real 301.7s opus recording landed in
+            // production spanning 1202s.
+            //
+            // The decoded length is authoritative for every container, so it
+            // wins whenever the two DISAGREE MATERIALLY. The 50ms threshold
+            // keeps ordinary probe/decode jitter (wav/mp3/m4a all agree to
+            // ~1-15ms) from rewriting values that were already right.
+            const decoded = await measureDecodedDuration(filePath)
+            if (decoded !== undefined && Number.isFinite(meta.duration) &&
+                Math.abs(decoded - meta.duration) > 0.05) {
+              console.info(
+                `[segment-duration] corrected ${path.basename(filePath)}: ` +
+                `probed=${meta.duration}s decoded=${decoded}s`
+              )
+              meta.duration = decoded
+              // sampleCount is derived FROM duration in identify(), so it
+              // inherits the same error and must be recomputed with it.
+              if (meta.sampleRate) { meta.sampleCount = Math.round(decoded * meta.sampleRate) }
+            }
+
             return {
               path: filePath,
               meta: meta
@@ -143,5 +237,8 @@ function convert (sourceFile, destinationPath) {
 module.exports = {
   identify,
   split,
-  convert
+  convert,
+  // Exported for testing: the segment-duration correction is the whole point of
+  // this change, so it has to be verifiable without running a full split().
+  measureDecodedDuration
 }
