@@ -21,6 +21,7 @@ const losslessExtensions = ['.wav', '.flac']
 const extensionsRequiringConvToWav = ['.flac']
 
 const { IngestionError } = require('../../utils/errors')
+const { checkRecordingTimestamp } = require('../../utils/recorder-provenance')
 const { maxDurationWithGraceSeconds, maxDurationHoursDisplay } = require('../../utils/limits')
 const loggerIgnoredErrors = [
   /Duplicate file\. Matching sha1 signature already ingested\./,
@@ -84,6 +85,15 @@ function validateFileFormat (extension) {
  * @param {*} extension
  */
 function validateAudioMeta (upload, meta, extension) {
+  // Provenance-aware date check. This is the ONLY point in the pipeline where
+  // the file's own metadata is available (ffprobe format.tags), so it is where
+  // the "a digital recorder cannot predate 1971" rule can actually be applied.
+  // The upload API can only enforce the absurdity floor (no bytes yet).
+  // Genuine digitised archives carry no recorder tags and pass freely.
+  const timestampProblem = checkRecordingTimestamp(upload.timestamp, meta.tags)
+  if (timestampProblem !== null) {
+    throw new IngestionError(timestampProblem)
+  }
   if (isNaN(meta.duration) || meta.duration === 0) {
     throw new IngestionError('Audio duration is zero')
   }
