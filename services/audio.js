@@ -112,6 +112,10 @@ function identify (sourceFile) {
  * @param {Number} maxDuration - the maximum duration of a segment (in seconds)
  * @returns {Object[]} - array with objects with segments information (local path, duration)
  */
+// Sentinel for a trailing segment that ffprobe refused entirely (see the catch
+// inside split()). A unique object, so it can never collide with a real result.
+const TRAILING_DROPPED = Symbol('trailing-segment-dropped')
+
 function split (sourceFile, destinationPath, maxDuration) {
   destinationPath += destinationPath.endsWith('/') ? '' : '/'
   const outputFileFormat = destinationPath + path.basename(sourceFile).replace(/\.([^.]*)$/, '.%03d.$1') // convert hello.wav to hello.%03d.wav
@@ -144,7 +148,11 @@ function split (sourceFile, destinationPath, maxDuration) {
       })
       .on('end', function (stdout, stderr) {
         clearTimeout(timeout)
-        const outputFiles = stdout.trim().split('\n').map(async (x) => {
+        // Names of the segments ffmpeg reported, in order. Needed so a probe
+        // failure can tell a TRAILING runt (droppable) from an interior
+        // segment (a real fault) -- see the catch below.
+        const segmentNames = stdout.trim().split('\n')
+        const outputFiles = segmentNames.map(async (x) => {
           try {
             const filePath = path.join(destinationPath, x)
             const meta = await identify(filePath)
@@ -179,13 +187,76 @@ function split (sourceFile, destinationPath, maxDuration) {
               path: filePath,
               meta: meta
             }
-          } catch (e) { reject(e) }
+          } catch (e) {
+            // AN UNPROBEABLE TRAILING SEGMENT MUST NOT KILL THE WHOLE INGEST.
+            //
+            // Stream-copy segmentation can emit a runt final segment holding a
+            // PARTIAL frame, which ffprobe refuses outright rather than
+            // reporting badly:
+            //   [mp3] Invalid frame size (417): Could not seek to 879.
+            //   <file>: Invalid argument            (ffprobe exit 1)
+            // so identify() THROWS. Measured on mp3: this happens whenever the
+            // source length is an exact multiple of the segment length (60,
+            // 120, 180, 240, 300, 360, 420, 600s all reproduce) -- i.e. exactly
+            // the durations scheduled recorders produce.
+            //
+            // Previously this path called reject(e) and returned undefined,
+            // which ALSO left an undefined hole in the Promise.all array, so
+            // the .then() below threw a misleading
+            // "Cannot read properties of undefined (reading 'meta')" before the
+            // rejection surfaced -- masking the real cause.
+            //
+            // The runt carries NO audio (measured: 880 bytes, ffmpeg reports no
+            // decoded time, measureDecodedDuration() returns undefined), so
+            // dropping it loses nothing. This generalises the sampleCount guard
+            // below to the case where the segment cannot be probed AT ALL.
+            //
+            // Deliberately narrow: only a TRAILING segment is dropped. A
+            // mid-file probe failure is a real fault and must still fail the
+            // whole split, because silently discarding interior audio would
+            // corrupt the timeline.
+            //
+            // NOTE ON THE MECHANISM: we must SIGNAL the interior failure by
+            // returning a marker and re-throwing in the aggregation step below,
+            // NOT by calling reject() here. `resolve(Promise.all(...))` runs
+            // synchronously before any of these async callbacks settle, so this
+            // promise is already locked to that inner promise and a later
+            // reject() is a NO-OP. (That is precisely why the original code's
+            // reject(e) never surfaced and the caller saw the misleading
+            // "Cannot read properties of undefined" instead of the ffprobe
+            // error.) Caught by mutation testing: forcing isTrailing=false left
+            // the mp3 cases still passing, which they could only do if the
+            // interior branch were unreachable in effect.
+            const filePath = path.join(destinationPath, x)
+            const isTrailing = x === segmentNames[segmentNames.length - 1]
+            if (isTrailing) {
+              console.info(
+                `[segment-drop] trailing segment ${path.basename(filePath)} could not be probed ` +
+                `(${e && e.message}); dropping it -- it carries no decodable audio`
+              )
+              return TRAILING_DROPPED
+            }
+            return { __probeError: e, path: filePath }
+          }
         })
         /*
         * There is a very rare case that the segment is very small, 0.0000x second.
         * With this small segment, the sample count will be null so we have to exclude it
         */
         resolve(Promise.all(outputFiles).then(files => {
+          // An INTERIOR segment that could not be probed is a real fault: fail
+          // the split rather than silently shortening the recording.
+          const broken = files.find(f => f && f.__probeError)
+          if (broken) {
+            throw broken.__probeError
+          }
+          // Drop the trailing runt segment, if the catch above flagged one.
+          while (files.length && files[files.length - 1] === TRAILING_DROPPED) {
+            files.pop()
+          }
+          if (!files.length) {
+            throw new Error('No probeable segments were produced')
+          }
           if (!files[files.length - 1].meta.sampleCount) {
             files.pop()
           }

@@ -11,7 +11,7 @@ const arbimonService = require('../services/rfcx/arbimon')
 const auth0Service = require('../services/auth0')
 const moment = require('moment-timezone')
 const { getSampleRateFromFilename } = require('../services/rfcx/guardian')
-const { maxDurationWithGraceSeconds, maxDurationHoursDisplay, flacLimitSize, wavLimitSize, otherLimitSize } = require('../utils/limits')
+const { maxDurationWithGraceSeconds, maxDurationHoursDisplay, flacLimitSize, wavLimitSize, otherLimitSize, uncompressedExtensions } = require('../utils/limits')
 
 const maxBulkUploadCount = Number(process.env.UPLOAD_BULK_MAX_ITEMS || 100)
 // Parallelism for /uploads/bulk registration (2026-08-12 perf fix). Modest
@@ -140,11 +140,13 @@ async function validateUploadParams (params) {
   if (fileExtension === 'flac' && params.fileSize && params.fileSize > flacLimitSize) {
     throw new ValidationError(`This flac file size is exceeding our limit (${flacLimitSize / 1_000_000}MB)`)
   }
-  if (fileExtension === 'wav' && params.fileSize && params.fileSize > wavLimitSize) {
-    throw new ValidationError(`This wav file size is exceeding our limit (${wavLimitSize / 1_000_000}MB)`)
+  // WAV and AIFF are both uncompressed PCM -- same bytes for the same audio --
+  // so they share one cap (see utils/limits.js uncompressedExtensions).
+  if (uncompressedExtensions.includes(fileExtension) && params.fileSize && params.fileSize > wavLimitSize) {
+    throw new ValidationError(`This ${fileExtension} file size is exceeding our limit (${wavLimitSize / 1_000_000}MB)`)
   }
   // Other file extensions (e.g. opus)
-  if (!['flac', 'wav'].includes(fileExtension) && params.fileSize && params.fileSize > otherLimitSize) {
+  if (!['flac', ...uncompressedExtensions].includes(fileExtension) && params.fileSize && params.fileSize > otherLimitSize) {
     throw new ValidationError(`This file size is exceeding our limit (${otherLimitSize / 1_000_000}MB)`)
   }
   return params
