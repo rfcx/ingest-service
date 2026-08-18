@@ -48,6 +48,14 @@ router.route('/').get((req, res) => {
       // and moves on), never a process exit.
       .catch((err) => {
         console.error('[metrics] scrape failed (non-fatal):', err && err.message)
+        // headersSent guard, same reasoning as middleware/error.js: this .catch()
+        // also covers anything that throws INSIDE the .then() ABOVE — notably
+        // resetMetrics() — by which point the body has already been sent.
+        // Calling sendStatus() then throws ERR_HTTP_HEADERS_SENT synchronously
+        // (verified), which would escape as an uncaughtException: the very class
+        // of crash this file exists to prevent. The scrape itself already
+        // succeeded in that case, so there is nothing to report to Prometheus.
+        if (res.headersSent) { return }
         res.sendStatus(500)
       })
   }

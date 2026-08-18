@@ -98,6 +98,32 @@ describe('GET /metrics', () => {
     }
   })
 
+  test('a throw INSIDE .then (e.g. resetMetrics) does not double-send or crash', async () => {
+    // The .catch() also catches failures from the .then() body, by which point
+    // the response is already sent. sendStatus() would then throw
+    // ERR_HTTP_HEADERS_SENT synchronously and escape as an uncaughtException.
+    const seen = []
+    const onUnhandled = (reason) => seen.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const app = buildApp({
+        contentType: 'text/plain',
+        metrics: jest.fn().mockResolvedValue('some_metric 1'),
+        resetMetrics: jest.fn(() => { throw new Error('reset blew up after send') })
+      })
+
+      // The scrape itself succeeded, so the client still gets its 200 + body.
+      const res = await request(app).get('/metrics')
+      expect(res.status).toBe(200)
+      expect(res.text).toContain('some_metric 1')
+
+      await new Promise(resolve => setImmediate(resolve))
+      expect(seen).toEqual([])
+    } finally {
+      process.removeListener('unhandledRejection', onUnhandled)
+    }
+  })
+
   test('does not reset the register when collection failed', async () => {
     // resetMetrics is pushgateway-style: resetting after a FAILED gather would
     // discard histogram observations that were never actually exported.
