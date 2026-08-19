@@ -30,6 +30,7 @@ const extensionsRequiringConvToWav = ['.flac', '.aiff', '.aif']
 
 const { IngestionError } = require('../../utils/errors')
 const { maxDurationWithGraceSeconds, maxDurationHoursDisplay } = require('../../utils/limits')
+const { retryOnPutLimit } = require('../../utils/put-retry')
 const loggerIgnoredErrors = [
   /Duplicate file\. Matching sha1 signature already ingested\./,
   /This file was already ingested\./,
@@ -48,6 +49,13 @@ if (PROMETHEUS_ENABLED) {
   Object.keys(db.status).forEach((s) => {
     registerHistogram(s, `${s} upload status.`, [1, 2, 3, 4, 5, 10, 50, 100, 250, 500, 1000, 2000])
   })
+  // Segment-PUT bulkhead-retry observability (2026-08-19): the capacity
+  // decision that led to the s3-writer-ingest KEDA floor/cap had to be made
+  // from log greps. Count retries and exhaustions so the next one is made
+  // from data. House convention: histograms pushed with value 1 act as
+  // counters (same as the status metrics above).
+  registerHistogram('put_limit_retry', 'Segment PUTs retried after an s3-writer in-flight PUT limit rejection.', [1, 2, 3, 4, 5, 10, 50, 100, 250, 500, 1000, 2000])
+  registerHistogram('put_limit_exhausted', 'Segment PUTs that exhausted all put-limit retries and failed the ingest.', [1, 2, 3, 4, 5, 10, 50, 100, 250, 500, 1000, 2000])
 }
 
 /**
@@ -318,13 +326,37 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     tracker.setPoint()
     let processedSegCount = 0
     for (const chunk of [...chunks(outputFiles, 5)]) {
+      // Each segment PUT retries ONLY the s3-writer's in-flight PUT bulkhead
+      // rejection (503 SlowDown "in-flight PUT limit reached; retry") with
+      // bounded jittered backoff — see utils/put-retry.js for the 2026-08-19
+      // incident and the >5s-per-attempt rationale (the writer's own acquire
+      // window is 5s, so each retry sees a fresh window). ANY other error
+      // still fails fast on the first attempt, and an exhausted retry
+      // re-throws the last throttle error raw — so the rollback + status 30 +
+      // nack->DLQ path below is byte-identical to before for every non-
+      // throttle failure and for genuine sustained saturation. The retry
+      // wraps ONLY this PUT phase: segment keys (f.remotePath) were minted
+      // from Core data before this loop and are stable across attempts, so a
+      // re-PUT is an idempotent overwrite; the queue message is not acked
+      // until the whole ingest settles (consumer semantics untouched).
       await Promise.all(chunk.map((f) => {
-        return storage.upload(ingestBucket, f.remotePath, f.path)
-          .then((data) => {
-            if (!data || !data.ETag) {
-              throw new Error('Error while uploading file to storage')
+        return retryOnPutLimit(
+          () => storage.upload(ingestBucket, f.remotePath, f.path),
+          {
+            onRetry: ({ attempt, delayMs, error }) => {
+              console.warn(`[${uploadId}] s3-writer PUT limit hit for ${f.remotePath} (attempt ${attempt}); retrying in ${delayMs}ms: ${error && error.message}`)
+              if (PROMETHEUS_ENABLED) { pushHistogramMetric('put_limit_retry', 1) }
+            },
+            onExhausted: (error) => {
+              console.error(`[${uploadId}] s3-writer PUT limit retries exhausted for ${f.remotePath}: ${error && error.message}`)
+              if (PROMETHEUS_ENABLED) { pushHistogramMetric('put_limit_exhausted', 1) }
             }
-          })
+          }
+        ).then((data) => {
+          if (!data || !data.ETag) {
+            throw new Error('Error while uploading file to storage')
+          }
+        })
       }))
       processedSegCount += chunk.length
       console.info(`[${uploadId}] Processed ${processedSegCount} recordings of ${outputFiles.length}`)

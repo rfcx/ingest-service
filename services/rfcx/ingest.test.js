@@ -264,6 +264,111 @@ describe('Test ingest service', () => {
     expect(storage.deleteObject).not.toHaveBeenCalled()
   })
 
+  // --- s3-writer PUT-limit retry (2026-08-19) -------------------------------
+  // The writer rejects segment PUTs with 503 SlowDown
+  // "s3-writer in-flight PUT limit reached; retry" under bulkhead saturation.
+  // These tests drive the REAL ingest pipeline (real transcode of the test
+  // fixture) with storage.upload stubbed to emit that shape, asserting
+  // (a) transient bursts self-heal into INGESTED with bounded retries,
+  // (b) sustained saturation exhausts -> rollback + FAILED + re-throw (nack
+  //     -> DLQ, redrivable) exactly as before the retry existed,
+  // (c) non-throttle PUT failures keep their fail-fast single-attempt path.
+  // Backoff knobs are env-shrunk so the suite doesn't sleep for real.
+
+  function slowDown () {
+    const err = new Error('s3-writer in-flight PUT limit reached; retry')
+    err.code = 'SlowDown'
+    err.statusCode = 503
+    return err
+  }
+
+  function shrinkRetryKnobs (attempts = 3) {
+    process.env.PUT_RETRY_ATTEMPTS = String(attempts)
+    process.env.PUT_RETRY_BASE_MS = '1'
+    process.env.PUT_RETRY_MAX_MS = '2'
+    process.env.PUT_RETRY_MIN_MS = '1'
+  }
+
+  test('PUT-limit rejections are retried and the ingest still succeeds', async () => {
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    shrinkRetryKnobs(3)
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+
+    // First TWO segment PUTs hit the bulkhead, then every attempt succeeds
+    // (the burst passed) — the 08-19 prod shape at ~12% failure rate.
+    let calls = 0
+    const uploadSpy = jest.spyOn(storage, 'upload').mockImplementation(() => {
+      calls += 1
+      if (calls <= 2) { return Promise.reject(slowDown()) }
+      return Promise.resolve({ ETag: true })
+    })
+
+    await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+
+    const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    expect(newUpload.status).toBe(status.INGESTED)
+    // 5 segments + 2 retried attempts = 7 total PUT calls; no rollback.
+    expect(uploadSpy).toHaveBeenCalledTimes(7)
+    expect(storage.deleteObject).not.toHaveBeenCalled()
+  })
+
+  test('Exhausted PUT-limit retries roll back and nack exactly like before (bounded attempts)', async () => {
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    shrinkRetryKnobs(3)
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+
+    // Sustained saturation: every PUT attempt is rejected.
+    const uploadSpy = jest.spyOn(storage, 'upload').mockRejectedValue(slowDown())
+
+    // Must RE-THROW (consumer nacks to DLQ — transient class, redrivable).
+    await expect(
+      ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    ).rejects.toThrow(/in-flight PUT limit reached/)
+
+    const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    expect(newUpload.status).toBe(status.FAILED)
+    expect(newUpload.failureMessage).toBe('Server failed with processing your file. Please try again later.')
+    // BOUNDED: 5 segments x 3 attempts each = 15, not unbounded.
+    expect(uploadSpy).toHaveBeenCalledTimes(15)
+    // Rollback ran: every registered segment was deleted.
+    expect(storage.deleteObject).toHaveBeenCalledTimes(5)
+    // Core rollback ran too (source file had been created).
+    expect(segmentService.deleteStreamSourceFile).toHaveBeenCalledTimes(1)
+  })
+
+  test('Non-throttle PUT failure keeps the fail-fast single-attempt path', async () => {
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    shrinkRetryKnobs(3)
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+
+    const err = new Error('Access Denied')
+    err.code = 'AccessDenied'
+    err.statusCode = 403
+    const uploadSpy = jest.spyOn(storage, 'upload').mockRejectedValue(err)
+
+    await expect(
+      ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+    ).rejects.toThrow('Access Denied')
+
+    const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    expect(newUpload.status).toBe(status.FAILED)
+    // NO retry on non-throttle errors: exactly one attempt per segment in
+    // the first parallel chunk of 5, none re-attempted.
+    expect(uploadSpy).toHaveBeenCalledTimes(5)
+  })
+
   test('Pre-transcode dedup ACK-drops (coreData empty => no rollback crash)', async () => {
     // Regression: the pre-transcode dedup path throws DUPLICATE BEFORE
     // createStreamFileData runs, leaving coreData = {} (truthy). The catch
