@@ -185,6 +185,33 @@ describe('Test ingest service', () => {
     expect(newUpload.failureMessage).toBe('Server failed with processing your file. Please try again later.')
   })
 
+  // Regression (2026-08-21, OPEN-ITEMS #196): an UNREADABLE source (empty /
+  // truncated / not audio) must be TERMINAL, not the generic retryable
+  // failure. Reproduces the production case exactly: a 131072-byte all-zeros
+  // file, whose sha1 the client itself declared, retried ~2.1x/min forever
+  // because routes/uploads.js:isRetryableUpload() treats the generic message
+  // as retryable and the API answered `retry_upload`.
+  test('Unreadable media (empty/zero-byte file) is terminal, NOT retryable', async () => {
+    const fileName = 'test-zero-bytes.wav'
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    // 128 KiB of zeros: allocated but never written -- exactly what the
+    // failing production uploads contained (no RIFF header, no audio).
+    fs.writeFileSync(tempFilePath, Buffer.alloc(131072))
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+
+    // Terminal IngestionErrors RESOLVE (consumer ACK-drops) rather than
+    // rejecting -- an unreadable file must never be dead-lettered or requeued.
+    await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+
+    const newUpload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+    expect(newUpload.status).toBe(status.FAILED)
+    // The load-bearing assertion: it must NOT be the retryable message.
+    expect(newUpload.failureMessage).not.toBe('Server failed with processing your file. Please try again later.')
+    expect(newUpload.failureMessage).toMatch(/Audio file could not be read/)
+    expect(newUpload.failureMessage).toMatch(/will not help/)
+  })
+
   test('Duplicate error', async () => {
     const fileName = 'test-5mins-lv8.flac'
     const pathFile = path.join(__dirname, '../../test/', fileName)
