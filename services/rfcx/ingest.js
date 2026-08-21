@@ -9,6 +9,7 @@ const { chunks } = require('../../utils/array')
 const { getKeyByValue } = require('../../utils/obj')
 const { PROMETHEUS_ENABLED, registerHistogram, pushHistogramMetric } = require('../../services/prometheus')
 const path = require('path')
+const fs = require('fs')
 const moment = require('moment-timezone')
 const TimeTracker = require('../../utils/time-tracker')
 const uploadBucket = process.env.UPLOAD_BUCKET
@@ -37,7 +38,12 @@ const loggerIgnoredErrors = [
   /File extension is not supported/,
   /Stream source file was not created/,
   /Cannot create source file with provided data/,
-  /There is another file with the same timestamp in the stream/
+  /There is another file with the same timestamp in the stream/,
+  // Unreadable/empty/truncated media (2026-08-21): a terminal USER-side data
+  // problem, not a platform fault. The raw ffprobe diagnostic is logged
+  // separately at the throw site, so this only suppresses the duplicate
+  // error-level line in the generic handler.
+  /Audio file could not be read/
 ]
 
 if (PROMETHEUS_ENABLED) {
@@ -297,7 +303,57 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     await db.updateUploadStatus(uploadId, db.status.UPLOADED)
     tracker.logAndSetNewPoint(`[${uploadId}] updated upload status in Mongo`)
 
-    const fileData = await audioService.identify(fileLocalPath)
+    // ffprobe failure here means the BYTES ARE NOT DECODABLE AS AUDIO -- a
+    // truncated/empty/garbage upload. That is PERMANENT: re-running the exact
+    // same object through the exact same probe cannot succeed. Classify it as
+    // a terminal IngestionError so it is ACK-dropped and the upload reports
+    // `review_error`, NOT the generic "try again later" message.
+    //
+    // WHY THIS MATTERS (2026-08-21, OPEN-ITEMS #196): the generic message is
+    // the one string routes/uploads.js:isRetryableUpload() treats as RETRYABLE,
+    // so nextActionForUpload() answered `retry_upload` and the client dutifully
+    // re-uploaded FOREVER. One 131072-byte all-zeros file produced 330 upload
+    // rows in 12h (~2.1/min, still climbing) and ~308 DLQ messages/hour. The
+    // client was not misbehaving -- it was obeying the API. Every retry cost an
+    // R2 GET + ffprobe + DB writes, and the DLQ depth it created was
+    // simultaneously (mis)driving KEDA autoscaling.
+    //
+    // Scope deliberately narrow, TWICE OVER:
+    //   1. only the probe-the-source call is wrapped; and
+    //   2. only when the downloaded file is actually PRESENT ON DISK.
+    // A missing/unstatable local file means the DOWNLOAD failed -- that is an
+    // infrastructure fault, not bad user data, and it must keep the old
+    // behaviour (generic retryable message + dead-letter for redrive). Without
+    // this guard a failed download would be blamed on the user's audio and
+    // silently ACK-dropped, losing the redrive path.
+    let localSize = -1
+    try {
+      localSize = fs.statSync(fileLocalPath).size
+    } catch (_) {
+      localSize = -1
+    }
+    let fileData
+    try {
+      fileData = await audioService.identify(fileLocalPath)
+    } catch (probeErr) {
+      if (localSize < 0) {
+        // Download/staging problem -> transient. Re-throw untouched.
+        throw probeErr
+      }
+      // Keep the raw ffprobe diagnostic in the logs for operators; the user
+      // sees the actionable message below, not ffmpeg internals.
+      console.error(
+        `[${uploadId}] Unreadable media: ffprobe failed on ${fileExtension || 'unknown'} ` +
+        `source: ${probeErr && probeErr.message}`
+      )
+      throw new IngestionError(
+        `Audio file could not be read (${fileExtension || 'unknown format'}). ` +
+        'The uploaded file is empty, truncated or not valid audio. ' +
+        'Re-uploading the same file will not help -- please check the source ' +
+        'file on the recorder and upload it again.',
+        db.status.FAILED
+      )
+    }
     tracker.logAndSetNewPoint(`[${uploadId}] identified file with ffmpeg`)
     console.info(`[${uploadId}] Audio metadata`, JSON.stringify(fileData))
     validateAudioMeta(upload, fileData, fileExtension)

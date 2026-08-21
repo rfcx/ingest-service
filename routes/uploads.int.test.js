@@ -1004,6 +1004,33 @@ describe('GET /uploads/:id/status', () => {
     })
   })
 
+  // Regression (2026-08-21, OPEN-ITEMS #196): an unreadable/empty source must
+  // surface as review_error. Previously ffprobe failures fell through to the
+  // generic message, which is classified RETRYABLE -- so the API told the
+  // client to re-upload a permanently unreadable file, forever.
+  test('returns review guidance for unreadable media (not retry_upload)', async () => {
+    const dbUpload = await new UploadModel({
+      streamId: '0a1824085e3f',
+      userId: seedValues.primaryUserGuid,
+      status: status.FAILED,
+      failureMessage: 'Audio file could not be read (.wav). The uploaded file is empty, truncated or not valid audio. Re-uploading the same file will not help -- please check the source file on the recorder and upload it again.',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      originalFilename: 'recording.wav'
+    }).save()
+
+    const response = await request(app).get(`/uploads/${dbUpload._id}/status`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body).toMatchObject({
+      uploadId: `${dbUpload._id}`,
+      status: status.FAILED,
+      statusName: 'FAILED',
+      terminal: true,
+      retryable: false,
+      nextAction: 'review_error'
+    })
+  })
+
   test('returns forbidden error for upload which is not yours', async () => {
     const dbUpload = await new UploadModel({
       streamId: '0a1824085e3f',
