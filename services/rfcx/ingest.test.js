@@ -316,6 +316,67 @@ describe('Test ingest service', () => {
     expect(storage.deleteObject).not.toHaveBeenCalled()
   })
 
+  // --- segment file_size must describe the STORED FLAC (2026-08-21) ---------
+  // Regression: transcode() converts each split WAV segment to FLAC and updates
+  // file.path, but did NOT refresh file.meta -- so the size reported to Core
+  // (and thence to Arbimon's recordings.file_size) was the UNCOMPRESSED WAV
+  // size, a constant sampleCount*2 + header for every segment of a given
+  // length. Observed live 2026-08-21 on 97 freshly-uploaded recordings, all
+  // reporting 5760258 bytes while the stored objects ranged 3.3-4.3 MB.
+  //
+  // NOTE ON THE MOCKS: the suite-wide beforeEach stubs audioService.convert to
+  // return the SOURCE file's meta (size 6672949) and audioService.split to
+  // return per-segment meta (size 1024+idx). The convert() stub is shared by
+  // BOTH call sites -- the whole-file WAV conversion AND the per-segment FLAC
+  // conversion -- so a naive assertion here reads the stub, not the code. This
+  // test therefore re-stubs convert() per call so the segment conversions
+  // return DISTINCT, segment-specific sizes, which is what the real ffprobe
+  // does (verified: real FLAC segments of this fixture measure 15060/1070288/
+  // 1830924/1867764/1980091 bytes -- all different).
+  test('segment file_size is refreshed from the converted FLAC, not left as the WAV size', async () => {
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+
+    jest.spyOn(storage, 'upload').mockResolvedValue({ ETag: true })
+
+    // Distinct FLAC sizes per segment, mirroring reality. The first call is the
+    // whole-file WAV conversion (source meta); later calls are the per-segment
+    // FLAC conversions.
+    const flacSizes = [15060, 1070288, 1830924, 1867764, 1980091]
+    let convertCall = 0
+    jest.spyOn(audioService, 'convert').mockImplementation(() => {
+      const idx = convertCall++
+      if (idx === 0) {
+        return Promise.resolve({
+          meta: { duration: 299.806032, sampleCount: 13221446, sampleRate: 48000, bitRate: 1, codec: 'pcm_s16le', size: 6672949, checksum: UPLOAD.checksum }
+        })
+      }
+      return Promise.resolve({ meta: { duration: 60, sampleCount: 2880000, size: flacSizes[idx - 1] } })
+    })
+
+    await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+
+    expect(segmentService.createStreamFileData).toHaveBeenCalled()
+    // createStreamFileData(stream, payload); payload is camelCase at this point
+    // (it is transformed to snake_case inside the service).
+    const payload = segmentService.createStreamFileData.mock.calls.slice(-1)[0][1]
+    const segments = payload.streamSegments
+    expect(Array.isArray(segments)).toBe(true)
+    expect(segments.length).toBe(flacSizes.length)
+
+    const reported = segments.map(s => Number(s.fileSize))
+    // 1. each segment carries ITS OWN converted size ...
+    expect(reported).toEqual(flacSizes)
+    // 2. ... none is left at the split()-probed WAV size (1024 + idx) ...
+    expect(reported.some((v, i) => v === 1024 + i)).toBe(false)
+    // 3. ... and none is the whole-source size.
+    expect(reported.includes(6672949)).toBe(false)
+  })
+
   test('Exhausted PUT-limit retries roll back and nack exactly like before (bounded attempts)', async () => {
     const fileName = 'test-5mins-lv8.flac'
     const pathFile = path.join(__dirname, '../../test/', fileName)
