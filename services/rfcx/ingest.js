@@ -136,8 +136,33 @@ async function transcode (filePath, fileData) {
   if (isLosslessFile) { // convert lossless files to flac format
     for (const file of outputFiles) {
       const finalPath = file.path.replace(path.extname(file.path), '.flac')
-      await audioService.convert(file.path, finalPath)
+      const { meta: flacMeta } = await audioService.convert(file.path, finalPath)
       file.path = finalPath
+      // Refresh the segment's byte size from the FLAC we actually store.
+      //
+      // `file.meta` was probed from the pre-conversion WAV segment, so without
+      // this the size reported to Core (and thence to Arbimon's
+      // recordings.file_size) is the UNCOMPRESSED size -- a constant
+      // samples*2 + header for every 60s segment, ~30-40% larger than the FLAC
+      // that is actually uploaded. Observed live 2026-08-21: 97 recordings all
+      // reported 5760258 bytes while the stored objects ranged 3.3-4.3 MB.
+      //
+      // ONLY the size is refreshed. duration/sampleCount are deliberately left
+      // alone: they are corrected upstream by the decode-vs-probe reconciliation
+      // in audioService.split() (the cumulative-opus-timestamp fix), and
+      // re-probing here would discard that correction.
+      // Coerced rather than checked with Number.isFinite() directly: ffprobe
+      // reports format.size as a NUMBER in the build we ship (verified in the
+      // running pod: typeof 'number'), but returns it as a STRING in many other
+      // builds. A strict check would then silently skip the refresh and leave
+      // the WAV size in place -- a fix that quietly does nothing is worse than
+      // no fix, because it looks applied.
+      const flacSize = flacMeta ? Number(flacMeta.size) : NaN
+      if (Number.isFinite(flacSize) && flacSize > 0) {
+        file.meta.size = flacSize
+      } else {
+        console.warn(`[transcode] could not read FLAC size for ${finalPath}; keeping probed size ${file.meta && file.meta.size}`)
+      }
     }
   }
   return {
