@@ -183,9 +183,58 @@ async function deleteStreamSourceFile (stream, payload) {
   return axios.delete(url, { data, headers })
 }
 
+/**
+ * Strict twin of findIngestedDuplicate for callers that must distinguish
+ * "absent" from "lookup failed".
+ *
+ * findIngestedDuplicate deliberately swallows EVERY error and returns null,
+ * which is right for a best-effort pre-transcode optimisation but dangerous
+ * for a caller that writes a terminal status off the back of the answer: a
+ * transient Core/auth blip would be indistinguishable from genuine absence.
+ *
+ * This version fetches its own token (so ops jobs need no idToken) and:
+ *   - returns the source file on a match
+ *   - returns null ONLY on a real 404 / empty result
+ *   - THROWS on anything else (auth, network, 5xx)
+ *
+ * Added 2026-08-22 for the stuck-upload reaper.
+ */
+async function findIngestedDuplicateStrict (stream, checksum, timestamp) {
+  if (!stream || !checksum) {
+    return null
+  }
+  const url = `${apiHostName}internal/ingest/streams/${stream}/stream-source-file`
+  const token = await auth0Service.getToken()
+  const start = (timestamp && timestamp.toISOString)
+    ? timestamp.toISOString()
+    : timestamp
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      params: { sha1_checksum: checksum, ...(start ? { start } : {}) }
+    })
+    const data = response.data
+    if (!data || (Array.isArray(data) && !data.length)) {
+      return null
+    }
+    return Array.isArray(data) ? data[0] : data
+  } catch (e) {
+    const err = matchAxiosErrorToRfcx(e)
+    const status = (e && e.response && e.response.status)
+    if (status === 404 || /not found/i.test(err.message || '')) {
+      return null
+    }
+    throw err
+  }
+}
+
 module.exports = {
   getExistingSourceFile,
   findIngestedDuplicate,
+  findIngestedDuplicateStrict,
   createStreamFileData,
   deleteStreamSourceFile
 }

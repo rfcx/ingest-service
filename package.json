@@ -8,6 +8,7 @@
     "start:api": "node main-api.js",
     "start:tasks": "node main-tasks.js",
     "start:upload-source-cleanup": "node main-upload-source-cleanup.js",
+    "start:stuck-upload-reaper": "node main-stuck-upload-reaper.js",
     "db-start": ". ./bin/mongo/start.sh",
     "db-stop": "docker container stop ingest-service-mongo",
     "test": "eslint \"**/*.js\" && jest",

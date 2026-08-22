@@ -216,6 +216,28 @@ function findCleanupCandidates ({ statuses, cutoff, batchSize }) {
 }
 
 /**
+ * Mongo twin of the PG `findStuckUploads`. Kept in lockstep with it: same
+ * predicates, same ordering, same limit semantics, so the reaper behaves
+ * identically under either backend (see UPLOADS_DB).
+ *
+ * NOTE the deliberate absence of an `uploadSourceDeletedAt` filter -- unlike
+ * findCleanupCandidates, a stranded upload must be visible whether or not its
+ * source object has already been reaped.
+ *
+ * @param {{ statuses: number[], updatedBefore: Date, limit: number }} opts
+ */
+function findStuckUploads ({ statuses, updatedBefore, limit }) {
+  return UploadModel.find({
+    status: { $in: statuses },
+    updatedAt: { $lte: updatedBefore },
+    streamId: { $ne: null },
+    checksum: { $ne: null }
+  })
+    .sort({ updatedAt: 1 })
+    .limit(limit)
+}
+
+/**
  * Idempotent: the `$exists:false` guard stops a concurrent second pass from
  * overwriting the original deletion record.
  */
@@ -241,6 +263,7 @@ module.exports = {
   updateDeploymentInfo,
   getOrCreateHealthCheck,
   findCleanupCandidates,
+  findStuckUploads,
   markUploadSourceDeleted,
   status
 }
