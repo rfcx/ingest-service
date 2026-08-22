@@ -30,6 +30,21 @@ function registryDbConfig () {
 function getPool () {
   if (!pool) {
     pool = new Pool(registryDbConfig())
+    // A pool-level 'error' listener is REQUIRED. Without one, an error on an
+    // IDLE pooled client is an unhandled 'error' event, which becomes an
+    // uncaughtException and takes the whole process down (process-handlers.js
+    // deliberately exits on uncaughtException). The trigger in production is a
+    // Patroni leader restart: postgres kills every client with "terminating
+    // connection due to administrator command", and this pool's idle client
+    // throws it asynchronously with no caller to catch it.
+    //
+    // Reproduced 2026-08-22 against pg 8.22 + postgres 14: unpatched => the
+    // process exits 1; with this listener => the pool discards the dead client
+    // and reconnects on the next query. `services/db/uploads-pg.js` has had the
+    // equivalent listener since the mongo2pg port; this pool was simply missed.
+    pool.on('error', (err) => {
+      console.error('[upload-target-registry] idle client error', err && err.message)
+    })
   }
   return pool
 }
