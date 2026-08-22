@@ -11,6 +11,7 @@ const { PROMETHEUS_ENABLED, registerHistogram, pushHistogramMetric } = require('
 const path = require('path')
 const fs = require('fs')
 const moment = require('moment-timezone')
+const { v4: uuidv4 } = require('uuid')
 const TimeTracker = require('../../utils/time-tracker')
 const uploadBucket = process.env.UPLOAD_BUCKET
 const ingestBucket = process.env.INGEST_BUCKET
@@ -197,6 +198,74 @@ function setFilesIdAndPath (outputFiles, data, streamId) {
     file.remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${streamId}/${file.guid}${path.extname(file.path)}`
     dataItem.remotePath = file.remotePath
   }
+}
+
+/**
+ * Mint each segment's id and storage key BEFORE anything is written.
+ *
+ * WHY. Core rows used to be created first, and the S3 key was derived from the
+ * uuid Core minted (setFilesIdAndPath above). That ordering opens a window in
+ * which the database advertises audio that has not been written yet. Normally
+ * the window is ~1s; on 2026-08-21 a hot-tier PUT blocked 92.6s, its retries
+ * were rejected by s3-writer's in-flight PUT bulkhead (503 put-sem-timeout),
+ * the worker never reached its catch{} rollback, and the window stayed open
+ * permanently -- 44 segments were left advertised-but-absent.
+ *
+ * Minting locally inverts the failure mode: if the durable write fails there is
+ * no Core row at all, so the upload simply fails and the user retries. The
+ * worst case becomes an ORPHANED OBJECT (audio in storage, no row), which is
+ * harmless and reclaimable, instead of an orphaned row, which is user-visible
+ * data loss.
+ *
+ * WHY THIS IS SAFE:
+ *  - `id` already flows end to end: combineSegmentsData sends `id: file.guid`
+ *    and Core's post.js spreads `{ ...s }` into bulkCreate. Today file.guid is
+ *    undefined at that point, JSON drops the key, and Core falls back to its
+ *    own UUIDV4 default.
+ *  - Sequelize 5.22.5 honours an explicitly supplied id (verified empirically
+ *    against this exact version: supplied id kept, omitted id still
+ *    auto-filled, unknown keys ignored).
+ *  - The storage PATH never depended on the id: Core's calcSegmentDirname()
+ *    uses only start + stream_id, and the id is appended separately. So the
+ *    key we compute here is byte-identical to the one Core would compute.
+ *  - Re-POST stays idempotent: post.js matches existing segments by
+ *    (stream, starts) and updates availability rather than duplicating.
+ */
+function mintFilesIdAndPath (outputFiles, streamId) {
+  for (const file of outputFiles) {
+    file.guid = uuidv4()
+    const ts = moment.utc(file.start)
+    file.remotePath = `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${streamId}/${file.guid}${path.extname(file.path)}`
+  }
+}
+
+/**
+ * Find segments where Core returned an id different from the one we minted.
+ *
+ * This happens on Core's dedup path only: post.js looks up existing segments by
+ * (stream, starts) and, for a match, returns the EXISTING row and merely sets
+ * availability=1 — the supplied id is ignored. Since the audio has already been
+ * written under our minted key, the caller must copy it to Core's key or the
+ * row would reference a nonexistent object.
+ *
+ * Returns [{ start, from, to }] for the mismatches; [] on the normal path.
+ */
+function reconcileCoreSegmentIds (outputFiles, coreSegments, streamId) {
+  const out = []
+  for (const file of outputFiles) {
+    const dataItem = (coreSegments || []).find(d => file.start === d.start)
+    if (!dataItem || !dataItem.id || dataItem.id === file.guid) {
+      continue
+    }
+    const ts = moment.utc(file.start)
+    const ext = path.extname(file.path)
+    out.push({
+      start: file.start,
+      from: file.remotePath,
+      to: `${ts.format('YYYY')}/${ts.format('MM')}/${ts.format('DD')}/${streamId}/${dataItem.id}${ext}`
+    })
+  }
+  return out
 }
 
 /**
@@ -396,12 +465,10 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     outputFiles = transcodeData.outputFiles
     setAdditionalFileAttrs(outputFiles, upload)
 
-    const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
-    tracker.setPoint()
-    coreData = await segmentService.createStreamFileData(upload.streamId, corePayload)
-    tracker.logAndSetNewPoint(`[${uploadId}] created data in Core API`)
-
-    setFilesIdAndPath(outputFiles, coreData.streamSegments, upload.streamId)
+    // Mint ids + storage keys locally so the durable write can happen BEFORE
+    // Core rows exist. See mintFilesIdAndPath() for the full rationale and the
+    // evidence that Core honours a client-supplied id.
+    mintFilesIdAndPath(outputFiles, upload.streamId)
 
     console.info(`[${uploadId}] Uploading segments`)
     tracker.setPoint()
@@ -416,10 +483,11 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       // re-throws the last throttle error raw — so the rollback + status 30 +
       // nack->DLQ path below is byte-identical to before for every non-
       // throttle failure and for genuine sustained saturation. The retry
-      // wraps ONLY this PUT phase: segment keys (f.remotePath) were minted
-      // from Core data before this loop and are stable across attempts, so a
-      // re-PUT is an idempotent overwrite; the queue message is not acked
-      // until the whole ingest settles (consumer semantics untouched).
+      // wraps ONLY this PUT phase: segment keys (f.remotePath) are minted
+      // LOCALLY before this loop (mintFilesIdAndPath) and are stable across
+      // attempts, so a re-PUT is an idempotent overwrite; the queue message is
+      // not acked until the whole ingest settles (consumer semantics
+      // untouched).
       await Promise.all(chunk.map((f) => {
         return retryOnPutLimit(
           () => storage.upload(ingestBucket, f.remotePath, f.path),
@@ -443,6 +511,30 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       console.info(`[${uploadId}] Processed ${processedSegCount} recordings of ${outputFiles.length}`)
     }
     tracker.logAndSetNewPoint(`[${uploadId}] uploaded al segments to S3`)
+
+    // Core rows are created ONLY after every segment is durably written, using
+    // the ids minted above. A failure before this point leaves no row at all.
+    const corePayload = combineCorePayloadData(fileData, transcodeData.wavMeta, outputFiles, upload)
+    tracker.setPoint()
+    coreData = await segmentService.createStreamFileData(upload.streamId, corePayload)
+    tracker.logAndSetNewPoint(`[${uploadId}] created data in Core API`)
+
+    // ⚠️ Core is authoritative about ids, and it does NOT always return ours.
+    // post.js matches pre-existing segments by (stream, start): for those it
+    // returns the EXISTING row's id and only flips availability=1, ignoring the
+    // id we supplied. Our audio is already written under the MINTED key, so a
+    // silent re-sync here would leave Core pointing at a key that does not
+    // exist — precisely the advertised-but-absent bug this change removes.
+    //
+    // Reconcile explicitly: adopt Core's id, and where it differs from ours,
+    // copy the object to the id Core actually stored so the row and the object
+    // agree. This is the rare dedup path, not the hot path.
+    const reconciled = reconcileCoreSegmentIds(outputFiles, coreData.streamSegments, upload.streamId)
+    for (const r of reconciled) {
+      console.warn(`[${uploadId}] Core returned a pre-existing segment id for start=${r.start}; copying ${r.from} -> ${r.to}`)
+      await storage.copy(`${ingestBucket}/${r.from}`, ingestBucket, r.to)
+    }
+    setFilesIdAndPath(outputFiles, coreData.streamSegments, upload.streamId)
 
     console.info(`[${uploadId}] Modifying status to INGESTED (${db.status.INGESTED})`)
     await db.updateUploadStatus(uploadId, db.status.INGESTED, null, buildIngestionResult(coreData, outputFiles, upload))
