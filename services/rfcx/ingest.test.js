@@ -274,7 +274,10 @@ describe('Test ingest service', () => {
     expect(result).toBeDefined()
     expect(result.outcome).toBe('handled-terminal')
     expect(result.status).toBe(status.DUPLICATE)
-    expect(storage.deleteObject).not.toHaveBeenCalled()
+    // Post-2026-08-22 the PUTs happen before the Core call, so the rollback
+    // reclaims the just-written objects. ACK-drop semantics are unchanged --
+    // that is what `handled-terminal` above asserts.
+    expect(storage.deleteObject).toHaveBeenCalledTimes(5)
   })
 
   test('Handled-terminal preserves source upload for lifecycle expiry', async () => {
@@ -288,7 +291,12 @@ describe('Test ingest service', () => {
 
     const result = await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
     expect(result.outcome).toBe('handled-terminal')
-    expect(storage.deleteObject).not.toHaveBeenCalled()
+    // Segments are now written BEFORE Core is called (2026-08-22 ordering fix),
+    // so a duplicate rejection leaves objects with no row. Deleting them is the
+    // correct behaviour: it prevents orphaned objects accumulating in storage.
+    // The SOURCE upload is still preserved (asserted below) for lifecycle
+    // expiry and DLQ redrive.
+    expect(storage.deleteObject).toHaveBeenCalledTimes(5)
   })
 
   // --- s3-writer PUT-limit retry (2026-08-19) -------------------------------
@@ -428,8 +436,93 @@ describe('Test ingest service', () => {
     expect(uploadSpy).toHaveBeenCalledTimes(15)
     // Rollback ran: every registered segment was deleted.
     expect(storage.deleteObject).toHaveBeenCalledTimes(5)
-    // Core rollback ran too (source file had been created).
-    expect(segmentService.deleteStreamSourceFile).toHaveBeenCalledTimes(1)
+    // 🔑 THE POINT OF THE 2026-08-22 ORDERING FIX. The PUT phase now runs
+    // BEFORE Core rows are created, so an exhausted PUT means Core was never
+    // called and there is nothing to roll back -- and, critically, NO ROW WAS
+    // EVER CREATED for audio that does not exist. Under the old ordering this
+    // was 1 (the source file had already been created and had to be undone),
+    // and if the worker died before reaching that rollback the row was
+    // orphaned permanently. That is the 44-segment loss of 2026-08-21.
+    expect(segmentService.deleteStreamSourceFile).not.toHaveBeenCalled()
+  })
+
+  // --- write-before-Core ordering (2026-08-22) -----------------------------
+  // Core rows used to be created BEFORE the audio was written, so the DB
+  // advertised audio that did not exist yet. On 2026-08-21 a hot-tier PUT
+  // blocked 92.6s, its retries were rejected by s3-writer's PUT bulkhead, the
+  // worker never reached its catch{} rollback, and 44 segments were left
+  // advertised-but-absent. These tests pin the inverted ordering.
+
+  test('ORDERING: every segment PUT completes BEFORE Core is called', async () => {
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+
+    const order = []
+    storage.upload.mockImplementation(() => {
+      order.push('put')
+      return Promise.resolve({ ETag: true })
+    })
+    const coreSpy = jest.spyOn(segmentService, 'createStreamFileData')
+    const original = coreSpy.getMockImplementation()
+    coreSpy.mockImplementation((...args) => {
+      order.push('core')
+      return original(...args)
+    })
+
+    await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+
+    expect(order).toContain('core')
+    expect(order.filter(o => o === 'put')).toHaveLength(5)
+    // The decisive assertion: Core is called exactly once, and only after the
+    // LAST put. If this ever regresses, the advertised-but-absent window is
+    // back and a stalled worker can orphan rows again.
+    expect(order.lastIndexOf('put')).toBeLessThan(order.indexOf('core'))
+  })
+
+  test('ORDERING: segment keys are minted locally, not taken from Core', async () => {
+    const fileName = 'test-5mins-lv8.flac'
+    const pathFile = path.join(__dirname, '../../test/', fileName)
+    const tempFilePath = tempDirPath + fileName
+    process.env.CACHE_DIRECTORY = tempDirPath
+    fs.copyFile(pathFile, tempFilePath, (err) => { console.info(err) })
+    const upload = await UploadModel.findOne({ checksum: UPLOAD.checksum })
+
+    const keys = []
+    storage.upload.mockImplementation((bucket, remotePath) => {
+      keys.push(remotePath)
+      return Promise.resolve({ ETag: true })
+    })
+
+    await ingestService.ingest(`${UPLOAD.streamId}/${fileName}`, tempFilePath, UPLOAD.streamId, upload.id)
+
+    expect(keys).toHaveLength(5)
+    for (const k of keys) {
+      // YYYY/MM/DD/<streamId>/<uuid>.<ext> -- the same shape Core's
+      // calcSegmentDirname + calcSegmentPath produce, but computed locally.
+      expect(k).toMatch(
+        new RegExp(`^\\d{4}/\\d{2}/\\d{2}/${UPLOAD.streamId}/[0-9a-f-]{36}\\.flac$`)
+      )
+    }
+    // All distinct: a collision would silently overwrite a sibling segment.
+    expect(new Set(keys).size).toBe(5)
+
+    // 🔑 DISCRIMINATING ASSERTION. The Core mock returns FIXED uuids
+    // (6ec8579f-..., 31768a27-..., ...). Under the old ordering the PUT keys
+    // were derived from exactly those, so a shape-only check passes either
+    // way. Requiring the keys NOT to contain Core's ids is what actually
+    // proves they were minted locally, before Core was consulted.
+    const coreIds = [
+      '6ec8579f-e5b4-4d97-b4ce-c625a10908fb',
+      '31768a27-000d-468f-a127-d83ebd7d530d',
+      'f9572d63-f644-45bc-8942-8557ddb39c64'
+    ]
+    for (const id of coreIds) {
+      expect(keys.join('|')).not.toContain(id)
+    }
   })
 
   test('Non-throttle PUT failure keeps the fail-fast single-attempt path', async () => {
