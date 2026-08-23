@@ -344,6 +344,35 @@ function findCleanupCandidates ({ statuses, cutoff, batchSize }) {
 }
 
 /**
+ * Stranded uploads: rows left at a non-terminal status long after any healthy
+ * ingest would have settled.
+ *
+ * Deliberately NOT reusing findCleanupCandidates: that query filters on
+ * `upload_source_deleted_at IS NULL`, which is the right guard for source
+ * cleanup but the wrong one here (a stranded upload may or may not have had
+ * its source reaped, and we must see it either way).
+ *
+ * `checksum IS NOT NULL` is required because the reaper classifies by looking
+ * the checksum up in Core; a row without one cannot be classified and would
+ * otherwise be mis-handled.
+ *
+ * @param {{ statuses: number[], updatedBefore: Date, limit: number }} opts
+ */
+function findStuckUploads ({ statuses, updatedBefore, limit }) {
+  return query(`
+    SELECT ${COLUMNS}
+    FROM ingest.stream_uploads
+    WHERE status = ANY($1::smallint[])
+      AND updated_at <= $2
+      AND stream_id IS NOT NULL
+      AND checksum IS NOT NULL
+    ORDER BY updated_at ASC
+    LIMIT $3`,
+  [statuses, updatedBefore, limit])
+    .then(result => result.rows.map(rowToUpload))
+}
+
+/**
  * Idempotent by design: the `upload_source_deleted_at IS NULL` guard mirrors
  * Mongo's `$exists:false` so a concurrent second pass cannot overwrite the
  * original deletion record.
@@ -379,6 +408,7 @@ module.exports = {
   updateUploadStatus,
   getOrCreateHealthCheck,
   findCleanupCandidates,
+  findStuckUploads,
   markUploadSourceDeleted,
   status,
   // exported for tests / migrations, not used by app code
