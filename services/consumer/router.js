@@ -29,6 +29,42 @@ const url = process.env.RABBITMQ_URL || process.env.AMQP_URL
 const LEGACY = lanes.LEGACY_QUEUE
 const ROUTER_ENABLED = (process.env.INGEST_LANE_ROUTER || 'on').toLowerCase() !== 'off'
 
+// ---------------------------------------------------------------------------
+// LEGACY-QUEUE SINGLE-READER INVARIANT (2026-08-24)
+//
+// Every tasks pod runs BOTH this router (channel.consume on the legacy queue,
+// push) AND the multi-lane consumer's step-4 legacy drain (get, poll). The
+// consumer's "only when nothing else had work" guard protects LOCAL state, not
+// global state, so on an idle fleet a consumer poll can win a message before the
+// router routes it -- and the SAME upload is then ingested twice concurrently.
+// Measured 2026-08-24: 568 of 715 upload ids (79%) touched by more than one pod.
+// Record: runbooks/FINDING-ingest-legacy-queue-double-consumption-2026-08-18.md
+// (in the rfcx-local repo).
+//
+// The fix is to make the drain stand down while this router is actually reading
+// the queue. It is gated on LIVE STATE, not on the INGEST_LANE_ROUTER env flag,
+// and that distinction is load-bearing: main-tasks.js deliberately lets
+// startRouter() fail WITHOUT killing the pod, with the comment "continuing;
+// consumer still drains legacy". A static env gate would stay `true` after a
+// fatal router failure and so leave the legacy queue with ZERO readers in that
+// pod, while the pod still looks healthy (the consumer is the liveness anchor).
+// Fleet-wide that is caught by IngestConsumersAbsent, but ONE dead router among
+// three keeps the consumer count at 2 and alerts nothing.
+//
+// Truth table:
+//   router consuming -> drain OFF (exactly one reader; the race is closed)
+//   router disabled  -> drain ON  (unchanged behaviour)
+//   router crashed   -> drain ON  (safety net preserved -- the case an env gate
+//                                  would have silently broken)
+// Residual: a sub-second window during router reconnect where both may read.
+// Bounded and rare; createStreamFileData still arbitrates, and the
+// terminal-status guard (PR #131) stops a loser corrupting the status.
+// ---------------------------------------------------------------------------
+let consumingLegacy = false
+
+/** True only while this pod is a registered consumer of the legacy queue. */
+function isConsumingLegacy () { return consumingLegacy }
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const RECONNECT_BASE_MS = parseInt(process.env.RABBITMQ_RECONNECT_BASE_MS || '2000', 10)
 const RECONNECT_MAX_MS = parseInt(process.env.RABBITMQ_RECONNECT_MAX_MS || '30000', 10)
@@ -94,6 +130,7 @@ async function routerLoop () {
   console.info(`Ingest lane router up: legacy="${LEGACY}" -> express/priority/fair lanes`)
 
   await channel.consume(LEGACY, async (msg) => {
+    /* istanbul ignore next */
     if (msg === null) { return }
     let body
     try {
@@ -122,8 +159,14 @@ async function routerLoop () {
     }
   })
 
+  // LEGACY-QUEUE SINGLE-READER INVARIANT (2026-08-24). See isConsumingLegacy().
+  // Set only AFTER channel.consume() has resolved, i.e. once this pod really is
+  // a registered consumer of the legacy queue.
+  consumingLegacy = true
+
   // idle wait until the connection drops
   while (!stopped) { await sleep(1000) }
+  consumingLegacy = false
   try { await channel.close() } catch (_) {}
   try { await connection.close() } catch (_) {}
   throw new Error('router loop ended (connection/channel closed)')
@@ -138,6 +181,7 @@ async function startRouter () {
     try {
       await routerLoop()
     } catch (e) {
+      consumingLegacy = false
       attempt += 1
       const delay = Math.min(RECONNECT_BASE_MS * attempt, RECONNECT_MAX_MS)
       console.error(`Ingest router loop attempt ${attempt} ended (${e && e.message}); retrying in ${delay}ms`)
@@ -146,4 +190,4 @@ async function startRouter () {
   }
 }
 
-module.exports = { startRouter, laneTierForBody, firstUploadId }
+module.exports = { startRouter, laneTierForBody, firstUploadId, isConsumingLegacy }
