@@ -102,6 +102,24 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null, inge
       if (!upload) {
         throw new Error('Upload does not exist')
       }
+      // TERMINAL-SUCCESS GUARD (2026-08-24) -- parity with uploads-pg.js. An
+      // upload that reached INGESTED(20) is never moved to a failure status,
+      // so a concurrent duplicate ingest cannot relabel successfully-stored
+      // audio as failed. See the full rationale in uploads-pg.js.
+      //
+      // NOTE this backend is get-then-save, so the guard here is inherently
+      // weaker than the PG one (which is atomic in SQL): two writers can still
+      // interleave between the read and the save. That is a pre-existing
+      // property of this implementation, not a regression -- and this backend
+      // is FROZEN in rfcx-local (UPLOADS_DB=pg; the mongo StatefulSet is 0/0).
+      // It is implemented anyway so the two backends cannot silently diverge.
+      if (upload.status === status.INGESTED &&
+          [status.FAILED, status.DUPLICATE, status.CHECKSUM].includes(statusNumber)) {
+        console.warn(`[${uploadId}] refusing to overwrite INGESTED(${status.INGESTED}) with ${statusNumber}` +
+          (failureMessage ? ` ("${failureMessage}")` : '') +
+          ' -- audio already ingested by a concurrent worker')
+        return upload
+      }
       upload.status = statusNumber
       upload.updatedAt = moment().tz('UTC').toDate()
       if (failureMessage != null) {

@@ -221,9 +221,87 @@ describePg('updateUploadStatus', () => {
     const result = { streamSourceFileId: 'ssf-1', segments: [{ id: 'seg1', path: 'p' }] }
     await db.updateUploadStatus(id, db.status.INGESTED, null, result)
     expect((await db.getUpload(id)).ingestionResult).toEqual(result)
-    // a later flip without one must not wipe it
-    await db.updateUploadStatus(id, db.status.FAILED, 'later failure')
-    expect((await db.getUpload(id)).ingestionResult).toEqual(result)
+    // A later flip without one must not wipe it.
+    //
+    // This assertion originally flipped INGESTED -> FAILED. That transition is
+    // now REFUSED by the terminal-success guard, so it would no longer have
+    // exercised the ingestionResult-preservation behaviour it exists to test
+    // (it would pass for the wrong reason -- nothing was written at all).
+    // Re-pointed at a NON-terminal starting status so it still tests what it
+    // says: only `ingestionResult` handling, not the guard.
+    const id2 = await pgTesting.insertUpload({})
+    await db.updateUploadStatus(id2, db.status.UPLOADED, null, result)
+    expect((await db.getUpload(id2)).ingestionResult).toEqual(result)
+    await db.updateUploadStatus(id2, db.status.FAILED, 'later failure')
+    expect((await db.getUpload(id2)).ingestionResult).toEqual(result)
+    expect((await db.getUpload(id2)).status).toBe(db.status.FAILED)
+  })
+
+  // -------------------------------------------------------------------------
+  // Terminal-success guard (2026-08-24): INGESTED(20) is never overwritten by a
+  // failure status. Guards against the legacy-queue double-consumption race,
+  // where the LOSING duplicate worker wrote its status last and relabelled
+  // successfully-ingested audio as failed (423 rows all-time, 73% of which had
+  // actually ingested).
+  // -------------------------------------------------------------------------
+
+  test.each([
+    ['FAILED', 30],
+    ['DUPLICATE', 31],
+    ['CHECKSUM', 32]
+  ])('refuses to overwrite INGESTED with %s and leaves the row untouched', async (_name, failureStatus) => {
+    const id = await pgTesting.insertUpload({})
+    const result = { streamSourceFileId: 'ssf-1', segments: [{ id: 'seg1', path: 'p' }] }
+    await db.updateUploadStatus(id, db.status.INGESTED, null, result)
+    const before = await db.getUpload(id)
+
+    // must RESOLVE (not throw) -- the ingest catch block depends on it
+    const returned = await db.updateUploadStatus(id, failureStatus, 'loser of a duplicate ingest')
+    expect(returned.status).toBe(db.status.INGESTED)
+
+    const after = await db.getUpload(id)
+    expect(after.status).toBe(db.status.INGESTED)
+    expect(after.failureMessage ?? null).toBeNull()
+    expect(after.ingestionResult).toEqual(result)
+    // the refusal must not bump updated_at -- nothing was written
+    expect(new Date(after.updatedAt).getTime()).toBe(new Date(before.updatedAt).getTime())
+  })
+
+  test('still allows INGESTED -> INGESTED (idempotent re-write refreshes ingestionResult)', async () => {
+    const id = await pgTesting.insertUpload({})
+    await db.updateUploadStatus(id, db.status.INGESTED, null, { streamSourceFileId: 'a', segments: [] })
+    const second = { streamSourceFileId: 'b', segments: [{ id: 's', path: 'p' }] }
+    await db.updateUploadStatus(id, db.status.INGESTED, null, second)
+    const after = await db.getUpload(id)
+    expect(after.status).toBe(db.status.INGESTED)
+    expect(after.ingestionResult).toEqual(second)
+  })
+
+  test.each([
+    ['WAITING', 0],
+    ['UPLOADED', 10]
+  ])('does not block a failure status from a non-terminal state (%s -> FAILED)', async (_name, fromStatus) => {
+    const id = await pgTesting.insertUpload({})
+    await db.updateUploadStatus(id, fromStatus)
+    await db.updateUploadStatus(id, db.status.FAILED, 'a genuine failure')
+    const after = await db.getUpload(id)
+    expect(after.status).toBe(db.status.FAILED)
+    expect(after.failureMessage).toBe('a genuine failure')
+  })
+
+  test('a guarded update against a MISSING row still rejects (refusal is not conflated with absence)', async () => {
+    // The guard makes rowCount===0 ambiguous; this asserts the two cases stay
+    // distinguishable, which is the subtle part of the implementation.
+    await expect(db.updateUploadStatus('b'.repeat(24), db.status.FAILED, 'x'))
+      .rejects.toThrow('Upload does not exist')
+  })
+
+  test('counts refusals so duplicate ingests stay observable after the symptom is hidden', async () => {
+    const before = db.getTerminalOverwriteRefusedTotal()
+    const id = await pgTesting.insertUpload({})
+    await db.updateUploadStatus(id, db.status.INGESTED)
+    await db.updateUploadStatus(id, db.status.DUPLICATE, 'dup')
+    expect(db.getTerminalOverwriteRefusedTotal()).toBe(before + 1)
   })
 
   test('stores ingestionResult segments WITHOUT any $oid/_id leakage (backfill divergence 1)', async () => {
