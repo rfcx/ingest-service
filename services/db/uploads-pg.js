@@ -254,7 +254,39 @@ function setUploadMultipartAborted (uploadId) {
  * Knowing upgrade over Mongo: this is a single guarded UPDATE rather than
  * get-then-save, which removes the read-modify-write race between the API and
  * the task consumers.
+ *
+ * TERMINAL-SUCCESS GUARD (2026-08-24): a row that has reached INGESTED(20) is
+ * never moved to a FAILURE status (30/31/32).
+ *
+ * WHY: the legacy ingest queue has two readers in every tasks pod -- the lane
+ * router (channel.consume, push) and the multi-lane consumer's legacy drain
+ * (get, poll) -- so the same upload can be ingested twice concurrently. The
+ * post-transcode createStreamFileData call correctly arbitrates (one writer
+ * wins on the (stream_id, sha1) constraint, the loser gets 400 and rolls back
+ * its own segments), but the LOSER WRITES ITS STATUS LAST and so overwrote the
+ * winner's INGESTED(20) with 31. Measured 2026-08-18: 423 such rows all-time,
+ * 311 (73%) of which HAD in fact ingested -- i.e. the upload record lied about
+ * successfully-stored audio, and hid the genuine failures in the same bucket.
+ * Record: runbooks/FINDING-ingest-legacy-queue-double-consumption-2026-08-18.md
+ * (in the rfcx-local repo).
+ *
+ * The guard is applied IN SQL, not as a read-then-write, deliberately: a
+ * read-modify-write would reintroduce exactly the race it exists to close (the
+ * winner can set 20 between a loser's read and its write). The DB arbitrates,
+ * the same way it already arbitrates the segment race.
+ *
+ * Directional, not a lock: 20 -> 20 still succeeds (idempotent re-write, and it
+ * is how ingestionResult is refreshed), and every transition INTO 20 is
+ * unaffected. Only 20 -> {30,31,32} is refused.
+ *
+ * A refusal is NOT an error: it returns the current row, so callers (the ingest
+ * catch block) proceed exactly as before. It is logged + counted so the
+ * duplicate-work rate stays visible -- otherwise this trades a visible lie for
+ * an invisible one.
  */
+const TERMINAL_SUCCESS = status.INGESTED
+const FAILURE_STATUSES = [status.FAILED, status.DUPLICATE, status.CHECKSUM]
+
 function updateUploadStatus (uploadId, statusNumber, failureMessage = null, ingestionResult = null) {
   if (!statusNumbers.includes(statusNumber)) {
     throw new Error('Invalid status')
@@ -264,6 +296,7 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null, inge
   if (!OBJECT_ID_RE.test(key)) {
     return Promise.reject(new Error('Upload does not exist'))
   }
+  const guarded = FAILURE_STATUSES.includes(statusNumber)
 
   return query(`
     UPDATE ingest.stream_uploads
@@ -277,6 +310,7 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null, inge
           WHEN $6::jsonb IS NOT NULL THEN $6::jsonb
           ELSE ingestion_result END
     WHERE id = $1
+      AND NOT ($7::boolean AND status = $8)
     RETURNING ${COLUMNS}`,
   [
     key,
@@ -284,15 +318,49 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null, inge
     moment().tz('UTC').toDate(),
     failureMessage == null ? null : `${failureMessage}`,
     clearFailureMessage,
-    ingestionResult ? JSON.stringify(ingestionResult) : null
+    ingestionResult ? JSON.stringify(ingestionResult) : null,
+    guarded,
+    TERMINAL_SUCCESS
   ])
     .then((result) => {
       if (result.rowCount === 0) {
-        throw new Error('Upload does not exist')
+        // Zero rows means EITHER the row is missing OR the guard refused the
+        // transition. Those must not be conflated: the first is an error, the
+        // second is the expected outcome of a duplicate ingest. This extra read
+        // runs ONLY on the rare zero-row path, so the hot path stays a single
+        // statement.
+        if (!guarded) {
+          throw new Error('Upload does not exist')
+        }
+        return query(`SELECT ${COLUMNS} FROM ingest.stream_uploads WHERE id = $1`, [key])
+          .then((check) => {
+            if (check.rowCount === 0) {
+              throw new Error('Upload does not exist')
+            }
+            const row = rowToUpload(check.rows[0])
+            if (row.status === TERMINAL_SUCCESS) {
+              console.warn(`[${key}] refusing to overwrite INGESTED(${TERMINAL_SUCCESS}) with ${statusNumber}` +
+                (failureMessage ? ` ("${failureMessage}")` : '') +
+                ' -- audio already ingested by a concurrent worker')
+              countTerminalOverwriteRefused()
+              return row
+            }
+            // Row exists, is not terminal, yet nothing updated. Should be
+            // unreachable; surface it rather than silently returning.
+            throw new Error('Upload status update matched no row')
+          })
       }
       return rowToUpload(result.rows[0])
     })
 }
+
+// Count of suppressed terminal overwrites. Exposed for the metrics endpoint so
+// the duplicate-ingest rate remains observable after this guard hides its most
+// visible symptom -- this is the number that tells us whether the single-reader
+// fix (gating the legacy drain) actually worked.
+let terminalOverwriteRefusedTotal = 0
+function countTerminalOverwriteRefused () { terminalOverwriteRefusedTotal += 1 }
+function getTerminalOverwriteRefusedTotal () { return terminalOverwriteRefusedTotal }
 
 function countByStatus (statusNumber) {
   return query('SELECT COUNT(*)::bigint AS count FROM ingest.stream_uploads WHERE status = $1', [statusNumber])
@@ -410,6 +478,7 @@ module.exports = {
   findCleanupCandidates,
   findStuckUploads,
   markUploadSourceDeleted,
+  getTerminalOverwriteRefusedTotal,
   status,
   // exported for tests / migrations, not used by app code
   _internal: { rowToUpload, normaliseLaneTier, generateId, getPool, closePool }
