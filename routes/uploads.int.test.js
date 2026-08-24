@@ -210,6 +210,57 @@ describe('POST /uploads', () => {
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toEqual('This wav file size is exceeding our limit (200MB)')
   })
+  // -------------------------------------------------------------------------
+  // file_size (snake_case) alias -- 2026-08-24.
+  //
+  // The desktop uploader (rfcx/arbimon-uploader) posts `file_size`. Before the
+  // alias that value was dropped, `.optional()` passed, and every size check
+  // short-circuited on `params.fileSize && ...` -- so an oversized file got 200
+  // OK plus a signed URL, then died client-side, leaving the upload row at
+  // status 0 forever with no failure message. These tests pin the alias so the
+  // silent-skip cannot come back.
+  // -------------------------------------------------------------------------
+  test('accepts file_size (snake_case) as an alias and ENFORCES the size cap with it', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.wav',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 3600000,
+      file_size: 200_000_001 // eslint-disable-line camelcase
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    // Previously: 200 + a signed URL (check skipped). Now the cap applies.
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual('This wav file size is exceeding our limit (200MB)')
+  })
+
+  test('camelCase fileSize WINS when both spellings are present (no silent override)', async () => {
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.wav',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1,
+      duration: 3600000,
+      fileSize: 200_000_001,
+      file_size: 1_000 // eslint-disable-line camelcase
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    // The alias must not be able to mask a real (camelCase) value.
+    expect(response.statusCode).toBe(400)
+    expect(response.body.message).toEqual('This wav file size is exceeding our limit (200MB)')
+  })
+
+  // NOTE: the happy-path counterpart (a within-limit file_size upload returning
+  // 200) is deliberately covered as a UNIT test on normaliseUploadBody in
+  // routes/uploads.normalise.test.js instead of here. The 200 path in this
+  // suite requires MongoDB, so such a test could not be executed locally, and
+  // an assertion the author cannot run is not evidence.
+
   test('returns validation error if fileSize as other extensions file more than 150MB', async () => {
     const requestBody = {
       filename: '0a1824085e3f-2021-06-08T19-26-40.opus',

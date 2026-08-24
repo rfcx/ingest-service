@@ -98,8 +98,47 @@ async function assertProjectUploadWithinLimit (idToken, streamId, durationMs, ca
   return { projectId, summary }
 }
 
+// Accept `file_size` as an alias for `fileSize` (2026-08-24).
+//
+// WHY: the DESKTOP uploader (rfcx/arbimon-uploader utils/api.js) posts
+// `file_size`, while this converter reads `fileSize`. The value was therefore
+// silently dropped, `.optional()` passed, and every size check below
+// short-circuited on `params.fileSize && ...` -- so an oversized file received
+// 200 OK and a signed PUT URL instead of a clear rejection. The upload then
+// died client-side (the uploader's axios call caps at 200 MiB), so nothing ever
+// reached the bucket and the upload row sat at status 0 (CREATED) forever, with
+// no failure message and nothing to reap. Measured 2026-08-24: a 90-min 518 MB
+// WAV and a cluster of 31-35 min 192 kHz files failed exactly this way, two of
+// them stranded for 13 days.
+//
+// The mistake is understandable rather than sloppy: this same API accepts
+// snake_case on /streams (`is_public`, `project_id`), which the uploader also
+// calls, so the convention is genuinely mixed.
+//
+// Fixing only the client would leave every ALREADY-INSTALLED uploader failing
+// silently until its users update -- desktop apps do not update in lockstep --
+// so the alias is the load-bearing half. The client is corrected separately.
+//
+// ⚠️ BEHAVIOUR CHANGE: size validation now actually RUNS for these requests.
+// With MAX_WAV_BYTES raised to 2 GB this converts most previously-silent
+// stalls into successful uploads; anything still over the cap now gets a clear
+// ValidationError instead of a stall. That is safe for retry behaviour because
+// the uploader treats /exceeding our limit/i as a TERMINAL error (verified in
+// the deployed bundle), so it stops rather than re-submitting.
+//
+// Scope is deliberately ONE field: there is no evidence any client sends
+// sampleRate/targetBitrate in snake_case, and speculative aliases are API
+// surface we would have to support forever.
+function normaliseUploadBody (body) {
+  if (!body || typeof body !== 'object') { return body }
+  if (body.fileSize === undefined && body.file_size !== undefined) {
+    return { ...body, fileSize: body.file_size }
+  }
+  return body
+}
+
 function uploadConverter (body) {
-  const converter = new Converter(body || {}, {})
+  const converter = new Converter(normaliseUploadBody(body) || {}, {})
   converter.convert('filename').toString()
   converter.convert('timestamp').toMomentUtc()
   converter.convert('stream').toString()
@@ -277,6 +316,12 @@ const MULTIPART_MIN_FILE_BYTES = Number(process.env.MULTIPART_MIN_FILE_BYTES || 
 const MULTIPART_MAX_PARTS = 10000
 
 async function createMultipartSignedUpload (rawParams, { req, idToken, userId }) {
+  // Normalise FIRST: this route reads fileSize directly, BEFORE registerUpload
+  // runs the converter, so a `file_size` caller would otherwise be rejected
+  // here with "fileSize is required" even though the alias is accepted
+  // everywhere else. Keeping the two paths consistent matters because this is
+  // precisely the route a large-file client should be using.
+  rawParams = normaliseUploadBody(rawParams)
   if (!rawParams || !rawParams.fileSize) {
     throw new ValidationError('fileSize is required for multipart uploads.')
   }
@@ -783,4 +828,7 @@ router.route('/:id').get((req, res) => {
     .catch(httpErrorHandler(req, res, 'Failed getting upload with given id.'))
 })
 
+// Exported for unit tests. The router itself stays the default export so every
+// existing `require('./routes/uploads')` mount site is unchanged.
 module.exports = router
+module.exports.normaliseUploadBody = normaliseUploadBody
