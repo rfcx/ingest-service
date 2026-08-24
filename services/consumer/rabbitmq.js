@@ -7,6 +7,9 @@ const { parseUploadFromFileName } = require('./misc')
 const TimeTracker = require('../../utils/time-tracker')
 const db = require('../db/uploads')
 const lanes = require('./lanes')
+// Router liveness, for the legacy-queue single-reader invariant (2026-08-24).
+// Safe: router.js does NOT require this module, so there is no import cycle.
+const router = require('./router')
 
 const { flacLimitSize, wavLimitSize } = require('../../utils/limits')
 
@@ -199,8 +202,23 @@ async function consumeLoop () {
     }
     if (stopped) { break }
 
-    // 4) LEGACY drain (rollback / in-flight), only when nothing else had work.
-    if (!didWork) {
+    // 4) LEGACY drain (rollback / in-flight), only when nothing else had work
+    //    AND this pod's router is not already reading that queue.
+    //
+    //    The router (channel.consume, push) and this drain (get, poll) are BOTH
+    //    readers of the legacy queue in EVERY tasks pod. "Only when nothing else
+    //    had work" guards LOCAL state, not global: on an idle fleet this poll
+    //    can win a message before the router routes it, and the same upload is
+    //    then ingested twice concurrently (measured 2026-08-24: 568 of 715
+    //    upload ids touched by >1 pod). Standing down while the router is live
+    //    makes the legacy queue single-reader per pod.
+    //
+    //    Deliberately gated on router LIVE STATE, not on INGEST_LANE_ROUTER:
+    //    main-tasks.js lets the router fail without killing the pod precisely
+    //    because this drain covers it, so an env gate would leave the queue with
+    //    zero readers here after a router crash. See the invariant block in
+    //    services/consumer/router.js.
+    if (!didWork && !router.isConsumingLegacy()) {
       const msg = await getFrom(legacy)
       if (msg) { await processMessage(channel, msg); didWork = true }
     }
