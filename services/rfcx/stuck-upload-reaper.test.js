@@ -14,7 +14,7 @@ jest.mock('../db/uploads', () => ({
 }))
 
 const segments = require('./segments')
-const { runStuckUploadReaper, buildConfig, classify } = require('./stuck-upload-reaper')
+const { runStuckUploadReaper, buildConfig, classify, assertIndexableStatuses } = require('./stuck-upload-reaper')
 
 const upload = (over = {}) => ({
   id: 'u1',
@@ -140,5 +140,53 @@ describe('runStuckUploadReaper', () => {
     const arg = db.findStuckUploads.mock.calls[0][0]
     expect(arg.statuses).toEqual([10])
     expect(Date.now() - arg.updatedBefore.getTime()).toBeGreaterThan(2.9 * 3600 * 1000)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Index coupling (2026-08-24). `stream_uploads_stuck_idx` is partial
+// `WHERE status = 10`. PG can only use it while the query's status set is
+// provably equivalent to that scalar -- i.e. while `statuses` has EXACTLY ONE
+// element. Adding a second status silently makes the index unusable and the
+// scan reverts to a Seq Scan on every daily partition (measured on the live
+// primary: 20 Seq Scans, 13,357 shared buffers), which is what blew the pool's
+// 5s statement_timeout and failed 2 of 5 CronJob runs before the index existed.
+//
+// The guard is NON-FATAL by design: a mismatch makes the scan slow, not wrong,
+// and running slowly beats not running. But it must not be SILENT.
+// ---------------------------------------------------------------------------
+describe('index coupling guard', () => {
+  test('the shipped config IS indexable', () => {
+    expect(assertIndexableStatuses(buildConfig({}).statuses)).toBe(true)
+  })
+
+  test('warns (not throws) when statuses are widened past the index predicate', () => {
+    const logger = { warn: jest.fn() }
+    expect(assertIndexableStatuses([10, 0], logger)).toBe(false)
+    expect(logger.warn).toHaveBeenCalledTimes(1)
+    // the message must name the index and the migration, or it is not actionable
+    const msg = logger.warn.mock.calls[0][0]
+    expect(msg).toMatch(/stream_uploads_stuck_idx/)
+    expect(msg).toMatch(/002-ingest-schema-partitioned/)
+    expect(msg).toMatch(/Seq Scan/)
+  })
+
+  test('warns when statuses no longer contain UPLOADED at all', () => {
+    const logger = { warn: jest.fn() }
+    expect(assertIndexableStatuses([30], logger)).toBe(false)
+    expect(logger.warn).toHaveBeenCalled()
+  })
+
+  test('is silent for the indexable case', () => {
+    const logger = { warn: jest.fn() }
+    expect(assertIndexableStatuses([10], logger)).toBe(true)
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
+
+  test('does NOT abort the run when the config is un-indexable', async () => {
+    // slow-but-working must beat not-working
+    db.findStuckUploads.mockResolvedValue([])
+    const counts = await runStuckUploadReaper({ STUCK_UPLOAD_REAPER_DRY_RUN: 'true' })
+    expect(counts.error).toBe(0)
   })
 })
