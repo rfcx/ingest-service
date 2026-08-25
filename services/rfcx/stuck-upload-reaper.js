@@ -66,8 +66,42 @@ function buildConfig (env = process.env) {
     // on 2026-08-22, all older than 2h, and a sampled probe found their audio
     // present (5/5). Treating status=0 as stuck would have manufactured a
     // ~15k-row false positive.
+    //
+    // ⚠️ THIS ARRAY IS INDEX-COUPLED (2026-08-24). `stream_uploads_stuck_idx`
+    // is partial `WHERE status = 10`, and PG can only use it while the query's
+    // status set is provably equivalent to that scalar -- i.e. while this array
+    // has EXACTLY ONE element, UPLOADED. Adding a second status silently makes
+    // the index unusable and the scan reverts to a Seq Scan on every daily
+    // partition (measured: 20 Seq Scans, 13,357 buffers, which is what blew the
+    // 5s statement_timeout and failed 2 of 5 runs before the index existed).
+    // If you widen this, widen the index predicate to match -- see
+    // assertIndexableStatuses() below.
     statuses: [db.status.UPLOADED]
   }
+}
+
+/**
+ * Warn LOUDLY if the configured statuses can no longer ride
+ * `stream_uploads_stuck_idx`.
+ *
+ * Non-fatal on purpose: a mismatch makes the scan SLOW, not WRONG, and the
+ * reaper's job is important enough to run slowly rather than not at all. But it
+ * must not be SILENT -- a 200x regression that looks like "random timeouts under
+ * load" is exactly the failure this index was added to end, and it took a live
+ * incident plus an EXPLAIN to diagnose the first time.
+ */
+function assertIndexableStatuses (statuses, logger = console) {
+  const indexable = statuses.length === 1 && statuses[0] === db.status.UPLOADED
+  if (!indexable) {
+    logger.warn(
+      'Stuck upload reaper: statuses=' + JSON.stringify(statuses) +
+      ' no longer matches the partial index stream_uploads_stuck_idx ' +
+      '(WHERE status = 10). The scan will fall back to a Seq Scan on every ' +
+      'partition and may exceed the statement timeout. Widen the index ' +
+      'predicate in migrations/pg/002-ingest-schema-partitioned.sql to match.'
+    )
+  }
+  return indexable
 }
 
 /**
@@ -133,6 +167,7 @@ async function runStuckUploadReaper (env = process.env) {
   const counts = { scanned: 0, settled: 0, failed: 0, reported: 0, skipped: 0, error: 0, dryRun: config.dryRun }
 
   console.info(`Stuck upload reaper: cutoff=${cutoff.toISOString()} dryRun=${config.dryRun} statuses=${config.statuses}`)
+  assertIndexableStatuses(config.statuses)
 
   const candidates = await db.findStuckUploads({
     statuses: config.statuses,
@@ -196,4 +231,4 @@ async function runStuckUploadReaper (env = process.env) {
   return counts
 }
 
-module.exports = { runStuckUploadReaper, buildConfig, classify, _internal: { classify } }
+module.exports = { runStuckUploadReaper, buildConfig, classify, assertIndexableStatuses, _internal: { classify, assertIndexableStatuses } }

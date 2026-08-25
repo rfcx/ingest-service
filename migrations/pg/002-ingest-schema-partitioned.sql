@@ -81,6 +81,41 @@ CREATE INDEX IF NOT EXISTS stream_uploads_cleanup_idx
 CREATE INDEX IF NOT EXISTS stream_uploads_gauge_status_idx
   ON ingest.stream_uploads (status) WHERE status IN (30, 31);
 
+-- stuck-upload reaper scan: status=10 AND updated_at <= cutoff ORDER BY updated_at.
+--
+-- WHY A FOURTH INDEX (measured 2026-08-24, do not re-derive). The comment above
+-- says "WAITING/UPLOADED scans ride the pending partial" — that holds for the
+-- QUOTA sum, which filters on project_id, but NOT for the reaper, which does
+-- not. With `(project_id) WHERE status IN (0,10)` as the only candidate, the
+-- planner degenerated to a full partial-index scan (or Seq Scan) on EVERY daily
+-- partition: 13,357 shared buffers (~104 MB) touched per run to return ZERO
+-- rows. That blew the pool's 5s statement_timeout under load and the CronJob
+-- FAILED 2 of 5 runs — i.e. the stuck-upload safety net went down exactly when
+-- the system was busy and a stall was most likely.
+--
+-- The pending partial is also the wrong shape by population: it held 75,212
+-- entries of which ZERO were status=10 (they are all status=0 WAITING). The
+-- reaper was reading 75k irrelevant entries to find its candidates.
+--
+-- Measured with this index: 20 buffers (668x fewer), cost 11,795 -> 46.8, and
+-- the Sort disappears because (updated_at) also serves the ORDER BY, so
+-- LIMIT stops early.
+--
+-- COST: none on INSERT. Rows are inserted at status=WAITING(0) (uploads-pg.js
+-- createUpload), and a partial index is only touched by rows matching its
+-- predicate. It is maintained only across the 0->10 transition and the exit
+-- from 10, i.e. two single-row updates per upload.
+--
+-- Declared on the PARENT so PG propagates it to every existing partition and to
+-- future ones created by ensure_partitions() (CREATE TABLE ... PARTITION OF
+-- inherits parent indexes). Build measured at 275 ms across all 20 partitions,
+-- which is why this is a plain CREATE INDEX: PG14 cannot do CONCURRENTLY on a
+-- partitioned parent, and the ON ONLY + per-partition + ATTACH dance is not
+-- worth it for a sub-second lock on an index this small (it stays small by
+-- construction — status=10 is only ever in-flight uploads).
+CREATE INDEX IF NOT EXISTS stream_uploads_stuck_idx
+  ON ingest.stream_uploads (updated_at) WHERE status = 10;
+
 -- healthcheck singleton (not partitioned; one row)
 CREATE TABLE IF NOT EXISTS ingest.health_check (
   event      text PRIMARY KEY,
