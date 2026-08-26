@@ -64,6 +64,17 @@ if (PROMETHEUS_ENABLED) {
   // counters (same as the status metrics above).
   registerHistogram('put_limit_retry', 'Segment PUTs retried after an s3-writer in-flight PUT limit rejection.', [1, 2, 3, 4, 5, 10, 50, 100, 250, 500, 1000, 2000])
   registerHistogram('put_limit_exhausted', 'Segment PUTs that exhausted all put-limit retries and failed the ingest.', [1, 2, 3, 4, 5, 10, 50, 100, 250, 500, 1000, 2000])
+  // Duplicate event deliveries skipped by the ingest claim (2026-08-26, §239).
+  // ⚠️ REGISTRATION IS LOAD-BEARING, LEARNED THE HARD WAY: pushHistogramMetric
+  // THROWS on an unregistered name, and the first release of the claim pushed
+  // this metric WITHOUT registering it -- so every duplicate-skip (the claim's
+  // whole purpose, ~4k events in 2h) threw inside ingest(), was caught by the
+  // consumer as a handler failure, and NACKED THE MESSAGE TO THE DLQ. The
+  // data-plane outcome was still correct (the winner had already ingested;
+  // 1659/1659 post-roll files landed), which is exactly why it produced no
+  // user-visible symptom and was only caught by a DLQ-depth re-review pass.
+  // If you add a pushHistogramMetric call, add its registerHistogram HERE.
+  registerHistogram('duplicate_event_skipped', 'Duplicate upstream event deliveries skipped by the ingest claim (one per suppressed re-ingest).', [1, 2, 3, 4, 5, 10, 50, 100, 250, 500, 1000, 2000])
 }
 
 /**
@@ -408,7 +419,16 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
         } else {
           console.info(`[${uploadId}] Ingest claim not granted (${claim.reason}); skipping`)
         }
-        if (PROMETHEUS_ENABLED) { pushHistogramMetric('duplicate_event_skipped', 1) }
+        // try/catch: a metrics failure must NEVER turn a correct skip into a
+        // nack -- that inversion is exactly what the unregistered-histogram bug
+        // did (every skip -> throw -> consumer nack -> DLQ, ~4k messages in 2h).
+        // The skip decision is already made and logged; observability is
+        // strictly secondary to acking the duplicate away.
+        if (PROMETHEUS_ENABLED) {
+          try { pushHistogramMetric('duplicate_event_skipped', 1) } catch (e) {
+            console.warn(`[${uploadId}] duplicate_event_skipped metric push failed (non-fatal): ${e && e.message}`)
+          }
+        }
         claimHeld = false
         return
       }
