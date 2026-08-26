@@ -364,12 +364,57 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
   let coreData = {}
   let upload = null
   let uploadSource = null
+  // Tracks whether THIS invocation owns the ingest claim, so the catch block
+  // only releases a claim it actually took (see the release call there).
+  let claimHeld = false
   const streamLocalPath = getStreamLocalPath(fileStoragePath)
   try {
     const startTimestamp = Date.now() // is used for processing time calculation
     const fileExtension = path.extname(fileStoragePath).toLowerCase()
 
     validateFileFormat(fileExtension)
+
+    // ---------------------------------------------------------------------
+    // IDEMPOTENCY GATE -- duplicate EVENT delivery (2026-08-26).
+    //
+    // The upstream R2 -> CF Queue -> bridge -> webhook -> RabbitMQ path is
+    // at-least-once and fans out hard: measured over a live user burst, 1460
+    // ObjectCreated events for 204 distinct objects (mean 7.16, max 42), every
+    // duplicate reporting an IDENTICAL byte size. Each one is a GENUINE,
+    // DISTINCT queue message, so it cannot be suppressed by consumer-side
+    // dedup -- 151 upload ids were consumed more than once by the SAME pod.
+    //
+    // This claim is taken BEFORE the download, because the download is the
+    // dominant wasted cost (7.33 R2 GETs per file, billed egress) and every
+    // later guard -- the pre-transcode dedup check and createStreamFileData --
+    // only arbitrates AFTER the transcode and segment PUTs have been paid for.
+    //
+    // Losing the claim is a NORMAL outcome, not an error: it means another
+    // delivery of the same object is being handled (or already completed), so
+    // we return quietly and the caller ACKs. Throwing here would dead-letter
+    // routine duplicates and manufacture a DLQ backlog.
+    //
+    // Degrades safely: the Mongo upload store (frozen, mongo2pg §67) does not
+    // implement the claim, so an unsupported backend simply proceeds as before.
+    // Record: runbooks/INCIDENT-2026-08-26-r2-event-fanout-duplicate-ingest.md
+    // ---------------------------------------------------------------------
+    if (typeof db.claimUploadForIngest === 'function') {
+      const claim = await db.claimUploadForIngest(uploadId)
+      if (!claim.claimed) {
+        if (claim.reason === 'ingested') {
+          console.info(`[${uploadId}] Duplicate event for an already-INGESTED upload; skipping re-ingest`)
+        } else if (claim.reason === 'in-flight') {
+          console.info(`[${uploadId}] Duplicate event while another worker holds the ingest claim (status ${claim.status}); skipping`)
+        } else {
+          console.info(`[${uploadId}] Ingest claim not granted (${claim.reason}); skipping`)
+        }
+        if (PROMETHEUS_ENABLED) { pushHistogramMetric('duplicate_event_skipped', 1) }
+        claimHeld = false
+        return
+      }
+      claimHeld = true
+    }
+
     upload = await db.getUpload(uploadId)
     uploadSource = uploadTargets.sourceFromUpload(upload, fileStoragePath)
     console.info(`[${uploadId}] Upload metadata from database `, JSON.stringify(upload))
@@ -653,6 +698,17 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
       // Fully recorded + non-retryable: signal success so the consumer
       // ACK-drops the message instead of dead-lettering it.
       return { outcome: 'handled-terminal', status, message, uploadId }
+    }
+
+    // TRANSIENT failure -> this message is going to the DLQ for redrive, so the
+    // ingest claim MUST be released. Leaving it held would make a later
+    // operator redrive (or a duplicate delivery that could have succeeded) a
+    // silent no-op until the TTL expired -- turning a recoverable fault into an
+    // invisible one, which is precisely the class of bug this whole change
+    // exists to remove. Terminal outcomes deliberately do NOT release: the row
+    // is settled and must stay claimed against further duplicate deliveries.
+    if (claimHeld && typeof db.releaseIngestClaim === 'function') {
+      await db.releaseIngestClaim(uploadId)
     }
     // Transient / unexpected failure: re-throw so the consumer nacks the
     // message (nack-no-requeue -> DLQ).
