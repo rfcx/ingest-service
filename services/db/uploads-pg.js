@@ -287,6 +287,159 @@ function setUploadMultipartAborted (uploadId) {
 const TERMINAL_SUCCESS = status.INGESTED
 const FAILURE_STATUSES = [status.FAILED, status.DUPLICATE, status.CHECKSUM]
 
+/**
+ * INGEST CLAIM -- idempotency against DUPLICATE EVENT DELIVERY (2026-08-26).
+ *
+ * WHY. The upstream path R2 ObjectCreated -> Cloudflare Queue -> r2-ingest-bridge
+ * -> rfcx-api webhook -> RabbitMQ is AT-LEAST-ONCE, and in practice it fans out
+ * hard: measured 2026-08-26 over a live user burst, 1460 webhook events for 204
+ * distinct object keys (mean 7.16, max 42), with 204/204 keys reporting an
+ * IDENTICAL byte size on every duplicate -- one physical object, delivered many
+ * times. Each delivery is a GENUINE, DISTINCT RabbitMQ message, so neither the
+ * single-reader fix (#132) nor any consumer-side dedup can suppress it: 151
+ * upload ids were consumed more than once BY THE SAME POD.
+ *
+ * Without a claim, every duplicate ran the full ingest -- 7.33 R2 downloads,
+ * 1.86 transcodes and 1.86 segment-PUT batches PER FILE, of which only 1.00
+ * Core create can ever win. ~47% of transcode/S3 work in that burst was thrown
+ * away, and the loser then wrote its own status LAST, relabelling a
+ * successfully-ingested upload as 31 DUPLICATE (167 of 170 such rows carried a
+ * populated ingestion_result.streamSourceFileId -- i.e. proof that THAT ROW had
+ * already ingested).
+ * Record: runbooks/INCIDENT-2026-08-26-r2-event-fanout-duplicate-ingest.md
+ *
+ * WHAT THIS DOES. A single atomic UPDATE ... WHERE that both tests and takes the
+ * claim, so N concurrent workers racing the same upload produce exactly one
+ * winner. It is the DB that arbitrates, never a read-then-write -- a
+ * read-modify-write would reintroduce the very race it exists to close.
+ *
+ * A claim is granted when the row is:
+ *   - not already INGESTED(20)            -- terminal success is never redone
+ *   - not claimed by a still-live worker  -- i.e. no claim, or an EXPIRED one
+ *
+ * EXPIRY IS LOAD-BEARING, NOT BOOKKEEPING. A worker that dies mid-ingest must
+ * not wedge its upload forever. The claim therefore auto-expires, and the
+ * expiry window is deliberately reasoned against the two neighbours that also
+ * watch this state:
+ *   - observed successful ingests settle at p50 6s / p95 63s, worst 1h29m
+ *     (stuck-upload-reaper header, 7 days to 2026-08-22)
+ *   - the stuck-upload reaper's own age threshold is 3h
+ * The default TTL (30 min) sits ABOVE the observed worst case for normal work
+ * but well BELOW the reaper's threshold, so a crashed worker's upload is
+ * reclaimable by a later delivery long before the reaper would touch it, and
+ * the reaper's "stuck at 10" semantics are unchanged.
+ *
+ * DELIBERATELY NOT A NEW COLUMN. The claim rides on `ingestion_result` (jsonb,
+ * already present, already written by this path) under a reserved `_claim` key,
+ * so this needs NO migration on a 300M-row-adjacent live database. buildIngestionResult()
+ * overwrites the whole object on success, which naturally clears the claim.
+ */
+const CLAIM_KEY = '_claim'
+const CLAIM_TTL_MS = parseInt(process.env.INGEST_CLAIM_TTL_MS || `${30 * 60 * 1000}`, 10)
+const CLAIM_ENABLED = !['0', 'false', 'no', 'off'].includes(
+  String(process.env.INGEST_CLAIM_ENABLED ?? 'on').toLowerCase()
+)
+
+// Counters. The claim hides duplicate work, so the RATE of duplicate delivery
+// must stay visible -- otherwise this trades a visible waste for an invisible
+// one, which is the same mistake the terminal-status guard was careful to avoid.
+let claimSkippedTotal = 0
+let claimSkippedIngestedTotal = 0
+function getClaimSkippedTotal () { return claimSkippedTotal }
+function getClaimSkippedIngestedTotal () { return claimSkippedIngestedTotal }
+
+/**
+ * Try to claim `uploadId` for ingestion.
+ *
+ * @returns {Promise<{claimed: boolean, reason: string|null, status: number|null}>}
+ *   claimed=true  -> this worker owns the ingest and must proceed
+ *   claimed=false -> another delivery already handled/owns it; ACK and return.
+ *                    `reason` is 'ingested' (terminal success) or 'in-flight'.
+ *
+ * NEVER THROWS ON A MISSING ROW being the caller's problem: a genuinely absent
+ * upload returns claimed=false/reason='missing' so the caller can fall through
+ * to its existing not-found handling rather than crashing a consumer.
+ */
+function claimUploadForIngest (uploadId, { ttlMs = CLAIM_TTL_MS, workerId = null } = {}) {
+  const key = `${uploadId ?? ''}`.trim()
+  if (!OBJECT_ID_RE.test(key)) {
+    return Promise.reject(new Error('Upload does not exist'))
+  }
+  if (!CLAIM_ENABLED) {
+    return Promise.resolve({ claimed: true, reason: null, status: null })
+  }
+  const now = moment().tz('UTC').toDate()
+  const owner = workerId || `${process.env.HOSTNAME || 'worker'}:${process.pid}`
+
+  // One statement: test-and-set. The WHERE clause is the entire mutual
+  // exclusion -- if it matches, this worker won; if it matches nothing, someone
+  // else holds the claim or the row is already INGESTED.
+  return query(`
+    UPDATE ingest.stream_uploads
+    SET ingestion_result = COALESCE(ingestion_result, '{}'::jsonb) || jsonb_build_object(
+          $2::text, jsonb_build_object('owner', $3::text, 'at', $4::text, 'expiresAt', $5::text))
+    WHERE id = $1
+      AND status <> $6
+      AND (
+        ingestion_result -> $2::text IS NULL
+        OR (ingestion_result -> $2::text ->> 'expiresAt') IS NULL
+        OR (ingestion_result -> $2::text ->> 'expiresAt') < $4::text
+      )
+    RETURNING id`,
+  [
+    key,
+    CLAIM_KEY,
+    owner,
+    now.toISOString(),
+    new Date(now.getTime() + ttlMs).toISOString(),
+    TERMINAL_SUCCESS
+  ])
+    .then((result) => {
+      if (result.rowCount === 1) {
+        return { claimed: true, reason: null, status: null }
+      }
+      // Lost the race (or terminal). Read once, ONLY on this cold path, to
+      // report WHY -- conflating "already ingested" with "in flight" would hide
+      // exactly the signal that tells us whether the upstream fan-out is fixed.
+      return query('SELECT status FROM ingest.stream_uploads WHERE id = $1', [key])
+        .then((check) => {
+          if (check.rowCount === 0) {
+            return { claimed: false, reason: 'missing', status: null }
+          }
+          const current = Number(check.rows[0].status)
+          claimSkippedTotal += 1
+          if (current === TERMINAL_SUCCESS) {
+            claimSkippedIngestedTotal += 1
+            return { claimed: false, reason: 'ingested', status: current }
+          }
+          return { claimed: false, reason: 'in-flight', status: current }
+        })
+    })
+}
+
+/**
+ * Release a claim WITHOUT writing a terminal status.
+ *
+ * Used when an ingest aborts in a way that should be retryable (transient
+ * storage/Core failure re-thrown to the DLQ). Leaving a live claim behind would
+ * make a legitimate operator redrive silently no-op until the TTL expired.
+ * Success paths do NOT need this: buildIngestionResult() replaces the whole
+ * ingestion_result object, which drops the claim with it.
+ */
+function releaseIngestClaim (uploadId) {
+  const key = `${uploadId ?? ''}`.trim()
+  if (!OBJECT_ID_RE.test(key) || !CLAIM_ENABLED) {
+    return Promise.resolve(false)
+  }
+  return query(`
+    UPDATE ingest.stream_uploads
+    SET ingestion_result = ingestion_result - $2::text
+    WHERE id = $1 AND ingestion_result ? $2::text
+    RETURNING id`, [key, CLAIM_KEY])
+    .then((r) => r.rowCount === 1)
+    .catch(() => false)
+}
+
 function updateUploadStatus (uploadId, statusNumber, failureMessage = null, ingestionResult = null) {
   if (!statusNumbers.includes(statusNumber)) {
     throw new Error('Invalid status')
@@ -296,7 +449,23 @@ function updateUploadStatus (uploadId, statusNumber, failureMessage = null, inge
   if (!OBJECT_ID_RE.test(key)) {
     return Promise.reject(new Error('Upload does not exist'))
   }
-  const guarded = FAILURE_STATUSES.includes(statusNumber)
+  // The terminal-success guard covers 20 -> {30,31,32} (see the block above) and
+  // now ALSO 20 -> 10.
+  //
+  // WHY 20 -> 10 MATTERS (2026-08-26): it is the step that made the 31s
+  // possible. A duplicate delivery of an ALREADY-INGESTED upload wrote
+  // UPLOADED(10) on arrival, which silently un-did the terminal state; the
+  // pre-transcode dedup check then legitimately found the winner's source file
+  // and wrote 31 as a legal 10 -> 31 transition, so the existing guard never
+  // fired. Measured: 138 upload ids where the SAME POD wrote UPLOADED after it
+  // had already written INGESTED.
+  //
+  // SCOPE IS DELIBERATE -- this refuses only 20 -> 10, never 10 -> anything:
+  //   - the stuck-upload reaper's contract ("10 means in flight") is untouched;
+  //     it reads rows AT 10, and this cannot create or clear that state.
+  //   - a genuine redrive of a FAILED(30) upload still moves 30 -> 10 freely.
+  // Only a row that has already SUCCEEDED refuses to go backwards.
+  const guarded = FAILURE_STATUSES.includes(statusNumber) || statusNumber === status.UPLOADED
 
   return query(`
     UPDATE ingest.stream_uploads
@@ -474,6 +643,10 @@ module.exports = {
   getUploadDuplicateCount,
   getUploadFailedCount,
   updateUploadStatus,
+  claimUploadForIngest,
+  releaseIngestClaim,
+  getClaimSkippedTotal,
+  getClaimSkippedIngestedTotal,
   getOrCreateHealthCheck,
   findCleanupCandidates,
   findStuckUploads,
