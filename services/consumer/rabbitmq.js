@@ -38,6 +38,33 @@ const url = process.env.RABBITMQ_URL || process.env.AMQP_URL
 // ---------------------------------------------------------------------------
 
 const POLL_IDLE_MS = parseInt(process.env.INGEST_POLL_IDLE_MS || '500', 10)
+
+// ---------------------------------------------------------------------------
+// GRACEFUL DRAIN ON SIGTERM/SIGINT (2026-08-27, rfcx-local §242).
+//
+// Without this, a pod deletion (KEDA scale-down, rollout) killed the process
+// mid-ingest: the in-flight message requeued fine, but its redelivery was then
+// claim-skipped + ACKED against the dead worker's still-fresh ingest claim
+// (claim TTL 30 min >> redelivery seconds), so the upload wedged at status 10
+// until the 3h stuck-upload reaper marked it FAILED. Measured 2026-08-27:
+// 13 wedged rows in one 45-min scale flap.
+//
+// With this, SIGTERM flips termRequested: every pickup loop stands down (no
+// NEW work), the in-flight file finishes and is acked normally, and the
+// process exits 0. Files that genuinely outlast the grace period keep the old
+// behavior (SIGKILL -> requeue -> claim-skip -> reaper) — bounded and rare.
+// ---------------------------------------------------------------------------
+let termRequested = false
+function requestTerm (sig) {
+  if (termRequested) { return }
+  termRequested = true
+  console.info(`Ingest RabbitMQ: ${sig} received — draining in-flight ingest, no new pickups`)
+}
+process.once('SIGTERM', () => requestTerm('SIGTERM'))
+process.once('SIGINT', () => requestTerm('SIGINT'))
+// Test hook: lets a unit test request a drain without sending real signals.
+function _setTermRequestedForTest (v) { termRequested = v }
+function isTermRequested () { return termRequested }
 const PRIORITY_WEIGHT_DEFAULT = parseFloat(process.env.INGEST_PRIORITY_WEIGHT || '3')
 // Cap the priority inner-drain per cycle so express stays responsive even under
 // a priority flood (never spend unbounded time before re-checking express).
@@ -158,17 +185,17 @@ async function consumeLoop () {
     return msg || null // amqplib returns false when empty
   }
 
-  while (!stopped) {
+  while (!stopped && !termRequested) {
     let didWork = false
 
     // 1) EXPRESS first (rotating over express lanes) — tiny, always checked.
-    for (let i = 0; i < expressLanes.length && !stopped; i++) {
+    for (let i = 0; i < expressLanes.length && !stopped && !termRequested; i++) {
       const q = expressLanes[expressPtr]
       expressPtr = (expressPtr + 1) % expressLanes.length
       const msg = await getFrom(q)
       if (msg) { await processMessage(channel, msg); didWork = true; break }
     }
-    if (stopped) { break }
+    if (stopped || termRequested) { break }
     if (didWork) { continue } // re-check express before anything else
 
     // 2) PRIORITY — WEIGHTED. Accrue W credits/cycle; serve up to floor(credit)
@@ -177,7 +204,7 @@ async function consumeLoop () {
     const W = await priorityWeight()
     priorityCredit += W
     let served = 0
-    while (priorityCredit >= 1 && served < PRIORITY_MAX_PER_CYCLE && !stopped) {
+    while (priorityCredit >= 1 && served < PRIORITY_MAX_PER_CYCLE && !stopped && !termRequested) {
       let got = false
       for (let i = 0; i < priorityLanes.length; i++) {
         const q = priorityLanes[priorityPtr]
@@ -189,18 +216,18 @@ async function consumeLoop () {
     }
     // Leftover credits do NOT bank across cycles (no future starvation).
     if (priorityCredit > W) { priorityCredit = W }
-    if (stopped) { break }
+    if (stopped || termRequested) { break }
 
     // 3) STANDARD — exactly ONE fair-lane message per cycle (rotating). This is
     //    the starvation floor: standard always advances even under a priority
     //    flood.
-    for (let i = 0; i < fairLanes.length && !stopped; i++) {
+    for (let i = 0; i < fairLanes.length && !stopped && !termRequested; i++) {
       const q = fairLanes[fairPtr]
       fairPtr = (fairPtr + 1) % fairLanes.length
       const msg = await getFrom(q)
       if (msg) { await processMessage(channel, msg); didWork = true; break }
     }
-    if (stopped) { break }
+    if (stopped || termRequested) { break }
 
     // 4) LEGACY drain (rollback / in-flight), only when nothing else had work
     //    AND this pod's router is not already reading that queue.
@@ -228,6 +255,10 @@ async function consumeLoop () {
 
   try { await channel.close() } catch (_) {}
   try { await connection.close() } catch (_) {}
+  if (termRequested) {
+    console.info('Ingest RabbitMQ: drain complete — in-flight work finished, no new pickups')
+    return 'drained'
+  }
   throw new Error('consume loop ended (connection/channel closed)')
 }
 
@@ -237,13 +268,22 @@ async function connectWithRetry () {
   let attempt = 0
   // eslint-disable-next-line no-constant-condition
   while (true) {
+    let res
     try {
-      await consumeLoop()
+      res = await consumeLoop()
     } catch (e) {
       attempt += 1
       const delay = Math.min(RECONNECT_BASE_MS * attempt, RECONNECT_MAX_MS)
       console.error(`Ingest RabbitMQ loop attempt ${attempt} ended (${e && e.message}); retrying in ${delay}ms`)
       await sleep(delay)
+      continue
+    }
+    if (res === 'drained') {
+      // SIGTERM drain: the in-flight ingest finished + was acked; exit 0 so
+      // kubernetes records a clean termination, not a crash. Deliberately
+      // OUTSIDE the try: a drain must never fall into the reconnect path.
+      console.info('Ingest RabbitMQ: drained on SIGTERM; exiting')
+      process.exit(0)
     }
   }
 }
@@ -255,4 +295,4 @@ async function start () {
   await connectWithRetry()
 }
 
-module.exports = { start, handleMessage }
+module.exports = { start, handleMessage, _setTermRequestedForTest, isTermRequested, _internal: { consumeLoop, connectWithRetry } }

@@ -633,10 +633,22 @@ async function ingest (fileStoragePath, fileLocalPath, streamId, uploadId) {
     /**
      * ERROR HANDLING
      */
-    if (loggerIgnoredErrors.some((r) => { return r.test(err.message) })) {
-      console.warn(`[${uploadId}] Warn for upload ${uploadId} ${err.message}`)
+    // Log the FULL error shape, not just .message: aws-sdk v2 errors on
+    // HEAD requests (body-less responses) carry message=null, which made the
+    // 2026-08-27 intermittent download-failure class undiagnosable from logs
+    // ("Error for upload X null"). code/statusCode/name are where the signal
+    // lives for that SDK.
+    const errMsg = (err && err.message) != null ? err.message : '(no message)'
+    const errDetail = err && (err.code || err.statusCode || (err.name && err.name !== 'Error'))
+      ? ` [name=${err.name} code=${err.code} status=${err.statusCode}]`
+      : ''
+    if (loggerIgnoredErrors.some((r) => { return r.test(errMsg) })) {
+      console.warn(`[${uploadId}] Warn for upload ${uploadId} ${errMsg}${errDetail}`)
     } else {
-      console.error(`[${uploadId}] Error for upload ${uploadId} ${err.message}`)
+      console.error(`[${uploadId}] Error for upload ${uploadId} ${errMsg}${errDetail}`)
+      if (err && err.stack) {
+        console.error(`[${uploadId}] Error stack: ${String(err.stack).split('\n').slice(0, 4).join(' | ')}`)
+      }
     }
     const message = err instanceof IngestionError ? err.message : 'Server failed with processing your file. Please try again later.'
     const status = err instanceof IngestionError ? err.status : db.status.FAILED

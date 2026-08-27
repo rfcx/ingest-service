@@ -169,7 +169,10 @@ function download (remotePath, localPath, source) {
         Bucket: bucket,
         Key: key
       }, (headErr, data) => {
-        if (headErr) { reject(headErr) }
+        // RETURN after reject: without it a failed HEAD still fell through to
+        // getObject(), kicking off a doomed read stream (double-reject is a
+        // no-op for the promise, but the wasted request raced the error path).
+        if (headErr) { reject(headErr); return }
         const tempWriteStream = fs.createWriteStream(localPath)
         const tempReadStream = client.getObject({
           Bucket: bucket,
