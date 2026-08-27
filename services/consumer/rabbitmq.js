@@ -284,7 +284,6 @@ async function connectWithRetry () {
       // OUTSIDE the try: a drain must never fall into the reconnect path.
       console.info('Ingest RabbitMQ: drained on SIGTERM; exiting')
       process.exit(0)
-      return // unreachable in prod; keeps the control flow explicit
     }
   }
 }

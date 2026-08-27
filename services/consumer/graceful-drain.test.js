@@ -22,13 +22,10 @@
 // ---------------------------------------------------------------------------
 
 describe('graceful drain on SIGTERM', () => {
-  const QUEUES = ['ingest.work.express.0', 'ingest.work.priority.0', 'ingest.work.0', 'ingest-service-upload-production']
-
   let rabbitmq
   let ingestMock
   let channel
   let connection
-  let getCalls
   let acks
   let nacks
   let messageSupply
@@ -48,7 +45,6 @@ describe('graceful drain on SIGTERM', () => {
     process.env.INGEST_EXPRESS_COUNT = '1'
     process.env.INGEST_PRIORITY_COUNT = '1'
     process.env.INGEST_LANE_ROUTER = 'off'
-    getCalls = 0
     acks = 0
     nacks = 0
     messageSupply = []
@@ -56,7 +52,7 @@ describe('graceful drain on SIGTERM', () => {
     channel = {
       on: jest.fn(),
       checkQueue: jest.fn(async () => ({ messageCount: 0 })),
-      get: jest.fn(async () => { getCalls += 1; return messageSupply.length ? messageSupply.shift() : false }),
+      get: jest.fn(async () => (messageSupply.length ? messageSupply.shift() : false)),
       ack: jest.fn(() => { acks += 1 }),
       nack: jest.fn(() => { nacks += 1 }),
       close: jest.fn(async () => {})
@@ -92,7 +88,7 @@ describe('graceful drain on SIGTERM', () => {
     ingestMock.mockImplementation(async () => {
       // SIGTERM lands WHILE the first file is being processed.
       rabbitmq._setTermRequestedForTest(true)
-      await new Promise((r) => setTimeout(r, 20))
+      await new Promise((resolve) => setTimeout(resolve, 20))
       return { outcome: 'ingested' }
     })
 
