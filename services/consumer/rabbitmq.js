@@ -155,6 +155,7 @@ async function consumeLoop () {
   const expressLanes = lanes.expressLanes()
   const priorityLanes = lanes.priorityLanes()
   const fairLanes = lanes.fairLanes()
+  const backgroundLanes = lanes.backgroundLanes()
   const legacy = lanes.LEGACY_QUEUE
 
   const connection = await amqplib.connect(url)
@@ -172,11 +173,12 @@ async function consumeLoop () {
     await channel.checkQueue(q) // throws PRECONDITION/NOT_FOUND -> caller retries
   }
 
-  console.info(`Ingest RabbitMQ multi-lane consumer up: express=${expressLanes.length} priority=${priorityLanes.length} fair=${fairLanes.length} (+legacy) weight~${PRIORITY_WEIGHT_DEFAULT}`)
+  console.info(`Ingest RabbitMQ multi-lane consumer up: express=${expressLanes.length} priority=${priorityLanes.length} fair=${fairLanes.length} background=${backgroundLanes.length} (+legacy) weight~${PRIORITY_WEIGHT_DEFAULT}`)
 
   let expressPtr = 0
   let priorityPtr = 0
   let fairPtr = 0
+  let backgroundPtr = 0
   let priorityCredit = 0
 
   // get one message from a queue; null if empty. noAck=false so we ack/nack.
@@ -229,7 +231,30 @@ async function consumeLoop () {
     }
     if (stopped || termRequested) { break }
 
-    // 4) LEGACY drain (rollback / in-flight), only when nothing else had work
+    // 4) BACKGROUND — deferred/bulk work, served ONLY when every higher tier
+    //    was idle this cycle (same `!didWork` idiom as the legacy drain below).
+    //
+    //    WHY NOT A CREDIT LIKE PRIORITY: standard (step 3) is already fixed at
+    //    exactly ONE message per cycle, so a background credit of 1 would make
+    //    background EQUAL to standard -- not a background tier at all. The
+    //    analysis ladder's "background = 1" means the DENOMINATOR baseline
+    //    (serviced least, work-conserving, never starving the tiers above);
+    //    in this loop that is precisely the !didWork gate.
+    //
+    //    Work-conserving: when the higher tiers are empty this runs every
+    //    cycle at full speed, so a background backlog still drains promptly on
+    //    an otherwise-idle fleet.
+    if (!didWork) {
+      for (let i = 0; i < backgroundLanes.length && !stopped && !termRequested; i++) {
+        const q = backgroundLanes[backgroundPtr]
+        backgroundPtr = (backgroundPtr + 1) % backgroundLanes.length
+        const msg = await getFrom(q)
+        if (msg) { await processMessage(channel, msg); didWork = true; break }
+      }
+    }
+    if (stopped || termRequested) { break }
+
+    // 5) LEGACY drain (rollback / in-flight), only when nothing else had work
     //    AND this pod's router is not already reading that queue.
     //
     //    The router (channel.consume, push) and this drain (get, poll) are BOTH

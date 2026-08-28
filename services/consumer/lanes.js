@@ -21,20 +21,31 @@
 const LANE_COUNT = parseInt(process.env.INGEST_LANE_COUNT || '10', 10)
 const EXPRESS_COUNT = parseInt(process.env.INGEST_EXPRESS_COUNT || '2', 10)
 const PRIORITY_COUNT = parseInt(process.env.INGEST_PRIORITY_COUNT || '2', 10)
+// Background lanes (2026-08-27). Deferred/bulk work that must never compete
+// with live uploads: served ONLY when every higher tier is idle (see the
+// step-5 pass in rabbitmq.js). Queues are declared in rfcx-local
+// platform/rabbitmq/definitions.json, which also carries the TTL exemption --
+// without that exemption a background backlog would silently expire at 24h.
+const BACKGROUND_COUNT = parseInt(process.env.INGEST_BACKGROUND_COUNT || '2', 10)
 
 // Base name for the lane family. The router's INPUT is the legacy queue.
 const LANE_BASE = process.env.INGEST_LANE_BASE || 'ingest.work'
 const LEGACY_QUEUE = process.env.RABBITMQ_INGEST_TRIGGER_QUEUE || 'ingest-service-upload-production'
 
-const TIERS = ['express', 'priority', 'standard']
+// Order here is descending service priority; `standard` stays the DEFAULT for
+// any unknown/absent value (see normaliseTier) so a typo can never demote work
+// into background.
+const TIERS = ['express', 'priority', 'standard', 'background']
 
 function fairLane (i) { return `${LANE_BASE}.${i}` }
 function expressLane (i) { return `${LANE_BASE}.express.${i}` }
 function priorityLane (i) { return `${LANE_BASE}.priority.${i}` }
+function backgroundLane (i) { return `${LANE_BASE}.background.${i}` }
 
 function fairLanes () { return Array.from({ length: LANE_COUNT }, (_, i) => fairLane(i)) }
 function expressLanes () { return Array.from({ length: EXPRESS_COUNT }, (_, i) => expressLane(i)) }
 function priorityLanes () { return Array.from({ length: PRIORITY_COUNT }, (_, i) => priorityLane(i)) }
+function backgroundLanes () { return Array.from({ length: BACKGROUND_COUNT }, (_, i) => backgroundLane(i)) }
 
 // Normalise a laneTier value -> canonical tier. Unknown/empty -> "standard".
 function normaliseTier (tier) {
@@ -47,6 +58,7 @@ function lanesForTier (tier) {
   switch (normaliseTier(tier)) {
     case 'express': return expressLanes()
     case 'priority': return priorityLanes()
+    case 'background': return backgroundLanes()
     default: return fairLanes()
   }
 }
@@ -55,7 +67,8 @@ function lanesForTier (tier) {
 // the consumer's scan loop, not this list). Includes the legacy queue LAST as a
 // rollback/in-flight drain.
 function allLanes () {
-  return [...expressLanes(), ...priorityLanes(), ...fairLanes(), LEGACY_QUEUE]
+  return [...expressLanes(), ...priorityLanes(), ...fairLanes(),
+    ...backgroundLanes(), LEGACY_QUEUE]
 }
 
 // Pick a target lane for a message of `tier`, given current lane depths, using
@@ -75,15 +88,18 @@ module.exports = {
   LANE_COUNT,
   EXPRESS_COUNT,
   PRIORITY_COUNT,
+  BACKGROUND_COUNT,
   LANE_BASE,
   LEGACY_QUEUE,
   TIERS,
   fairLane,
   expressLane,
   priorityLane,
+  backgroundLane,
   fairLanes,
   expressLanes,
   priorityLanes,
+  backgroundLanes,
   normaliseTier,
   lanesForTier,
   allLanes,
