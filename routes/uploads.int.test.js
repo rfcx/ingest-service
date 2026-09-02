@@ -26,6 +26,7 @@ const app = expressApp()
 const UploadModel = require('../services/db/models/mongoose/upload').Upload
 const { status } = require('../services/db/mongo')
 const { ForbiddenError, EmptyResultError } = require('@rfcx/http-utils')
+const { ConflictError } = require('../utils/errors')
 const moment = require('moment-timezone')
 
 const route = require('./uploads')
@@ -343,6 +344,30 @@ describe('POST /uploads', () => {
     const response = await request(app).post('/uploads').send(requestBody)
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toBe('Duplicate.')
+  })
+  // A same-timestamp collision is a CONFLICT (409), not a permission failure.
+  // Before 2026-09-02 Core signalled it as 403 and the web uploader -- which
+  // (correctly) treats 403 as retryable auth/congestion -- retried one file
+  // 801 times. 409 is classified as permanent by that same client, so this
+  // status is what makes the retry loop stop.
+  test('returns 409 (not 403, not 500) when Core reports a same-timestamp collision', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      throw new ConflictError('There is another file with the same timestamp in the stream.')
+    })
+    const requestBody = {
+      filename: '0a1824085e3f-2021-06-08T19-26-40.flac',
+      timestamp: '2021-06-08T19:26:40.000Z',
+      stream: '0a1824085e3f',
+      checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca',
+      sampleRate: 64000,
+      targetBitrate: 1
+    }
+    const response = await request(app).post('/uploads').send(requestBody)
+    expect(response.statusCode).toBe(409)
+    expect(response.body.message).toBe('There is another file with the same timestamp in the stream.')
+    // same body shape @rfcx/http-utils emits for every other 4xx, so the
+    // client's existing parser reads it unchanged
+    expect(response.body.error).toEqual({ status: 409 })
   })
   test('returns validation error with "Invalid." message if file was already uploaded and has a different timestamp', async () => {
     getExistingSourceFile.mockImplementation(() => {
@@ -897,6 +922,37 @@ describe('POST /uploads/bulk', () => {
     expect(uploads[0].checksum).toBe('bulk-ok')
   })
 
+  // Bulk reports per-item status INSIDE a 200 body; the uploader reads that
+  // field through the same permanent-status predicate as the single paths,
+  // so a colliding item must carry 409 -- not 403 (retry forever) and not the
+  // old fall-through 500 (also retried).
+  test('a same-timestamp collision item reports status 409 without failing the batch', async () => {
+    getExistingSourceFile.mockImplementation(({ checksum }) => {
+      if (checksum === 'bulk-collision') {
+        throw new ConflictError('There is another file with the same timestamp in the stream.')
+      }
+      throw new EmptyResultError('Stream source file not found')
+    })
+
+    const response = await request(app).post('/uploads/bulk').send({
+      uploads: [
+        validUpload({ checksum: 'bulk-ok-2' }),
+        validUpload({ checksum: 'bulk-collision' })
+      ]
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.body.created).toBe(1)
+    expect(response.body.failed).toBe(1)
+    expect(response.body.uploads[0].ok).toBe(true)
+    expect(response.body.uploads[1]).toMatchObject({
+      index: 1,
+      ok: false,
+      status: 409,
+      error: 'There is another file with the same timestamp in the stream.'
+    })
+  })
+
   test('per-batch lookup cache: permission + project-summary hit ONCE per stream, quota still enforced across the batch', async () => {
     // 6 items, one stream. Pre-cache: 6 permission calls + 6 stream gets +
     // 6 summary calls. With the cache: 1 of each. Quota: limit allows only
@@ -1320,6 +1376,19 @@ describe('POST /uploads/multipart', () => {
     const response = await request(app).post('/uploads/multipart').send({ ...validBody, checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca' })
     expect(response.statusCode).toBe(400)
     expect(response.body.message).toContain('Duplicate')
+  })
+
+  // This is the exact route the 2026-09-01 801-retry loop hit: two 317 MB WAVs
+  // whose UTC instants were already occupied. Must be 409 so the uploader's
+  // permanent-status predicate stops it after one attempt.
+  test('returns 409 when Core reports a same-timestamp collision', async () => {
+    getExistingSourceFile.mockImplementation(() => {
+      throw new ConflictError('There is another file with the same timestamp in the stream.')
+    })
+    const response = await request(app).post('/uploads/multipart').send({ ...validBody, checksum: 'acd44fdcc42e0dad141f35ae1aa029fd6b3f9eca' })
+    expect(response.statusCode).toBe(409)
+    expect(response.body.message).toBe('There is another file with the same timestamp in the stream.')
+    expect(response.body.error).toEqual({ status: 409 })
   })
 })
 

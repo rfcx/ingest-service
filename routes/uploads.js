@@ -1,7 +1,22 @@
 const express = require('express')
 const router = express.Router()
-const { Converter, ValidationError, httpErrorHandler, EmptyResultError, ForbiddenError } = require('@rfcx/http-utils')
+const { Converter, ValidationError, httpErrorHandler: baseHttpErrorHandler, EmptyResultError, ForbiddenError } = require('@rfcx/http-utils')
+const { ConflictError } = require('../utils/errors')
 const platform = process.env.PLATFORM || 'amazon'
+
+// @rfcx/http-utils' handler knows 400/401/403/404 and renders EVERYTHING else
+// as a 500 with the fallback message. A ConflictError (Core 409, e.g. a
+// same-timestamp collision) must reach the client as 409 so the uploader
+// classifies it as PERMANENT and stops retrying -- see utils/errors.js.
+function httpErrorHandler (req, res, fallbackMessage) {
+  const base = baseHttpErrorHandler(req, res, fallbackMessage)
+  return (err) => {
+    if (err instanceof ConflictError) {
+      return res.status(409).json({ message: err.message, error: { status: 409 } })
+    }
+    return base(err)
+  }
+}
 const db = require('../services/db/uploads')
 const storage = require(`../services/storage/${platform}`)
 const uploadTargets = require('../services/uploads/upload-targets')
@@ -360,6 +375,10 @@ function bulkErrorStatus (err) {
   if (err instanceof ValidationError) { return 400 }
   if (err instanceof ForbiddenError) { return 403 }
   if (err instanceof EmptyResultError) { return 404 }
+  // Per-item status inside a 200 bulk body. The uploader reads this field via
+  // the same isPermanentSignStatus predicate as the single/multipart paths, so
+  // 409 here also stops the bulk retry loop for a colliding item.
+  if (err instanceof ConflictError) { return 409 }
   return 500
 }
 
