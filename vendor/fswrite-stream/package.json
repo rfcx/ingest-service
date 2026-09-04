@@ -1,0 +1,10 @@
+{
+  "name": "fswrite-stream",
+  "version": "1.0.0-rfcx.1",
+  "description": "Write a stream to a file (rfcx-vendored copy of SamyPesse/fswrite-stream 1.0.0 with the pipe-timing/guard fix)",
+  "main": "index.js",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "length-stream": "^0.1.1"
+  }
+}
