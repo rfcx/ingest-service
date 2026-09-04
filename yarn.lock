@@ -3324,10 +3324,8 @@ fsevents@^2.3.2, fsevents@~2.3.2:
   resolved "https://registry.yarnpkg.com/fsevents/-/fsevents-2.3.3.tgz#cac6407785d03675a2a5e1a5305c697b347d90d6"
   integrity sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==
 
-fswrite-stream@^1.0.0:
-  version "1.0.0"
-  resolved "https://registry.yarnpkg.com/fswrite-stream/-/fswrite-stream-1.0.0.tgz#7ac3cfe6092ddff998435675502389e652a36fae"
-  integrity sha512-lw8AASaynZR42Hyc7Jp8a9WB8gHG+cCdOTdTi5t6kMhaexHJfBUQOrT6u0A42nPYmFx1g076dsy4MIQIWZ/rdg==
+fswrite-stream@^1.0.0, "fswrite-stream@file:./vendor/fswrite-stream":
+  version "1.0.0-rfcx.1"
   dependencies:
     length-stream "^0.1.1"
 
