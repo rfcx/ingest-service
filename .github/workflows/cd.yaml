@@ -44,6 +44,14 @@ jobs:
       repo: ingest-service
       dockerfile: build/Dockerfile
       targets: '["ingest-service"]'
+      # BuildKit registry layer cache (rfcx/cicd#10, 2026-09-04). Single
+      # target, so the win is cross-RUN: the `base` stage (two apt installs,
+      # nvm + node install via curl, npm -g yarn) has NO source dependency and
+      # the `yarn --frozen-lockfile` layer depends only on the lockfile -- all
+      # of it stays cached until those inputs change. Last master run: 99s
+      # build. Fails safe (missing/GC'd cache tag = miss, ignore-error on
+      # export). Pattern proven on rfcx/arbimon (14.6 -> 2.5 min).
+      build-cache: true
       deployments: |
         [
           {"name": "ingest-service-api",   "image": "ingest-service"},
