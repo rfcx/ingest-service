@@ -197,14 +197,14 @@ function updateDeploymentInfo (opts) {
     })
 }
 
+// Read-only twin of uploads-pg.js getOrCreateHealthCheck (2026-09-05): the
+// readiness probe must not write on EITHER backend, or a UPLOADS_DB=mongo
+// rollback would silently change readiness semantics. Returns a stand-in when
+// the singleton has never been created; the successful round-trip is the
+// signal.
 function getOrCreateHealthCheck () {
-  return HealthCheckModel.findOneAndUpdate(
-    { event: 'check' },
-    { event: 'check' },
-    {
-      new: true,
-      upsert: true
-    })
+  return HealthCheckModel.findOne({ event: 'check' }).lean()
+    .then(doc => doc || { event: 'check', updated_at: null })
 }
 
 // ---------------------------------------------------------------------------

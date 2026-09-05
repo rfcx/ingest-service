@@ -544,13 +544,33 @@ function getUploadFailedCount () {
   return countByStatus(status.FAILED)
 }
 
+// The API readinessProbe calls this every 15 s per replica. It MUST NOT write.
+//
+// Until 2026-09-05 it was an INSERT ... ON CONFLICT upsert. Under
+// synchronous replication every COMMIT waits for the standby's WAL write, so
+// the probe inherited the standby's latency: on 2026-09-05, 1,592 of 1,782
+// ingest_service statement-timeout cancels on the leader were this probe, and
+// on every failover it produced ~250 'cannot execute INSERT in a read-only
+// transaction' errors (2026-09-01) while evicting BOTH replicas -- which
+// protects nobody, because both share the same backend and there is nowhere
+// to shed to. A readiness probe that performs a synchronously-replicated write
+// fails whenever ANY standby is slow. Reads do not wait on the standby
+// (measured: 8 ms during a 30 s SyncRep stall, same as outside it).
+//
+// Readiness now means "this replica can reach PG and the ingest schema is
+// present". The table is created by the migrations (001/002-ingest-schema.sql)
+// but NOT seeded -- the old upsert was what created the row -- so an empty
+// table is a healthy fresh environment, not a failure: the SELECT succeeding
+// (schema resolves, pool works) is the signal, and a missing table still
+// throws. The name is kept because the route, the switch-module parity test
+// and the mongo twin all reference it. Record: rfcx-local OPEN-ITEMS §288 +
+// runbooks/FINDING-2026-09-03-ingest-api-healthcheck-db-write-coupling.md.
 function getOrCreateHealthCheck () {
   return query(`
-    INSERT INTO ingest.health_check (event, updated_at)
-    VALUES ('check', now())
-    ON CONFLICT (event) DO UPDATE SET updated_at = now()
-    RETURNING event, updated_at`)
-    .then(result => result.rows[0])
+    SELECT event, updated_at
+    FROM ingest.health_check
+    WHERE event = 'check'`)
+    .then(result => result.rows[0] || { event: 'check', updated_at: null })
 }
 
 // ---------------------------------------------------------------------------
