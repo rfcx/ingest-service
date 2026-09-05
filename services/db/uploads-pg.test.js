@@ -397,12 +397,38 @@ describePg('counts and quota', () => {
     expect(await db.getPendingProjectDuration('nobody')).toBe(0)
   })
 
-  test('getOrCreateHealthCheck is an idempotent upsert (the API readinessProbe calls this)', async () => {
-    const first = await db.getOrCreateHealthCheck()
-    expect(first.event).toBe('check')
-    const second = await db.getOrCreateHealthCheck()
-    expect(second.event).toBe('check')
+  // The readinessProbe calls this every 15 s per replica. It used to be an
+  // upsert; under synchronous replication that made pod readiness wait on the
+  // standby's WAL write (rfcx-local §288). These tests are written so that
+  // reverting to the upsert FAILS them (ablation-checked 2026-09-05).
+  test('getOrCreateHealthCheck does NOT write: an empty table stays empty', async () => {
+    await pgTesting.getPool().query('TRUNCATE ingest.health_check')
+    expect(await pgTesting.countRows('health_check')).toBe(0)
+    const res = await db.getOrCreateHealthCheck()
+    expect(res.event).toBe('check')
+    expect(res.updated_at).toBeNull()
+    expect(await pgTesting.countRows('health_check')).toBe(0)
+  })
+
+  test('getOrCreateHealthCheck does NOT write: an existing row keeps its updated_at', async () => {
+    await pgTesting.getPool().query('TRUNCATE ingest.health_check')
+    await pgTesting.getPool().query("INSERT INTO ingest.health_check (event, updated_at) VALUES ('check', '2020-01-01T00:00:00Z')")
+    const res = await db.getOrCreateHealthCheck()
+    expect(res.event).toBe('check')
+    expect(new Date(res.updated_at).toISOString()).toBe('2020-01-01T00:00:00.000Z')
+    const again = await db.getOrCreateHealthCheck()
+    expect(new Date(again.updated_at).toISOString()).toBe('2020-01-01T00:00:00.000Z')
     expect(await pgTesting.countRows('health_check')).toBe(1)
+  })
+
+  test('getOrCreateHealthCheck still fails when the schema is missing (the signal readiness keeps)', async () => {
+    // Rename rather than drop so the table can be restored for later tests.
+    await pgTesting.getPool().query('ALTER TABLE ingest.health_check RENAME TO health_check_hidden')
+    try {
+      await expect(db.getOrCreateHealthCheck()).rejects.toThrow(/health_check/)
+    } finally {
+      await pgTesting.getPool().query('ALTER TABLE ingest.health_check_hidden RENAME TO health_check')
+    }
   })
 })
 
